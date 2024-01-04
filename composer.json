@@ -1,5 +1,5 @@
 {
-  "name": "kim-branzell/auto-alt-text",
+  "name": "kimbranzell/auto-alt-text",
   "description": "A WordPress plugin that automatically generates alt text for images.",
   "type": "wordpress-plugin",
   "require": {
