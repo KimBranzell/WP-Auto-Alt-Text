@@ -1,0 +1,26 @@
+{
+  "name": "kim-branzell/auto-alt-text",
+  "description": "A WordPress plugin that automatically generates alt text for images.",
+  "type": "wordpress-plugin",
+  "require": {
+      "php": ">=8.0"
+  },
+  "authors": [
+      {
+          "name": "Kim Branzell",
+          "email": "hej@jagheter.kim"
+      }
+  ],
+  "autoload": {
+      "psr-4": {
+          "YourNamespace\\": "src/"
+      }
+  },
+  "extra": {
+      "installer-paths": {
+          "wp-content/plugins/{$name}/": ["type:wordpress-plugin"]
+      }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
