@@ -3,8 +3,8 @@
 class OpenAI {
 
     private function callAPI($data) {
-        $api_key    = get_option('auto_alt_text_api_key');
-        $openai_url = 'https://api.openai.com/v1/chat/completions'; // OpenAI API endpoint
+        $api_key    	= get_option('auto_alt_text_api_key');
+		$openai_url 	= 'https://api.openai.com/v1/chat/completions'; // OpenAI API endpoint
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $openai_url);
@@ -28,13 +28,18 @@ class OpenAI {
     }
 
     public function get_image_description($image_url) {
+		$language = get_option('language');
+		$instruction = $language == 'sv'
+        ? "Vad finns i denna bild? Skriv det som en alternativ text. Håll det kort och beskrivligt. Inkludera inte ord som 'bild på' och liknande. Skriv inte 'alt:' eller 'alt text:'."
+        : "What’s in this image? Write it as an alt text. Keep it short and descriptive. Don't include words like 'image of' or 'picture of'. Don't write 'alt:' or 'alt text:'.";
+
         $data = [
             'model' => 'gpt-4-vision-preview',
             'messages' => [
                 [
                     'role' => 'user',
                     'content' => [
-                        ['type' => 'text', 'text' => "What’s in this image? Write it as an alt text. Keep it short and descriptive. Don't include words like 'image of' or 'picture of'. Don't write 'alt:' or 'alt text:'."],
+						['type' => 'text', 'text' => $instruction],
                         ['type' => 'image_url', 'image_url' => ['url' => $image_url]]
                     ]
                 ]

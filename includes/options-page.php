@@ -19,11 +19,30 @@ function auto_alt_text_options() {
         wp_die(__('You do not have sufficient permissions to access this page.'));
     }
 
-    include 'options_page_html.php';
+    // Start the form
+    echo '<form method="post" action="options.php">';
+    settings_fields(SETTINGS_GROUP);
+    do_settings_sections('auto-alt-text');
+
+    // API Key field
+    echo '<h2>' . __('API Key', 'wp-auto-alt-text') . '</h2>';
+    echo '<input type="text" name="auto_alt_text_api_key" value="' . esc_attr(get_option('auto_alt_text_api_key')) . '" />';
+
+    // Language selector
+    echo '<h2>' . __('Language', 'wp-auto-alt-text') . '</h2>';
+    $language = get_option('language');
+    echo '<select name="language">';
+    echo '<option value="en"' . selected($language, 'en', false) . '>English</option>';
+    echo '<option value="sv"' . selected($language, 'sv', false) . '>Svenska</option>';
+    echo '</select>';
+
+    submit_button();
+    echo '</form>';
 }
 
 function auto_alt_text_register_settings() {
     register_setting(SETTINGS_GROUP, 'auto_alt_text_api_key', 'auto_alt_text_sanitize');
+	register_setting(SETTINGS_GROUP, 'language', 'auto_alt_text_sanitize');
 }
 
 function auto_alt_text_sanitize($input) {

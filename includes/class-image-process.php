@@ -40,13 +40,13 @@ class Auto_Alt_Text_Image_Process {
   public function add_custom_generate_alt_text_button($form_fields, $post) {
     $nonce = wp_create_nonce('generate_alt_text_nonce');
     $form_fields['generate_alt_text'] = array(
-        'label' => 'Generate Alt Text',
+        'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
         'input' => 'html',
-        'html' => '<button class="generate-alt-text-button" id="generate-alt-text" data-attachment-id="' . $post->ID . '" data-nonce="' . $nonce . '">Generate Alternative Text with AI
-        <div class="loader loader--style2" title="1" style="display: none;">
+        'html' => '<button class="generate-alt-text-button" id="generate-alt-text" data-attachment-id="' . $post->ID . '" data-nonce="' . $nonce . '">' . __('Generate Alternative Text with AI', 'wp-auto-alt-text') .
+        '<div class="generate-alt-text-loader loader loader--style2" title="1" style="display: none;">
           <svg version="1.1" id="loader-1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
             width="40px" height="40px" viewBox="0 0 50 50" style="enable-background:new 0 0 50 50;" xml:space="preserve">
-          <path fill="#000" d="M25.251,6.461c-10.318,0-18.683,8.365-18.683,18.683h4.068c0-8.071,6.543-14.615,14.615-14.615V6.461z">
+          <path fill="#2271b1" d="M25.251,6.461c-10.318,0-18.683,8.365-18.683,18.683h4.068c0-8.071,6.543-14.615,14.615-14.615V6.461z">
             <animateTransform attributeType="xml"
               attributeName="transform"
               type="rotate"
@@ -114,8 +114,8 @@ class Auto_Alt_Text_Image_Process {
    * Check if the WordPress instance is running in a local environment.
    */
   private function is_local_environment() {
-    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
-    return strpos($host, '.ddev.site') !== false;
+	$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
+	return strpos($host, '.ddev.site') !== false || strpos($host, '.test') !== false;
   }
 }
 
