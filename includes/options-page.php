@@ -1,9 +1,28 @@
 <?php
-define('SETTINGS_GROUP', 'auto-alt-text-settings-group');
+require_once plugin_dir_path(__FILE__) . 'config.php';
+
+if (!@include_once(plugin_dir_path(__FILE__) . 'config.php')) {
+    // Fallback definitions if config file fails to load
+    if (!defined('SETTINGS_GROUP')) {
+        define('SETTINGS_GROUP', 'auto-alt-text-settings-group');
+    }
+    if (!defined('AUTO_ALT_TEXT_API_KEY_OPTION')) {
+        define('AUTO_ALT_TEXT_API_KEY_OPTION', 'auto_alt_text_api_key');
+    }
+    if (!defined('AUTO_ALT_TEXT_LANGUAGE_OPTION')) {
+        define('AUTO_ALT_TEXT_LANGUAGE_OPTION', 'language');
+    }
+}
 
 add_action('admin_menu', 'auto_alt_text_menu');
 add_action('admin_init', 'auto_alt_text_register_settings');
 
+/**
+ * Registers the Auto Alt Text options page in the WordPress admin menu.
+ *
+ * This function adds an options page for the Auto Alt Text plugin to the WordPress admin menu.
+ * The options page is accessible to users with the 'manage_options' capability.
+ */
 function auto_alt_text_menu() {
     add_options_page(
         'Auto Alt Text Options',
@@ -14,39 +33,114 @@ function auto_alt_text_menu() {
     );
 }
 
+/**
+ * Returns an array of supported languages for the Auto Alt Text plugin.
+ *
+ * The array keys are the language codes, and the values are the corresponding language names.
+ *
+ * @return array An associative array of supported languages.
+ */
+function get_supported_languages() {
+    return [
+        'en' => 'English',
+        'sv' => 'Svenska'
+    ];
+}
+
+/**
+ * Renders the options page for the Auto Alt Text plugin.
+ *
+ * This function checks if the current user has the necessary permissions to access the options page.
+ * If the user has permission, it renders the options page with an HTML form that allows the user to
+ * configure the API key and language settings for the Auto Alt Text service.
+ */
 function auto_alt_text_options() {
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.'));
     }
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+    <?php
 
     // Start the form
     echo '<form method="post" action="options.php">';
+    wp_nonce_field('auto_alt_text_nonce_action', 'auto_alt_text_nonce');
     settings_fields(SETTINGS_GROUP);
     do_settings_sections('auto-alt-text');
+    settings_errors();
 
     // API Key field
     echo '<h2>' . __('API Key', 'wp-auto-alt-text') . '</h2>';
-    echo '<input type="text" name="auto_alt_text_api_key" value="' . esc_attr(get_option('auto_alt_text_api_key')) . '" />';
+    // Replace current API key output with:
+    echo '<input type="text" name="auto_alt_text_api_key" value="' . esc_attr(get_option('auto_alt_text_api_key', '')) . '" />';
 
     // Language selector
     echo '<h2>' . __('Language', 'wp-auto-alt-text') . '</h2>';
     $language = get_option('language');
     echo '<select name="language">';
-    echo '<option value="en"' . selected($language, 'en', false) . '>English</option>';
-    echo '<option value="sv"' . selected($language, 'sv', false) . '>Svenska</option>';
+    foreach (get_supported_languages() as $code => $name) {
+        echo '<option value="' . esc_attr($code) . '"' . selected($language, $code, false) . '>' . esc_html($name) . '</option>';
+    }
     echo '</select>';
 
     submit_button();
     echo '</form>';
+    echo '</div>';
 }
 
+/**
+ * Registers the settings for the Auto Alt Text plugin.
+ *
+ * This function registers two settings:
+ * - 'auto_alt_text_api_key': The API key for the Auto Alt Text service.
+ * - 'language': The language to use for the Auto Alt Text service.
+ *
+ * Both settings are sanitized using the 'auto_alt_text_sanitize' function.
+ */
 function auto_alt_text_register_settings() {
-    register_setting(SETTINGS_GROUP, 'auto_alt_text_api_key', 'auto_alt_text_sanitize');
-	register_setting(SETTINGS_GROUP, 'language', 'auto_alt_text_sanitize');
+    register_setting(
+        SETTINGS_GROUP,                 // Option group
+        'auto_alt_text_api_key',        // Option name
+        'auto_alt_text_sanitize'        // Sanitization callback
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'language',
+        'auto_alt_text_sanitize'
+    );
 }
 
+/**
+ * Sanitizes the input value for the Auto Alt Text API key setting.
+ *
+ * Validates the API key format to ensure it starts with "sk-" and is at least 32 characters long.
+ * If the input is invalid, an error is added to the settings API and the current API key value is returned.
+ * Otherwise, the input is sanitized using `sanitize_text_field()`.
+ *
+ * @param string $input The input value to be sanitized.
+ * @return string The sanitized input value.
+ */
 function auto_alt_text_sanitize($input) {
-    // Sanitize and validate the input here
+    $option_name = current_filter();
+
+    switch($option_name) {
+        case AUTO_ALT_TEXT_API_KEY_OPTION:
+            if (!preg_match('/^sk-[a-zA-Z0-9]{32,}$/', $input)) {
+                add_settings_error(
+                    AUTO_ALT_TEXT_API_KEY_OPTION,
+                    'invalid_api_key',
+                    __('Invalid OpenAI API key format. It should start with "sk-"', 'wp-auto-alt-text')
+                );
+                return get_option(AUTO_ALT_TEXT_API_KEY_OPTION);
+            }
+            break;
+        case AUTO_ALT_TEXT_LANGUAGE_OPTION:
+            if (!in_array($input, ['en', 'sv'])) {
+                return 'en'; // Default to English if invalid
+            }
+            break;
+    }
     return sanitize_text_field($input);
 }
 ?>

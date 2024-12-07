@@ -29,15 +29,50 @@ class Auto_Alt_Text_Image_Process {
   }
 
   public function handle_new_attachment($attachment_id) {
-    if (wp_attachment_is_image($attachment_id)) {
-      $image_url = $this->get_image_url_for_openai($attachment_id);
-      $alt_text = $this->openai->get_image_description($image_url);
+    if (!wp_attachment_is_image($attachment_id)) {
+        return;
+    }
 
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+    try {
+        $image_url = $this->get_image_url_for_openai($attachment_id);
+        $alt_text = $this->openai->get_image_description($image_url);
+
+        if (empty($alt_text)) {
+            throw new Exception('Failed to generate alt text');
+        }
+
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+
+        add_action('admin_notices', function() {
+            echo '<div class="notice notice-success is-dismissible">';
+            echo '<p>Alt text successfully generated and applied.</p>';
+            echo '</div>';
+        });
+    } catch (Exception $e) {
+        add_action('admin_notices', function() use ($e) {
+            echo '<div class="notice notice-error is-dismissible">';
+            echo '<p>Error generating alt text: ' . esc_html($e->getMessage()) . '</p>';
+            echo '</div>';
+        });
     }
   }
 
   public function add_custom_generate_alt_text_button($form_fields, $post) {
+    $api_key = get_option('auto_alt_text_api_key');
+
+    // If no API key is set, show a notice instead of the button
+    if (empty($api_key)) {
+        $form_fields['generate_alt_text'] = array(
+            'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
+            'input' => 'html',
+            'html' => '<div class="notice notice-warning inline"><p>' .
+                    __('Please configure your OpenAI API key in the Auto Alt Text settings to enable AI generation.', 'wp-auto-alt-text') .
+                    ' <a href="' . admin_url('options-general.php?page=auto-alt-text') . '">' .
+                    __('Configure Now', 'wp-auto-alt-text') . '</a></p></div>'
+        );
+        return $form_fields;
+    }
+
     $nonce = wp_create_nonce('generate_alt_text_nonce');
     $form_fields['generate_alt_text'] = array(
         'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
@@ -120,5 +155,3 @@ class Auto_Alt_Text_Image_Process {
 }
 
 ?>
-
-
