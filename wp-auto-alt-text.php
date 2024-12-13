@@ -23,6 +23,7 @@ if (!defined('WPINC')) {
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/class-openai.php';
 require_once __DIR__ . '/includes/class-image-process.php';
+require_once __DIR__ . '/includes/class-rate-limiter.php';
 require_once __DIR__ . '/includes/options-page.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
