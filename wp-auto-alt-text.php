@@ -20,6 +20,7 @@ if (!defined('WPINC')) {
 }
 
 // Include dependencies
+require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/class-openai.php';
 require_once __DIR__ . '/includes/class-image-process.php';
 require_once __DIR__ . '/includes/options-page.php';
@@ -38,8 +39,6 @@ if (!function_exists('auto_alt_text_run')) {
 	$openai = new OpenAI();
 	$plugin_admin = new Auto_Alt_Text_Admin();
 	$plugin_image_process = new Auto_Alt_Text_Image_Process($openai);
-
-	wp_enqueue_style('auto_alt_text_css', plugin_dir_url(__FILE__) . 'css/style.css');
   }
 }
 
