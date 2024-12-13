@@ -21,7 +21,7 @@ class Auto_Alt_Text_Image_Process {
       $image_description = $attachment->post_title; // or any other source of description
 
       // Generate alt text using your function
-      $alt_text = generate_alt_text_with_openai($image_description);
+      $alt_text = $this->openai->generate_alt_text_with_openai($image_description);
 
       // Update the image's alt text
       update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
