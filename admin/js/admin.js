@@ -41,3 +41,44 @@ document.addEventListener('click', async function({ target }) {
     }
   }
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Add batch processing button
+  const mediaToolbar = document.querySelector('.media-toolbar');
+  const batchButton = document.createElement('button');
+  batchButton.className = 'button process-alt-text-batch';
+  batchButton.textContent = 'Generate Alt Text for Selected';
+  mediaToolbar.appendChild(batchButton);
+
+  // Handle batch processing
+  batchButton.addEventListener('click', function(e) {
+      e.preventDefault();
+
+      const selected = Array.from(document.querySelectorAll('.attachment.selected'))
+          .map(el => el.dataset.id);
+
+      if (selected.length === 0) {
+          alert('Please select images first');
+          return;
+      }
+
+      fetch(autoAltTextData.ajaxurl, {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+              action: 'process_image_batch',
+              nonce: autoAltTextData.nonce,
+              ids: selected
+          })
+      })
+      .then(response => response.json())
+      .then(data => {
+          if (data.success) {
+              alert(`Alt text generated for ${Object.keys(data.data).length} images`);
+          }
+      })
+      .catch(error => console.error('Error:', error));
+  });
+});
