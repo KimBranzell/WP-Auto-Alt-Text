@@ -17,7 +17,7 @@ class OpenAI {
         return base64_encode(openssl_encrypt($key, 'AES-256-CBC', AUTH_SALT, 0, $iv));
     }
 
-    private function decrypt_api_key($encrypted_key) {
+    public function decrypt_api_key($encrypted_key) {
         if (!defined('AUTH_SALT')) {
             return $encrypted_key;
         }

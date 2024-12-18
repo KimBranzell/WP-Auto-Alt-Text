@@ -17,6 +17,20 @@ if (!@include_once(plugin_dir_path(__FILE__) . 'config.php')) {
 add_action('admin_menu', 'auto_alt_text_menu');
 add_action('admin_init', 'auto_alt_text_register_settings');
 
+add_action('admin_enqueue_scripts', 'auto_alt_text_admin_styles');
+
+function auto_alt_text_admin_styles($hook) {
+    if ($hook != 'settings_page_auto-alt-text') {
+        return;
+    }
+    wp_enqueue_style(
+        'auto-alt-text-admin',
+        plugin_dir_url( dirname( __FILE__ ) ) . 'css/admin-style.css',
+        [],
+        '1.0.0'
+    );
+}
+
 /**
  * Registers the Auto Alt Text options page in the WordPress admin menu.
  *
@@ -72,6 +86,9 @@ function auto_alt_text_options() {
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.'));
     }
+
+    global $wp_settings_errors;
+    $wp_settings_errors = array();
     ?>
     <div class="wrap">
         <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
@@ -85,12 +102,20 @@ function auto_alt_text_options() {
 
             <div class="card">
                 <h2><?php _e('API Configuration', 'wp-auto-alt-text'); ?></h2>
+                <?php
+                $encrypted_key = get_option('auto_alt_text_api_key');
+                $openai = new OpenAI();
+                $decrypted_key = $encrypted_key ? $openai->decrypt_api_key($encrypted_key) : '';
+                ?>
                 <table class="form-table">
                     <tr>
                         <th scope="row"><?php _e('OpenAI API Key', 'wp-auto-alt-text'); ?></th>
                         <td>
-                            <input type="text" name="auto_alt_text_api_key" class="regular-text"
-                                value="<?php echo esc_attr(get_option('auto_alt_text_api_key', '')); ?>" />
+                            <input type="text"
+                                name="auto_alt_text_api_key"
+                                class="regular-text"
+                                value="<?php echo esc_attr($decrypted_key); ?>"
+                            />
                         </td>
                     </tr>
                 </table>
@@ -147,11 +172,6 @@ function auto_alt_text_register_settings() {
         'language',
         'auto_alt_text_sanitize'
     );
-    register_setting(
-        'auto_alt_text_options', // option group
-        AUTO_ALT_TEXT_API_KEY_OPTION, // option name
-        'auto_alt_text_sanitize' // sanitize callback
-    );
 }
 
 /**
@@ -167,6 +187,15 @@ function auto_alt_text_register_settings() {
 function auto_alt_text_sanitize($input) {
     $option_name = current_filter();
     error_log('Current filter: ' . $option_name);
+
+    if ($option_name === 'sanitize_option_auto_alt_text_api_key') {
+        add_settings_error(
+            'auto_alt_text_settings',
+            'settings_updated',
+            __('Settings saved successfully.', 'wp-auto-alt-text'),
+            'updated'
+        );
+    }
 
     switch($option_name) {
         case 'sanitize_option_auto_alt_text_api_key':
