@@ -9,11 +9,59 @@ class OpenAI {
     private $last_error;
     private $rate_limiter;
 
+    public function encrypt_api_key($key) {
+        if (!defined('AUTH_SALT')) {
+            return $key;
+        }
+        $iv = substr(AUTH_SALT, 0, 16);
+        return base64_encode(openssl_encrypt($key, 'AES-256-CBC', AUTH_SALT, 0, $iv));
+    }
+
+    private function decrypt_api_key($encrypted_key) {
+        if (!defined('AUTH_SALT')) {
+            return $encrypted_key;
+        }
+        $iv = substr(AUTH_SALT, 0, 16);
+        return openssl_decrypt(base64_decode($encrypted_key), 'AES-256-CBC', AUTH_SALT, 0, $iv);
+    }
+
+    public static function get_privacy_policy_content() {
+        return array(
+            'title' => __('WP Auto Alt Text Privacy Notice'),
+            'content' => __('This plugin processes images through OpenAI\'s API to generate alt text. Image URLs are temporarily shared with OpenAI for processing. No personal data is permanently stored by the service. Generated alt texts are stored in your WordPress database. You can delete this data at any time through the Media Library.')
+        );
+    }
+
+    // Add data export method
+    public function export_user_data($user_id) {
+        $attachments = get_posts(array(
+            'post_type' => 'attachment',
+            'author' => $user_id,
+            'posts_per_page' => -1
+        ));
+
+        $data = array();
+        foreach ($attachments as $attachment) {
+            $alt_text = get_post_meta($attachment->ID, '_wp_attachment_image_alt', true);
+            if ($alt_text) {
+                $data[] = array(
+                    'name' => __('Generated Alt Text'),
+                    'value' => $alt_text
+                );
+            }
+        }
+        return $data;
+    }
 
     public function __construct() {
-        $this->api_key = get_option('auto_alt_text_api_key');
+        $encrypted_key = get_option('auto_alt_text_api_key');
+        $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
+    }
 
+    public function save_api_key($key) {
+        $encrypted_key = $this->encrypt_api_key($key);
+        update_option('auto_alt_text_api_key', $encrypted_key);
     }
 
     public function get_image_description($image_url) {
