@@ -27,6 +27,9 @@ require_once __DIR__ . '/includes/class-rate-limiter.php';
 require_once __DIR__ . '/includes/options-page.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
+$admin = new Auto_Alt_Text_Admin();
+add_action('admin_enqueue_scripts', [$admin, 'enqueueAutoAltTextScript']);
+
 // Load text domain for translations
 function myplugin_load_textdomain() {
 	load_plugin_textdomain( 'wp-auto-alt-text', false, basename( dirname( __FILE__ ) ) . '/languages' );
