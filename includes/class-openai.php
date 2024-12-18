@@ -32,6 +32,9 @@ class OpenAI {
 
         try {
             $instruction = $this->get_instruction();
+
+            error_log("Sending request to OpenAI for image: $image_url");
+
             $response_data = $this->callAPI([
                 'model' => self::MODEL,
                 'messages' => [
@@ -46,17 +49,20 @@ class OpenAI {
                 'max_tokens' => self::MAX_TOKENS
             ]);
 
-            $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
+            error_log('OpenAI Response: ' . print_r($response_data, true));
+            return $response_data['choices'][0]['message']['content'] ?? null;
 
-            if ($alt_text) {
-                set_transient($cache_key, $alt_text, self::CACHE_EXPIRATION);
-            }
+            // $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
 
-            return $alt_text;
+            // if ($alt_text) {
+            //     set_transient($cache_key, $alt_text, self::CACHE_EXPIRATION);
+            // }
+
+            // return $alt_text;
 
         } catch (Exception $e) {
-            $this->last_error = $e->getMessage();
             error_log('Auto Alt Text Error: ' . $e->getMessage());
+            $this->last_error = $e->getMessage();
             return null;
         }
     }
