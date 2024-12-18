@@ -63,6 +63,13 @@ function handleSingleImageGeneration(event) {
     const nonce = button.dataset.nonce;
     const loader = button.querySelector('.loader');
 
+    // Check if we have a cached version first
+    const cachedText = sessionStorage.getItem(`alt_text_${attachmentId}`);
+    if (cachedText) {
+        showPreviewDialog(cachedText, attachmentId, true); // Ensure true is passed here
+        return;
+    }
+
     loader.style.display = 'inline-block';
     fetch(ajaxurl, {
         method: 'POST',
@@ -77,9 +84,10 @@ function handleSingleImageGeneration(event) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log('data', data);
         if (data.success && data.data.alt_text) {
-            showPreviewDialog(data.data.alt_text, attachmentId);
+            // Store the generated text
+            sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
+            showPreviewDialog(data.data.alt_text, attachmentId, false);
         }
     })
     .catch(error => console.error('Error:', error))
@@ -88,35 +96,69 @@ function handleSingleImageGeneration(event) {
     });
 }
 
-function showPreviewDialog(altText, attachmentId) {
+function showPreviewDialog(altText, attachmentId, isCached) {
+
     const dialog = document.createElement('div');
     dialog.className = 'alt-text-preview-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'preview-title');
+
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
-            <h3>Preview Generated Alt Text</h3>
+            <h3>Preview Generated Alt Text ${isCached ? '<span class="cached-badge">Cached</span>' : ''}</h3>
             <textarea class="preview-text">${altText}</textarea>
             <div class="preview-actions">
                 <button class="button apply-alt-text">Apply</button>
+                ${isCached ? '<button class="button button-secondary regenerate-alt-text">Generate New</button>' : ''}
                 <button class="button button-secondary cancel-alt-text">Cancel</button>
             </div>
         </div>
     `;
 
-    document.body.appendChild(dialog);
+    // Add regenerate functionality if showing cached version
+    if (isCached) {
+        dialog.querySelector('.regenerate-alt-text').addEventListener('click', () => {
+            sessionStorage.removeItem(`alt_text_${attachmentId}`);
+            dialog.remove();
+            document.querySelector(`[data-attachment-id="${attachmentId}"]`).click();
+        });
+    }
 
-    dialog.querySelector('.apply-alt-text').addEventListener('click', () => {
+    document.body.appendChild(dialog);
+    const textarea = dialog.querySelector('.preview-text');
+    textarea.focus();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    function applyAltText() {
         const finalText = dialog.querySelector('.preview-text').value;
         const altTextField = document.querySelector('#attachment-details-two-column-alt-text');
         if (altTextField) {
             altTextField.value = finalText;
         }
         dialog.remove();
+    }
+
+    // Close on escape
+    document.addEventListener('keydown', function handleEscape(e) {
+        if (e.key === 'Escape') {
+            dialog.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
     });
 
-    dialog.querySelector('.cancel-alt-text').addEventListener('click', () => {
-        dialog.remove();
+    // Close on background click
+    dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+            dialog.remove();
+        }
     });
+
+    // Handle enter key on buttons
+    dialog.querySelector('.apply-alt-text').addEventListener('click', applyAltText);
+    dialog.querySelector('.cancel-alt-text').addEventListener('click', () => dialog.remove());
 }
+
 
 function handleBatchProcessing(obs) {
   const mediaToolbar = document.querySelector('.media-toolbar-mode-select');
