@@ -201,3 +201,52 @@ function updateProgressBar(progress) {
         }, 1000);
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const templateInput = document.getElementById('alt-text-prompt-template');
+    const charCount = document.getElementById('char-count');
+    const maxLength = 1000;
+
+    if (templateInput && charCount) {
+        // Add progress bar element
+        const progressBar = document.createElement('div');
+        progressBar.className = 'template-progress';
+        progressBar.innerHTML = `
+            <div class="progress-track">
+                <div class="template-progress-bar"></div>
+            </div>
+        `;
+        charCount.parentNode.appendChild(progressBar);
+
+        const bar = progressBar.querySelector('.template-progress-bar');
+
+        function updateCounter() {
+            const length = templateInput.value.length;
+            charCount.textContent = length;
+
+            if (length > maxLength) {
+                templateInput.value = templateInput.value.substring(0, maxLength);
+                charCount.textContent = maxLength;
+            }
+
+            // Update progress bar and colors
+            const progress = (length / maxLength) * 100;
+            bar.style.width = `${progress}%`;
+
+            if (length >= maxLength) {
+                bar.style.backgroundColor = '#dc3232';
+                charCount.title = 'Character limit reached';
+            } else if (length >= maxLength * 0.9) {
+                bar.style.backgroundColor = '#dba617';
+                charCount.title = 'Approaching character limit';
+            } else {
+                bar.style.backgroundColor = '#666666';
+                charCount.title = '';
+            }
+        }
+
+        templateInput.setAttribute('maxlength', maxLength);
+        templateInput.addEventListener('input', updateCounter);
+        updateCounter();
+    }
+});

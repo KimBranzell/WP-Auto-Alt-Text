@@ -146,10 +146,38 @@ function auto_alt_text_options() {
                 </table>
             </div>
 
+            <div class="card">
+                <h2><?php _e('AI Prompt Template', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('Custom Template', 'wp-auto-alt-text'); ?></th>
+                        <td>
+                            <textarea name="alt_text_prompt_template" id="alt-text-prompt-template" class="large-text code" rows="4"><?php echo esc_textarea(get_option('alt_text_prompt_template', 'You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text that:
+                                1. Is specific and descriptive
+                                2. Keeps it concise
+                                3. Includes relevant keywords
+                                4. Maintains proper grammar and syntax
+                                5. Focuses on the main subject and important details')); ?>
+                            </textarea>
+                            <div id="template-counter" class="description">
+                                <div>Characters: <span id="char-count">0</span>/1000</div>
+                            </div>
+                            <p class="description">
+                                <?php _e('Use {LANGUAGE} in your template to automatically insert the selected language.', 'wp-auto-alt-text'); ?>
+                                <br>
+                                <strong><?php _e('Example:', 'wp-auto-alt-text'); ?></strong>
+                                <?php _e('Generate a descriptive alt text in {LANGUAGE} that captures the main elements of the image.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
             <?php submit_button(); ?>
         </form>
     </div>
     <?php
+
 }
 
 /**
@@ -172,6 +200,11 @@ function auto_alt_text_register_settings() {
         'language',
         'auto_alt_text_sanitize'
     );
+    register_setting(
+        SETTINGS_GROUP,
+        'alt_text_prompt_template',     // New setting for prompt template
+        'auto_alt_text_sanitize'
+    );
 }
 
 /**
@@ -186,7 +219,6 @@ function auto_alt_text_register_settings() {
  */
 function auto_alt_text_sanitize($input) {
     $option_name = current_filter();
-    error_log('Current filter: ' . $option_name);
 
     if ($option_name === 'sanitize_option_auto_alt_text_api_key') {
         add_settings_error(
@@ -213,6 +245,32 @@ function auto_alt_text_sanitize($input) {
             $openai = new OpenAI();
             $encrypted = $openai->encrypt_api_key($trimmed_input);
             return $encrypted;
+
+        case 'sanitize_option_alt_text_prompt_template':
+            $min_length = 50;
+            $max_length = 1000;
+            $required_keywords = ['alt text', 'descriptive', 'concise'];
+
+            if (strlen($input) < $min_length || strlen($input) > $max_length) {
+                add_settings_error(
+                    'alt_text_prompt_template',
+                    'invalid_prompt_length',
+                    sprintf(__('Prompt template must be between %d and %d characters.', 'wp-auto-alt-text'), $min_length, $max_length)
+                );
+                return get_option('alt_text_prompt_template');
+            }
+
+            foreach ($required_keywords as $keyword) {
+                if (stripos($input, $keyword) === false) {
+                    add_settings_error(
+                        'alt_text_prompt_template',
+                        'missing_keyword',
+                        sprintf(__('Prompt template must include the keyword "%s".', 'wp-auto-alt-text'), $keyword)
+                    );
+                    return get_option('alt_text_prompt_template');
+                }
+            }
+            return sanitize_textarea_field($input);
 
         case AUTO_ALT_TEXT_LANGUAGE_OPTION:
             if (!in_array($input, ['en', 'sv'])) {

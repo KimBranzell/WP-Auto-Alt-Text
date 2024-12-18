@@ -117,19 +117,14 @@ class Auto_Alt_Text_Image_Process {
       wp_send_json_error('Invalid attachment ID.');
     }
 
-    error_log("Image URL: " . $image_url);
-
     $openai = new OpenAI();
     $alt_text = $openai->get_image_description($image_url);
 
-    error_log("Generated alt text: " . $alt_text);
 
     if ($alt_text) {
         update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
-        error_log("Updated post meta with alt text: " . $alt_text);
         wp_send_json_success(array('alt_text' => $alt_text));
     } else {
-        error_log("Alt text was null or empty");
         wp_send_json_error('Failed to generate alt text');
     }
   }

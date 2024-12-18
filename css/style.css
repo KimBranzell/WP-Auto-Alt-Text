@@ -72,3 +72,37 @@
   padding: 0 12px;
   margin: 10px 10px 10px 0;
 }
+
+.template-progress {
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.progress-track {
+  background: #f0f0f0;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 400px;
+}
+
+.template-progress-bar {
+  height: 100%;
+  background: #2271b1;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  width: 0;
+}
+
+#template-counter {
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#char-count {
+  font-weight: 600;
+  transition: color 0.3s ease;
+}

@@ -81,8 +81,6 @@ class OpenAI {
         try {
             $instruction = $this->get_instruction();
 
-            error_log("Sending request to OpenAI for image: $image_url");
-
             $response_data = $this->callAPI([
                 'model' => self::MODEL,
                 'messages' => [
@@ -97,7 +95,6 @@ class OpenAI {
                 'max_tokens' => self::MAX_TOKENS
             ]);
 
-            error_log('OpenAI Response: ' . print_r($response_data, true));
             return $response_data['choices'][0]['message']['content'] ?? null;
 
             // $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
@@ -191,6 +188,11 @@ class OpenAI {
     private function get_instruction() {
         $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
         $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
+        $template = get_option('alt_text_prompt_template');
+
+        if (!empty($template)) {
+            return str_replace('{LANGUAGE}', $language_name, $template);
+        }
 
         return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {$language_name} tailored to the following requirements:
 
