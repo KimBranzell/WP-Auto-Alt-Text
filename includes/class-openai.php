@@ -189,15 +189,18 @@ class OpenAI {
     }
 
     private function get_instruction() {
-        $language = get_option('language', 'en');
-        return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text tailored to the following requirements:
+        $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+        $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
 
-            Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
-            Don't include phrases like 'image of' or 'picture of'.
-            Write the text in {$language} language.
-            For ambiguous images, describe them neutrally.
-            Use plain and easy-to-understand language.
-            If {$language} is unsupported, default to English.
+        return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {$language_name} tailored to the following requirements:
+
+            1. Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
+            2. Don't include phrases like 'image of' or 'picture of'.
+            3. Write the text in {$language} language.
+            4. For ambiguous images, describe them neutrally.
+            5. Use plain and easy-to-understand language.
+            6. If {$language} is unsupported, default to English.
+            7. Maintain proper grammar and syntax in {$language_name}
 
             Output:
             A single, SEO-friendly alt text description";

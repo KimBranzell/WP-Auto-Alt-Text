@@ -42,8 +42,22 @@ function auto_alt_text_menu() {
  */
 function get_supported_languages() {
     return [
+        'sv' => 'Swedish',
+        'no' => 'Norwegian',
+        'dk' => 'Danish',
+        'fi' => 'Finnish',
         'en' => 'English',
-        'sv' => 'Svenska'
+        'es' => 'Spanish',
+        'fr' => 'French',
+        'de' => 'German',
+        'it' => 'Italian',
+        'pt' => 'Portuguese',
+        'nl' => 'Dutch',
+        'ru' => 'Russian',
+        'ja' => 'Japanese',
+        'zh' => 'Chinese',
+        'ko' => 'Korean',
+        'ar' => 'Arabic',
     ];
 }
 
@@ -61,32 +75,56 @@ function auto_alt_text_options() {
     ?>
     <div class="wrap">
         <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <form method="post" action="options.php">
+            <?php
+            wp_nonce_field('auto_alt_text_nonce_action', 'auto_alt_text_nonce');
+            settings_fields(SETTINGS_GROUP);
+            do_settings_sections('auto-alt-text');
+            settings_errors();
+            ?>
+
+            <div class="card">
+                <h2><?php _e('API Configuration', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('OpenAI API Key', 'wp-auto-alt-text'); ?></th>
+                        <td>
+                            <input type="text" name="auto_alt_text_api_key" class="regular-text"
+                                value="<?php echo esc_attr(get_option('auto_alt_text_api_key', '')); ?>" />
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2><?php _e('Language Settings', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('Alt Text Language', 'wp-auto-alt-text'); ?></th>
+                        <td>
+                            <select name="<?php echo AUTO_ALT_TEXT_LANGUAGE_OPTION; ?>" class="regular-text">
+                                <?php
+                                $current_language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+                                foreach (get_supported_languages() as $code => $name) {
+                                    printf(
+                                        '<option value="%s" %s>%s</option>',
+                                        esc_attr($code),
+                                        selected($current_language, $code, false),
+                                        esc_html($name)
+                                    );
+                                }
+                                ?>
+                            </select>
+                            <p class="description"><?php _e('Select the language for generated alt text descriptions', 'wp-auto-alt-text'); ?></p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <?php submit_button(); ?>
+        </form>
+    </div>
     <?php
-
-    // Start the form
-    echo '<form method="post" action="options.php">';
-    wp_nonce_field('auto_alt_text_nonce_action', 'auto_alt_text_nonce');
-    settings_fields(SETTINGS_GROUP);
-    do_settings_sections('auto-alt-text');
-    settings_errors();
-
-    // API Key field
-    echo '<h2>' . __('API Key', 'wp-auto-alt-text') . '</h2>';
-    // Replace current API key output with:
-    echo '<input type="text" name="auto_alt_text_api_key" value="' . esc_attr(get_option('auto_alt_text_api_key', '')) . '" />';
-
-    // Language selector
-    echo '<h2>' . __('Language', 'wp-auto-alt-text') . '</h2>';
-    $language = get_option('language');
-    echo '<select name="language">';
-    foreach (get_supported_languages() as $code => $name) {
-        echo '<option value="' . esc_attr($code) . '"' . selected($language, $code, false) . '>' . esc_html($name) . '</option>';
-    }
-    echo '</select>';
-
-    submit_button();
-    echo '</form>';
-    echo '</div>';
 }
 
 /**
