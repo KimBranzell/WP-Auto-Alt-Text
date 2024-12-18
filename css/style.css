@@ -106,3 +106,45 @@
   font-weight: 600;
   transition: color 0.3s ease;
 }
+
+.alt-text-preview-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 160000;
+}
+
+.alt-text-preview-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 4px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.alt-text-preview-content h3 {
+  margin-top: 0;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+}
+
+.preview-text {
+  width: 100%;
+  min-height: 100px;
+  margin: 10px 0;
+  padding: 8px;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 15px;
+}

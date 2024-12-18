@@ -57,37 +57,65 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function handleSingleImageGeneration(event) {
-  event.preventDefault();
-  const button = event.target;
-  const attachmentId = button.dataset.attachmentId;
-  const nonce = button.dataset.nonce;
-  const loader = button.querySelector('.loader');
+    event.preventDefault();
+    const button = event.target;
+    const attachmentId = button.dataset.attachmentId;
+    const nonce = button.dataset.nonce;
+    const loader = button.querySelector('.loader');
 
-  loader.style.display = 'inline-block';
-  fetch(ajaxurl, {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-          action: 'generate_alt_text_for_attachment',
-          attachment_id: attachmentId,
-          nonce: nonce
-      })
-  })
-  .then(response => response.json())
-  .then(data => {
-      if (data.success && data.data.alt_text) {
-          const altTextField = document.querySelector('#attachment-details-two-column-alt-text');
-          if (altTextField) {
-              altTextField.value = data.data.alt_text;
-          }
-      }
-  })
-  .catch(error => console.error('Error:', error))
-  .finally(() => {
-      loader.style.display = 'none';
-  });
+    loader.style.display = 'inline-block';
+    fetch(ajaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'generate_alt_text_for_attachment',
+            attachment_id: attachmentId,
+            nonce: nonce
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('data', data);
+        if (data.success && data.data.alt_text) {
+            showPreviewDialog(data.data.alt_text, attachmentId);
+        }
+    })
+    .catch(error => console.error('Error:', error))
+    .finally(() => {
+        loader.style.display = 'none';
+    });
+}
+
+function showPreviewDialog(altText, attachmentId) {
+    const dialog = document.createElement('div');
+    dialog.className = 'alt-text-preview-dialog';
+    dialog.innerHTML = `
+        <div class="alt-text-preview-content">
+            <h3>Preview Generated Alt Text</h3>
+            <textarea class="preview-text">${altText}</textarea>
+            <div class="preview-actions">
+                <button class="button apply-alt-text">Apply</button>
+                <button class="button button-secondary cancel-alt-text">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(dialog);
+
+    dialog.querySelector('.apply-alt-text').addEventListener('click', () => {
+        const finalText = dialog.querySelector('.preview-text').value;
+        const altTextField = document.querySelector('#attachment-details-two-column-alt-text');
+        if (altTextField) {
+            altTextField.value = finalText;
+        }
+        dialog.remove();
+    });
+
+    dialog.querySelector('.cancel-alt-text').addEventListener('click', () => {
+        dialog.remove();
+    });
 }
 
 function handleBatchProcessing(obs) {
