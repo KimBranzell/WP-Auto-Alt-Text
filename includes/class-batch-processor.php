@@ -14,6 +14,17 @@ class Auto_Alt_Text_Batch_Processor {
      * @return array The generated alt text for each processed attachment.
      */
     public function process_batch($attachment_ids) {
+
+        // Verify nonce
+        if (!check_ajax_referer('wp_auto_alt_text_nonce', 'nonce', false)) {
+            wp_send_json_error('Invalid security token');
+        }
+
+        // Verify user capabilities
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+
         $results = [];
         $chunks = array_chunk($attachment_ids, $this->batch_size);
 

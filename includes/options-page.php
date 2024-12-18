@@ -109,6 +109,11 @@ function auto_alt_text_register_settings() {
         'language',
         'auto_alt_text_sanitize'
     );
+    register_setting(
+        'auto_alt_text_options', // option group
+        AUTO_ALT_TEXT_API_KEY_OPTION, // option name
+        'auto_alt_text_sanitize' // sanitize callback
+    );
 }
 
 /**
@@ -123,18 +128,25 @@ function auto_alt_text_register_settings() {
  */
 function auto_alt_text_sanitize($input) {
     $option_name = current_filter();
+    error_log('Current filter: ' . $option_name);
 
     switch($option_name) {
-        case AUTO_ALT_TEXT_API_KEY_OPTION:
-            if (!preg_match('/^sk-[a-zA-Z0-9]{32,}$/', $input)) {
+        case 'sanitize_option_auto_alt_text_api_key':
+            $trimmed_input = trim($input);
+            $matches = preg_match('/^sk-(proj-)?[A-Za-z0-9_-]{80,}$/', $trimmed_input);
+
+            if (!$matches) {
                 add_settings_error(
-                    AUTO_ALT_TEXT_API_KEY_OPTION,
+                    'auto_alt_text_api_key',
                     'invalid_api_key',
-                    __('Invalid OpenAI API key format. It should start with "sk-"', 'wp-auto-alt-text')
+                    __('Invalid OpenAI API key format. The key must start with "sk-" or "sk-proj-" followed by at least 80 characters.', 'wp-auto-alt-text')
                 );
-                return get_option(AUTO_ALT_TEXT_API_KEY_OPTION);
+                return get_option('auto_alt_text_api_key');
             }
-            break;
+            $openai = new OpenAI();
+            $encrypted = $openai->encrypt_api_key($trimmed_input);
+            return $encrypted;
+
         case AUTO_ALT_TEXT_LANGUAGE_OPTION:
             if (!in_array($input, ['en', 'sv'])) {
                 return 'en'; // Default to English if invalid

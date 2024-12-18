@@ -30,6 +30,23 @@ require_once __DIR__ . '/admin/class-admin.php';
 $admin = new Auto_Alt_Text_Admin();
 add_action('admin_enqueue_scripts', [$admin, 'enqueueAutoAltTextScript']);
 
+add_action('admin_init', function() {
+	if (function_exists('wp_add_privacy_policy_content')) {
+			wp_add_privacy_policy_content(
+					'WP Auto Alt Text',
+					OpenAI::get_privacy_policy_content()['content']
+			);
+	}
+});
+
+add_filter('wp_privacy_personal_data_exporters', function($exporters) {
+	$exporters['wp-auto-alt-text'] = array(
+			'exporter_friendly_name' => __('WP Auto Alt Text Generated Content'),
+			'callback' => array(new Auto_Alt_Text_OpenAI(), 'export_user_data'),
+	);
+	return $exporters;
+});
+
 // Load text domain for translations
 function myplugin_load_textdomain() {
 	load_plugin_textdomain( 'wp-auto-alt-text', false, basename( dirname( __FILE__ ) ) . '/languages' );
