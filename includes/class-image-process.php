@@ -17,15 +17,15 @@ class Auto_Alt_Text_Image_Process {
   public function auto_generate_alt_text_on_upload($attachment_id) {
     // Ensure the attachment is an image
     if (wp_attachment_is_image($attachment_id)) {
-      // Get the image metadata or any relevant description
-      $attachment = get_post($attachment_id);
-      $image_description = $attachment->post_title; // or any other source of description
+      $image_url = wp_get_attachment_url($attachment_id);
 
-      // Generate alt text using your function
-      $alt_text = $this->openai->generate_alt_text_with_openai($image_description);
+      // Generate alt text using consolidated method
+      $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
 
       // Update the image's alt text
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+      if ($alt_text) {
+          update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+      }
     }
   }
 

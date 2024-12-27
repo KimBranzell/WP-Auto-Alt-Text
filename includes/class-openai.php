@@ -8,6 +8,14 @@ class OpenAI {
     private $api_key;
     private $last_error;
     private $rate_limiter;
+    private $statistics;
+
+    public function __construct() {
+        $encrypted_key = get_option('auto_alt_text_api_key');
+        $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
+        $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
+        $this->statistics = new Auto_Alt_Text_Statistics();
+    }
 
     public function encrypt_api_key($key) {
         if (!defined('AUTH_SALT')) {
@@ -51,12 +59,6 @@ class OpenAI {
             }
         }
         return $data;
-    }
-
-    public function __construct() {
-        $encrypted_key = get_option('auto_alt_text_api_key');
-        $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
-        $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
     }
 
     public function save_api_key($key) {
@@ -112,26 +114,6 @@ class OpenAI {
         }
     }
 
-    public function generate_alt_text_with_openai($image_description) {
-        try {
-            $response_data = $this->callAPI([
-                'model' => self::MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => "Generate a concise alt text for an image with this description: {$image_description}"
-                    ]
-                ],
-                'max_tokens' => self::MAX_TOKENS
-            ]);
-
-            return $response_data['choices'][0]['message']['content'] ?? null;
-        } catch (Exception $e) {
-            error_log('Auto Alt Text Error: ' . $e->getMessage());
-            return null;
-        }
-    }
-
     private function get_cache_key($image_url) {
         return 'auto_alt_text_' . md5($image_url);
     }
@@ -140,7 +122,7 @@ class OpenAI {
         return $this->last_error;
     }
 
-    public function generate_alt_text($image_url) {
+    public function generate_alt_text($image_url, $attachment_id) {
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
             return null;
@@ -169,6 +151,24 @@ class OpenAI {
                 ],
                 'max_tokens' => self::MAX_TOKENS
             ]);
+
+            if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
+                $generated_text = $response_data['choices'][0]['message']['content'];
+                $tokens_used = $response_data['usage']['total_tokens'];
+
+                error_log("OpenAI Response Data: " . print_r($response_data, true));
+                error_log("Generated Text: " . $generated_text);
+                error_log("Tokens Used: " . $tokens_used);
+
+                // Track the generation
+                $this->statistics->track_generation(
+                    $attachment_id,
+                    $generated_text,
+                    $tokens_used
+                );
+
+                return $generated_text;
+            }
 
             $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
 

@@ -38,12 +38,22 @@ function auto_alt_text_admin_styles($hook) {
  * The options page is accessible to users with the 'manage_options' capability.
  */
 function auto_alt_text_menu() {
-    add_options_page(
-        'Auto Alt Text Options',
-        'Auto Alt Text',
-        'manage_options',
-        'auto-alt-text',
-        'auto_alt_text_options'
+    add_menu_page(
+        'Auto Alt Text',          // Page title
+        'Auto Alt Text',          // Menu title
+        'manage_options',         // Capability
+        'auto-alt-text',          // Menu slug
+        'auto_alt_text_options',  // Function
+        'dashicons-format-image'  // Icon
+    );
+
+    add_submenu_page(
+        'auto-alt-text',         // Parent slug
+        'Settings',              // Page title
+        'Settings',              // Menu title
+        'manage_options',        // Capability
+        'auto-alt-text',         // Menu slug
+        'auto_alt_text_options'  // Function
     );
 }
 
