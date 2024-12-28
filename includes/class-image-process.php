@@ -3,7 +3,7 @@
 class Auto_Alt_Text_Image_Process {
   private $openai;
 
-  public function __construct(OpenAI $openai) {
+  public function __construct(Auto_Alt_Text_OpenAI $openai) {
       $this->openai = $openai;
       add_action('add_attachment', array($this, 'handle_new_attachment'));
       add_filter('attachment_fields_to_edit', array($this, 'add_custom_generate_alt_text_button'), 10, 2);
@@ -15,17 +15,19 @@ class Auto_Alt_Text_Image_Process {
    * Automatically generate alt text when a new image is uploaded.
    */
   public function auto_generate_alt_text_on_upload($attachment_id) {
+
     // Ensure the attachment is an image
-    if (wp_attachment_is_image($attachment_id)) {
-      // Get the image metadata or any relevant description
-      $attachment = get_post($attachment_id);
-      $image_description = $attachment->post_title; // or any other source of description
+    if (!wp_attachment_is_image($attachment_id)) {
+      return;
+    }
 
-      // Generate alt text using your function
-      $alt_text = $this->openai->generate_alt_text_with_openai($image_description);
+    // Get full server path instead of URL
+    $image_path = get_attached_file($attachment_id);
 
-      // Update the image's alt text
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+    $alt_text = $this->openai->generate_alt_text($image_path, $attachment_id, 'upload');
+
+    if ($alt_text) {
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
     }
   }
 
@@ -36,7 +38,7 @@ class Auto_Alt_Text_Image_Process {
 
     try {
         $image_url = $this->get_image_url_for_openai($attachment_id);
-        $alt_text = $this->openai->get_image_description($image_url);
+        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
 
         if (empty($alt_text)) {
             throw new Exception('Failed to generate alt text');
@@ -74,7 +76,7 @@ class Auto_Alt_Text_Image_Process {
         return $form_fields;
     }
 
-    $nonce = wp_create_nonce('generate_alt_text_nonce');
+    $nonce = wp_create_nonce('auto_alt_text_nonce');
     $form_fields['generate_alt_text'] = array(
         'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
         'input' => 'html',
@@ -117,19 +119,14 @@ class Auto_Alt_Text_Image_Process {
       wp_send_json_error('Invalid attachment ID.');
     }
 
-    error_log("Image URL: " . $image_url);
+    $openai = new Auto_Alt_Text_OpenAI();
+    $alt_text = $openai->generate_alt_text($image_url, $attachment_id);
 
-    $openai = new OpenAI();
-    $alt_text = $openai->get_image_description($image_url);
-
-    error_log("Generated alt text: " . $alt_text);
 
     if ($alt_text) {
         update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
-        error_log("Updated post meta with alt text: " . $alt_text);
         wp_send_json_success(array('alt_text' => $alt_text));
     } else {
-        error_log("Alt text was null or empty");
         wp_send_json_error('Failed to generate alt text');
     }
   }
@@ -169,7 +166,7 @@ class Auto_Alt_Text_Image_Process {
 
     foreach ($ids as $id) {
       $image_url = $this->get_image_url_for_openai($id);
-      $alt_text = $this->openai->get_image_description($image_url);
+      $alt_text = $this->openai->generate_alt_text($image_url, $id, 'batch');
 
       if ($alt_text) {
         update_post_meta($id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));

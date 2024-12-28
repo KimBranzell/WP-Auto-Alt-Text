@@ -1,5 +1,5 @@
 <?php
-class OpenAI {
+class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/chat/completions';
     private const MODEL = 'gpt-4o';
     private const CACHE_EXPIRATION = DAY_IN_SECONDS;
@@ -8,6 +8,14 @@ class OpenAI {
     private $api_key;
     private $last_error;
     private $rate_limiter;
+    private $statistics;
+
+    public function __construct() {
+        $encrypted_key = get_option('auto_alt_text_api_key');
+        $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
+        $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
+        $this->statistics = new Auto_Alt_Text_Statistics();
+    }
 
     public function encrypt_api_key($key) {
         if (!defined('AUTH_SALT')) {
@@ -17,7 +25,7 @@ class OpenAI {
         return base64_encode(openssl_encrypt($key, 'AES-256-CBC', AUTH_SALT, 0, $iv));
     }
 
-    private function decrypt_api_key($encrypted_key) {
+    public function decrypt_api_key($encrypted_key) {
         if (!defined('AUTH_SALT')) {
             return $encrypted_key;
         }
@@ -53,109 +61,40 @@ class OpenAI {
         return $data;
     }
 
-    public function __construct() {
-        $encrypted_key = get_option('auto_alt_text_api_key');
-        $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
-        $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
-    }
-
     public function save_api_key($key) {
         $encrypted_key = $this->encrypt_api_key($key);
         update_option('auto_alt_text_api_key', $encrypted_key);
     }
 
-    public function get_image_description($image_url) {
-        if (empty($this->api_key)) {
-            $this->last_error = 'OpenAI API key is not configured';
-            return null;
-        }
-
-        // Check cache
-        $cache_key = $this->get_cache_key($image_url);
-        $cached_result = get_transient($cache_key);
-
-        if ($cached_result !== false) {
-            return $cached_result;
-        }
-
-        try {
-            $instruction = $this->get_instruction();
-
-            error_log("Sending request to OpenAI for image: $image_url");
-
-            $response_data = $this->callAPI([
-                'model' => self::MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            ['type' => 'text', 'text' => $instruction],
-                            ['type' => 'image_url', 'image_url' => ['url' => $image_url]]
-                        ]
-                    ]
-                ],
-                'max_tokens' => self::MAX_TOKENS
-            ]);
-
-            error_log('OpenAI Response: ' . print_r($response_data, true));
-            return $response_data['choices'][0]['message']['content'] ?? null;
-
-            // $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
-
-            // if ($alt_text) {
-            //     set_transient($cache_key, $alt_text, self::CACHE_EXPIRATION);
-            // }
-
-            // return $alt_text;
-
-        } catch (Exception $e) {
-            error_log('Auto Alt Text Error: ' . $e->getMessage());
-            $this->last_error = $e->getMessage();
-            return null;
-        }
-    }
-
-    public function generate_alt_text_with_openai($image_description) {
-        try {
-            $response_data = $this->callAPI([
-                'model' => self::MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => "Generate a concise alt text for an image with this description: {$image_description}"
-                    ]
-                ],
-                'max_tokens' => self::MAX_TOKENS
-            ]);
-
-            return $response_data['choices'][0]['message']['content'] ?? null;
-        } catch (Exception $e) {
-            error_log('Auto Alt Text Error: ' . $e->getMessage());
-            return null;
-        }
-    }
-
-    private function get_cache_key($image_url) {
-        return 'auto_alt_text_' . md5($image_url);
+    private function get_cache_key($image_source) {
+        return 'alt_text_' . md5($image_source);
     }
 
     public function get_last_error() {
         return $this->last_error;
     }
 
-    public function generate_alt_text($image_url) {
+    public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
+
+        $cache_key = $this->get_cache_key($image_source);
+        $cached_result = get_transient($cache_key);
+
+
+        if ($cached_result !== false && !$preview_mode) {
+            return $cached_result;
+        }
+
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
             return null;
         }
 
-        // Check cache
-        $cache_key = $this->get_cache_key($image_url);
-        $cached_result = get_transient($cache_key);
+        // Always get file path from attachment ID
+        $image_path = get_attached_file($attachment_id);
 
-        if ($cached_result !== false) {
-            return $cached_result;
-        }
+        // Convert file to base64
+        $image_data = base64_encode(file_get_contents($image_path));
+        $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
             $instruction = $this->get_instruction();
@@ -173,31 +112,53 @@ class OpenAI {
                 'max_tokens' => self::MAX_TOKENS
             ]);
 
-            $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
+            if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
+                $generated_text = $response_data['choices'][0]['message']['content'];
+                $tokens_used = $response_data['usage']['total_tokens'];
 
-            if ($alt_text) {
-                set_transient($cache_key, $alt_text, self::CACHE_EXPIRATION);
+                // Track the generation
+                $this->statistics->track_generation(
+                    $attachment_id,
+                    $generated_text,
+                    $tokens_used,
+                    $generation_type
+                );
+
+                // Only save alt text if not in preview mode
+                if (!$preview_mode) {
+                    update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
+                    set_transient($cache_key, $generated_text, DAY_IN_SECONDS);
+                }
+
+                return $generated_text;
             }
 
-            return $alt_text;
+            return null;
 
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
-            error_log('Auto Alt Text Error: ' . $e->getMessage());
             return null;
         }
     }
 
     private function get_instruction() {
-        $language = get_option('language', 'en');
-        return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text tailored to the following requirements:
+        $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+        $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
+        $template = get_option('alt_text_prompt_template');
 
-            Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
-            Don't include phrases like 'image of' or 'picture of'.
-            Write the text in {$language} language.
-            For ambiguous images, describe them neutrally.
-            Use plain and easy-to-understand language.
-            If {$language} is unsupported, default to English.
+        if (!empty($template)) {
+            return str_replace('{LANGUAGE}', $language_name, $template);
+        }
+
+        return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {$language_name} tailored to the following requirements:
+
+            1. Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
+            2. Don't include phrases like 'image of' or 'picture of'.
+            3. Write the text in {$language} language.
+            4. For ambiguous images, describe them neutrally.
+            5. Use plain and easy-to-understand language.
+            6. If {$language} is unsupported, default to English.
+            7. Maintain proper grammar and syntax in {$language_name}
 
             Output:
             A single, SEO-friendly alt text description";
