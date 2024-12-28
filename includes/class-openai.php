@@ -1,5 +1,5 @@
 <?php
-class OpenAI {
+class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/chat/completions';
     private const MODEL = 'gpt-4o';
     private const CACHE_EXPIRATION = DAY_IN_SECONDS;
@@ -66,75 +66,35 @@ class OpenAI {
         update_option('auto_alt_text_api_key', $encrypted_key);
     }
 
-    public function get_image_description($image_url) {
-        if (empty($this->api_key)) {
-            $this->last_error = 'OpenAI API key is not configured';
-            return null;
-        }
-
-        // Check cache
-        $cache_key = $this->get_cache_key($image_url);
-        $cached_result = get_transient($cache_key);
-
-        if ($cached_result !== false) {
-            return $cached_result;
-        }
-
-        try {
-            $instruction = $this->get_instruction();
-
-            $response_data = $this->callAPI([
-                'model' => self::MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            ['type' => 'text', 'text' => $instruction],
-                            ['type' => 'image_url', 'image_url' => ['url' => $image_url]]
-                        ]
-                    ]
-                ],
-                'max_tokens' => self::MAX_TOKENS
-            ]);
-
-            return $response_data['choices'][0]['message']['content'] ?? null;
-
-            // $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
-
-            // if ($alt_text) {
-            //     set_transient($cache_key, $alt_text, self::CACHE_EXPIRATION);
-            // }
-
-            // return $alt_text;
-
-        } catch (Exception $e) {
-            error_log('Auto Alt Text Error: ' . $e->getMessage());
-            $this->last_error = $e->getMessage();
-            return null;
-        }
-    }
-
-    private function get_cache_key($image_url) {
-        return 'auto_alt_text_' . md5($image_url);
+    private function get_cache_key($image_source) {
+        return 'alt_text_' . md5($image_source);
     }
 
     public function get_last_error() {
         return $this->last_error;
     }
 
-    public function generate_alt_text($image_url, $attachment_id) {
+    public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
+
+        $cache_key = $this->get_cache_key($image_source);
+        $cached_result = get_transient($cache_key);
+
+
+        if ($cached_result !== false && !$preview_mode) {
+            return $cached_result;
+        }
+
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
             return null;
         }
 
-        // Check cache
-        $cache_key = $this->get_cache_key($image_url);
-        $cached_result = get_transient($cache_key);
+        // Always get file path from attachment ID
+        $image_path = get_attached_file($attachment_id);
 
-        if ($cached_result !== false) {
-            return $cached_result;
-        }
+        // Convert file to base64
+        $image_data = base64_encode(file_get_contents($image_path));
+        $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
             $instruction = $this->get_instruction();
@@ -156,31 +116,27 @@ class OpenAI {
                 $generated_text = $response_data['choices'][0]['message']['content'];
                 $tokens_used = $response_data['usage']['total_tokens'];
 
-                error_log("OpenAI Response Data: " . print_r($response_data, true));
-                error_log("Generated Text: " . $generated_text);
-                error_log("Tokens Used: " . $tokens_used);
-
                 // Track the generation
                 $this->statistics->track_generation(
                     $attachment_id,
                     $generated_text,
-                    $tokens_used
+                    $tokens_used,
+                    $generation_type
                 );
+
+                // Only save alt text if not in preview mode
+                if (!$preview_mode) {
+                    update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
+                    set_transient($cache_key, $generated_text, DAY_IN_SECONDS);
+                }
 
                 return $generated_text;
             }
 
-            $alt_text = $response_data['choices'][0]['message']['content'] ?? null;
-
-            if ($alt_text) {
-                set_transient($cache_key, $alt_text, self::CACHE_EXPIRATION);
-            }
-
-            return $alt_text;
+            return null;
 
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
-            error_log('Auto Alt Text Error: ' . $e->getMessage());
             return null;
         }
     }

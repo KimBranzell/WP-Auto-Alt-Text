@@ -15,6 +15,15 @@ document.addEventListener('DOMContentLoaded', function() {
       handleBatchProcessing(obs);
   });
 
+  const cleanupForm = document.querySelector('form[name="cleanup_stats"]');
+  if (cleanupForm) {
+      cleanupForm.addEventListener('submit', function(e) {
+          if (!confirm('Are you sure you want to remove all generation records for deleted images?')) {
+              e.preventDefault();
+          }
+      });
+  }
+
   observer.observe(document.body, {
       childList: true,
       subtree: true
@@ -63,10 +72,10 @@ function handleSingleImageGeneration(event) {
     const nonce = button.dataset.nonce;
     const loader = button.querySelector('.loader');
 
-    // Check if we have a cached version first
+    // Check for cached version in this session
     const cachedText = sessionStorage.getItem(`alt_text_${attachmentId}`);
     if (cachedText) {
-        showPreviewDialog(cachedText, attachmentId, true); // Ensure true is passed here
+        showPreviewDialog(cachedText, attachmentId, true);
         return;
     }
 
@@ -79,13 +88,14 @@ function handleSingleImageGeneration(event) {
         body: new URLSearchParams({
             action: 'generate_alt_text_for_attachment',
             attachment_id: attachmentId,
-            nonce: nonce
+            nonce: nonce,
+            preview: true
         })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success && data.data.alt_text) {
-            // Store the generated text
+            // Store the generated text in session storage
             sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
             showPreviewDialog(data.data.alt_text, attachmentId, false);
         }
@@ -96,7 +106,16 @@ function handleSingleImageGeneration(event) {
     });
 }
 
+function showError(message) {
+    const notice = document.createElement('div');
+    notice.className = 'notice notice-error is-dismissible';
+    notice.innerHTML = `<p>${message}</p>`;
+    document.querySelector('.wrap').insertBefore(notice, document.querySelector('.wrap').firstChild);
+}
 function showPreviewDialog(altText, attachmentId, isCached) {
+
+    const button = document.querySelector(`[data-attachment-id="${attachmentId}"]`);
+    const nonce = button.dataset.nonce;  // Get nonce from original button
 
     const dialog = document.createElement('div');
     dialog.className = 'alt-text-preview-dialog';
@@ -109,12 +128,61 @@ function showPreviewDialog(altText, attachmentId, isCached) {
             <h3>Preview Generated Alt Text ${isCached ? '<span class="cached-badge">Cached</span>' : ''}</h3>
             <textarea class="preview-text">${altText}</textarea>
             <div class="preview-actions">
-                <button class="button apply-alt-text">Apply</button>
-                ${isCached ? '<button class="button button-secondary regenerate-alt-text">Generate New</button>' : ''}
+                <button class="button button-primary apply-alt-text">Apply</button>
+                ${isCached ? '<button class="button regenerate-alt-text">Generate New</button>' : ''}
                 <button class="button button-secondary cancel-alt-text">Cancel</button>
             </div>
         </div>
     `;
+
+    document.body.appendChild(dialog);
+    const textarea = dialog.querySelector('.preview-text');
+    textarea.focus();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    dialog.querySelector('.apply-alt-text').addEventListener('click', () => {
+        const finalText = dialog.querySelector('.preview-text').value;
+        const applyButton = dialog.querySelector('.apply-alt-text');
+        applyButton.disabled = true;
+        applyButton.textContent = 'Applying...';
+
+        fetch(ajaxurl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'apply_alt_text',
+                attachment_id: attachmentId,
+                alt_text: finalText,
+                nonce: nonce
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const altTextFields = document.querySelectorAll('#attachment-details-two-column-alt-text, #attachment-details-alt-text');
+                altTextFields.forEach(field => {
+                    field.value = finalText;
+                });
+                sessionStorage.setItem(`alt_text_${attachmentId}`, finalText);
+            } else {
+                throw new Error(data.message || 'Failed to update alt text');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(`Failed to update alt text: ${error.message}`);
+        })
+        .finally(() => {
+            dialog.remove();
+        });
+    });
 
     // Add regenerate functionality if showing cached version
     if (isCached) {
@@ -125,19 +193,8 @@ function showPreviewDialog(altText, attachmentId, isCached) {
         });
     }
 
-    document.body.appendChild(dialog);
-    const textarea = dialog.querySelector('.preview-text');
-    textarea.focus();
-    textarea.setSelectionRange(0, textarea.value.length);
-
-    function applyAltText() {
-        const finalText = dialog.querySelector('.preview-text').value;
-        const altTextField = document.querySelector('#attachment-details-two-column-alt-text');
-        if (altTextField) {
-            altTextField.value = finalText;
-        }
-        dialog.remove();
-    }
+    // Handle cancel
+    dialog.querySelector('.cancel-alt-text').addEventListener('click', () => dialog.remove());
 
     // Close on escape
     document.addEventListener('keydown', function handleEscape(e) {
@@ -146,17 +203,6 @@ function showPreviewDialog(altText, attachmentId, isCached) {
             document.removeEventListener('keydown', handleEscape);
         }
     });
-
-    // Close on background click
-    dialog.addEventListener('click', (e) => {
-        if (e.target === dialog) {
-            dialog.remove();
-        }
-    });
-
-    // Handle enter key on buttons
-    dialog.querySelector('.apply-alt-text').addEventListener('click', applyAltText);
-    dialog.querySelector('.cancel-alt-text').addEventListener('click', () => dialog.remove());
 }
 
 

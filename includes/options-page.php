@@ -114,7 +114,7 @@ function auto_alt_text_options() {
                 <h2><?php _e('API Configuration', 'wp-auto-alt-text'); ?></h2>
                 <?php
                 $encrypted_key = get_option('auto_alt_text_api_key');
-                $openai = new OpenAI();
+                $openai = new Auto_Alt_Text_OpenAI();
                 $decrypted_key = $encrypted_key ? $openai->decrypt_api_key($encrypted_key) : '';
                 ?>
                 <table class="form-table">
@@ -252,7 +252,7 @@ function auto_alt_text_sanitize($input) {
                 );
                 return get_option('auto_alt_text_api_key');
             }
-            $openai = new OpenAI();
+            $openai = new Auto_Alt_Text_OpenAI();
             $encrypted = $openai->encrypt_api_key($trimmed_input);
             return $encrypted;
 

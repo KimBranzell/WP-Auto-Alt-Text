@@ -9,6 +9,7 @@ class Auto_Alt_Text_Ajax_Handler {
         check_ajax_referer('auto_alt_text_nonce', 'nonce');
 
         $attachment_id = intval($_POST['attachment_id']);
+        $preview_mode = isset($_POST['preview']) && $_POST['preview'] === 'true';
         $image_url = wp_get_attachment_url($attachment_id);
 
         if (!$image_url) {
@@ -17,7 +18,7 @@ class Auto_Alt_Text_Ajax_Handler {
         }
 
         $openai = new Auto_Alt_Text_OpenAI();
-        $alt_text = $openai->generate_alt_text($image_url, $attachment_id);
+        $alt_text = $openai->generate_alt_text($image_url, $attachment_id, 'manual', $preview_mode);
 
         if ($alt_text) {
             wp_send_json_success(['alt_text' => $alt_text]);
@@ -54,5 +55,56 @@ class Auto_Alt_Text_Ajax_Handler {
         }
 
         wp_send_json_success($results);
+    }
+    public function apply_alt_text() {
+        try {
+            if (!check_ajax_referer('auto_alt_text_nonce', 'nonce', false)) {
+                throw new Exception('Invalid security token');
+            }
+
+            $attachment_id = intval($_POST['attachment_id']);
+            $alt_text = sanitize_text_field($_POST['alt_text']);
+
+            if (!$attachment_id || !$alt_text) {
+                throw new Exception('Missing required parameters');
+            }
+
+            if (!current_user_can('edit_post', $attachment_id)) {
+                throw new Exception('Permission denied');
+            }
+
+            $result = update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+
+            if ($result === false) {
+                throw new Exception('Failed to update alt text');
+            }
+
+            $statistics = new Auto_Alt_Text_Statistics();
+            $tokens_used = isset($_POST['tokens_used']) ? intval($_POST['tokens_used']) : 0;
+
+            $tracked = $statistics->track_generation(
+                $attachment_id,
+                $alt_text,
+                $tokens_used,
+                'manual'
+            );
+
+            if (!$tracked) {
+                error_log('[Auto Alt Text] Failed to track generation');
+            }
+
+            wp_send_json_success([
+                'message' => 'Alt text updated successfully',
+                'alt_text' => $alt_text,
+                'attachment_id' => $attachment_id
+            ]);
+
+        } catch (Exception $e) {
+            error_log('[Auto Alt Text Error] ' . $e->getMessage());
+            wp_send_json_error([
+                'message' => $e->getMessage(),
+                'code' => $e->getCode()
+            ]);
+        }
     }
 }

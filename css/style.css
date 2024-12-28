@@ -189,3 +189,68 @@
 .regenerate-alt-text {
   margin-right: auto !important;
 }
+
+.generation-type {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.generation-type.manual {
+  background-color: #e0f2f1;
+  color: #00695c;
+}
+
+.generation-type.upload {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.generation-type.batch {
+  background-color: #ede7f6;
+  color: #4527a0;
+}
+
+.orphaned-alt-text-stats {
+  padding: 1em;
+}
+
+.orphaned-alt-text-stats p {
+  margin-top: 0;
+}
+
+.alt-text-preview-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 160000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.alt-text-preview-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 4px;
+  width: 500px;
+  max-width: 90%;
+}
+
+.preview-text {
+  width: 100%;
+  min-height: 100px;
+  margin: 15px 0;
+  padding: 10px;
+}
+
+.preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
