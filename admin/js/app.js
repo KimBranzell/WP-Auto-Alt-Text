@@ -113,15 +113,14 @@ function showError(message) {
     document.querySelector('.wrap').insertBefore(notice, document.querySelector('.wrap').firstChild);
 }
 function showPreviewDialog(altText, attachmentId, isCached) {
-
-    const button = document.querySelector(`[data-attachment-id="${attachmentId}"]`);
-    const nonce = button.dataset.nonce;  // Get nonce from original button
-
     const dialog = document.createElement('div');
     dialog.className = 'alt-text-preview-dialog';
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-labelledby', 'preview-title');
+
+    const button = document.querySelector(`[data-attachment-id="${attachmentId}"]`);
+    const nonce = button.dataset.nonce;
 
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
@@ -142,6 +141,7 @@ function showPreviewDialog(altText, attachmentId, isCached) {
 
     dialog.querySelector('.apply-alt-text').addEventListener('click', () => {
         const finalText = dialog.querySelector('.preview-text').value;
+        const isEdited = finalText.trim() !== altText.trim();
         const applyButton = dialog.querySelector('.apply-alt-text');
         applyButton.disabled = true;
         applyButton.textContent = 'Applying...';
@@ -155,6 +155,8 @@ function showPreviewDialog(altText, attachmentId, isCached) {
                 action: 'apply_alt_text',
                 attachment_id: attachmentId,
                 alt_text: finalText,
+                original_text: altText,
+                is_edited: isEdited ? '1' : '0',
                 nonce: nonce
             })
         })

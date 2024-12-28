@@ -40,7 +40,7 @@ class Auto_Alt_Text_Statistics {
         $this->table_name = $wpdb->prefix . 'auto_alt_text_stats';
     }
 
-    public function track_generation($image_id, $generated_text, $tokens_used, $generation_type) {
+    public function track_generation($image_id, $generated_text, $tokens_used, $generation_type, $is_applied = false, $is_edited = false, $edited_text = null) {
         global $wpdb;
 
         return $wpdb->insert(
@@ -51,9 +51,12 @@ class Auto_Alt_Text_Statistics {
                 'generated_text' => $generated_text,
                 'tokens_used' => $tokens_used,
                 'generation_type' => $generation_type,
-                'generation_time' => current_time('mysql')
+                'generation_time' => current_time('mysql'),
+                'is_applied' => $is_applied,
+                'is_edited' => $is_edited,
+                'edited_text' => $edited_text
             ],
-            ['%d', '%d', '%s', '%d', '%s', '%s']
+            ['%d', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s']
         );
     }
 

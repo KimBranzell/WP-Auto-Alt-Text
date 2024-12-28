@@ -254,3 +254,67 @@
   gap: 10px;
   margin-top: 15px;
 }
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+  margin: 2px;
+}
+
+.status-badge.applied {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-badge.edited {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.edited-text {
+  margin-top: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #666;
+  background: #f5f5f5;
+  border-left: 3px solid #f57c00;
+}
+
+.preview-text {
+  width: 100%;
+  min-height: 100px;
+  margin: 15px 0;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.diff-view {
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.diff-view del {
+  background: #ffebee;
+  color: #c62828;
+  text-decoration: line-through;
+  padding: 0 4px;
+}
+
+.diff-view ins {
+  background: #e8f5e9;
+  color: #2e7d32;
+  text-decoration: none;
+  padding: 0 4px;
+}
+
+.diff-label {
+  font-weight: 500;
+  color: #666;
+  display: block;
+  margin-bottom: 4px;
+}

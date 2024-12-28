@@ -1,4 +1,10 @@
 <?php
+
+require_once ABSPATH . WPINC . '/Text/Diff.php';
+require_once ABSPATH . WPINC . '/Text/Diff/Renderer.php';
+require_once ABSPATH . WPINC . '/Text/Diff/Renderer/inline.php';
+
+
 class Auto_Alt_Text_Statistics_Page {
     private $statistics;
 
@@ -68,13 +74,14 @@ class Auto_Alt_Text_Statistics_Page {
             </div>
 
             <h2>Generation History</h2>
-            <table class="wp-list-table widefat fixed striped">
+                <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
                         <th>Image</th>
                         <th>Generated Text</th>
                         <th>Type</th>
                         <th>Update #</th>
+                        <th>Status</th>
                         <th>User</th>
                         <th>Date</th>
                         <th>Tokens</th>
@@ -84,13 +91,28 @@ class Auto_Alt_Text_Statistics_Page {
                     <?php foreach ($stats['recent_generations'] as $generation): ?>
                         <tr>
                             <td><?php echo wp_get_attachment_image($generation->image_id, [50, 50]); ?></td>
-                            <td><?php echo esc_html($generation->generated_text); ?></td>
                             <td>
-                                <span class="generation-type <?php echo esc_attr($generation->generation_type); ?>">
-                                    <?php echo esc_html($this->statistics->get_generation_type_label($generation->generation_type)); ?>
-                                </span>
+                                <?php
+                                echo esc_html($generation->generated_text);
+                                if ($generation->is_edited) {
+                                    $diff = $this->text_diff($generation->generated_text, $generation->edited_text);
+                                    echo '<div class="edited-text">';
+                                    echo '<span class="diff-label">Changes:</span>';
+                                    echo '<div class="diff-view">' . $diff . '</div>';
+                                    echo '</div>';
+                                }
+                                ?>
                             </td>
+                            <td><span class="generation-type <?php echo esc_attr($generation->generation_type); ?>"><?php echo esc_html($generation->generation_type); ?></span></td>
                             <td><?php echo esc_html($generation->update_number); ?></td>
+                            <td>
+                                <?php if ($generation->is_applied): ?>
+                                    <span class="status-badge applied">Applied</span>
+                                <?php endif; ?>
+                                <?php if ($generation->is_edited): ?>
+                                    <span class="status-badge edited">Edited</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
                             <td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' ago'); ?></td>
                             <td><?php echo esc_html($generation->tokens_used); ?></td>
@@ -100,5 +122,15 @@ class Auto_Alt_Text_Statistics_Page {
             </table>
         </div>
         <?php
+    }
+
+    private function text_diff($old_text, $new_text) {
+        $old_words = preg_split('/\s+/', $old_text);
+        $new_words = preg_split('/\s+/', $new_text);
+
+        $diff = new Text_Diff($old_words, $new_words);
+        $renderer = new Text_Diff_Renderer_Inline();
+
+        return $renderer->render($diff);
     }
 }

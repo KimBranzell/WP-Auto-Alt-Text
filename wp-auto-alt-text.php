@@ -71,7 +71,6 @@ add_action(	'add_attachment', [$image_processor, 'auto_generate_alt_text_on_uplo
 add_action(	'wp_ajax_apply_alt_text', [$ajax_handler, 'apply_alt_text']	);
 
 
-
 // Code to initialize the plugin functionality
 if (!function_exists('auto_alt_text_run')) {
   function auto_alt_text_run() {

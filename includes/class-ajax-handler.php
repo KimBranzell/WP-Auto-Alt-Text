@@ -64,6 +64,9 @@ class Auto_Alt_Text_Ajax_Handler {
 
             $attachment_id = intval($_POST['attachment_id']);
             $alt_text = sanitize_text_field($_POST['alt_text']);
+            $original_text = sanitize_text_field($_POST['original_text']);
+            $is_edited = isset($_POST['is_edited']) && $_POST['is_edited'] === '1';
+            $tokens_used = isset($_POST['tokens_used']) ? intval($_POST['tokens_used']) : 0;
 
             if (!$attachment_id || !$alt_text) {
                 throw new Exception('Missing required parameters');
@@ -79,19 +82,30 @@ class Auto_Alt_Text_Ajax_Handler {
                 throw new Exception('Failed to update alt text');
             }
 
-            $statistics = new Auto_Alt_Text_Statistics();
-            $tokens_used = isset($_POST['tokens_used']) ? intval($_POST['tokens_used']) : 0;
+            // Update the existing statistics record
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'auto_alt_text_stats';
 
-            $tracked = $statistics->track_generation(
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$table_name}
+                 SET is_applied = 1,
+                     is_edited = %d,
+                     edited_text = %s
+                 WHERE image_id = %d
+                 AND generated_text = %s
+                 AND generation_time = (
+                     SELECT max_time FROM (
+                         SELECT MAX(generation_time) as max_time
+                         FROM {$table_name}
+                         WHERE image_id = %d
+                     ) as sub
+                 )",
+                $is_edited,
+                $is_edited ? $alt_text : null,
                 $attachment_id,
-                $alt_text,
-                $tokens_used,
-                'manual'
-            );
-
-            if (!$tracked) {
-                error_log('[Auto Alt Text] Failed to track generation');
-            }
+                $original_text,
+                $attachment_id
+            ));
 
             wp_send_json_success([
                 'message' => 'Alt text updated successfully',
