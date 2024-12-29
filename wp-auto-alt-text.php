@@ -19,6 +19,8 @@ if (!defined('WPINC')) {
     die;
 }
 
+
+
 // Include dependencies
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/class-openai.php';
@@ -33,9 +35,15 @@ require_once __DIR__ . '/includes/class-image-process.php';
 require_once __DIR__ . '/includes/class-dashboard-widget.php';
 require_once __DIR__ . '/includes/class-page-builders.php';
 require_once __DIR__ . '/includes/class-woocommerce.php';
+require_once __DIR__ . '/includes/class-cli.php';
+require_once __DIR__ . '/includes/class-rest-api.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
 register_activation_hook(__FILE__, ['Auto_Alt_Text_Activator', 'activate']);
+
+if (defined('WP_CLI') && WP_CLI) {
+	WP_CLI::add_command('auto-alt-text', 'Auto_Alt_Text_CLI');
+}
 
 $openai = new Auto_Alt_Text_OpenAI();
 $admin = new Auto_Alt_Text_Admin();
@@ -58,6 +66,10 @@ add_action('admin_init', function() {
 
 add_action('init', function() {
 	new Auto_Alt_Text_Page_Builders();
+});
+
+add_action('init', function() {
+	new Auto_Alt_Text_REST_API();
 });
 
 add_filter('wp_privacy_personal_data_exporters', function($exporters) {
