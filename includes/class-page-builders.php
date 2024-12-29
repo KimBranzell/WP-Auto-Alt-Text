@@ -60,18 +60,27 @@ class Auto_Alt_Text_Page_Builders {
     }
 
     public function process_beaver_image($data) {
-        if (!empty($data['alt'])) {
+        // Early return if data is not valid
+        if (!is_array($data) || empty($data)) {
             return $data;
         }
 
-        $alt_text = $this->openai->generate_alt_text(
-            $data['url'],
-            $data['id'],
-            'beaver_builder'
-        );
+        // Check if required fields exist
+        if (!isset($data['url']) || !isset($data['id'])) {
+            return $data;
+        }
 
-        if ($alt_text) {
-            $data['alt'] = $alt_text;
+        // Only process if alt is empty and we have a valid ID
+        if (empty($data['alt']) && !empty($data['id'])) {
+            $alt_text = $this->openai->generate_alt_text(
+                $data['url'],
+                $data['id'],
+                'beaver_builder'
+            );
+
+            if ($alt_text) {
+                $data['alt'] = $alt_text;
+            }
         }
 
         return $data;
