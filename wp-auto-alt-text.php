@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name:          Auto Alt Text
+Plugin Name:          WP Auto Alt Text
 Plugin URI:           https://branzell.kim
 Author:               Kim Branzell
 Author URI:           https://branzell.kim
