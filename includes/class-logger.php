@@ -3,6 +3,16 @@ class Auto_Alt_Text_Logger {
     private $table_name;
     const LOG_LEVELS = ['debug', 'info', 'warning', 'error'];
 
+    private static function is_debug_mode() {
+        return defined('AUTO_ALT_TEXT_DEBUG') && AUTO_ALT_TEXT_DEBUG;
+    }
+
+    public static function debug($message, $context = []) {
+        if (self::is_debug_mode()) {
+            self::log($message, 'debug', $context);
+        }
+    }
+
     public function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'auto_alt_text_logs';
@@ -106,7 +116,7 @@ class Auto_Alt_Text_Logger {
                 </thead>
                 <tbody>
                     <?php foreach ($logs as $log): ?>
-                        <tr>
+                        <tr class="log-level-<?php echo esc_attr($log->level); ?>">
                             <td><?php echo esc_html($log->timestamp); ?></td>
                             <td><span class="log-level log-level-<?php echo esc_attr($log->level); ?>">
                                 <?php echo esc_html(ucfirst($log->level)); ?>

@@ -104,7 +104,6 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
-
         Auto_Alt_Text_Logger::log("Starting alt text generation", "info", [
             'attachment_id' => $attachment_id,
             'type' => $generation_type,

@@ -19,7 +19,9 @@ if (!defined('WPINC')) {
     die;
 }
 
-
+if (!defined('AUTO_ALT_TEXT_DEBUG')) {
+	define('AUTO_ALT_TEXT_DEBUG', WP_DEBUG);
+}
 
 // Include dependencies
 require_once __DIR__ . '/includes/config.php';
