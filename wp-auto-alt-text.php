@@ -30,6 +30,7 @@ require_once __DIR__ . '/includes/class-statistics-page.php';
 require_once __DIR__ . '/includes/class-ajax-handler.php';
 require_once __DIR__ . '/includes/class-image-process.php';
 require_once __DIR__ . '/includes/class-dashboard-widget.php';
+require_once __DIR__ . '/includes/class-page-builders.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
 register_activation_hook(__FILE__, ['Auto_Alt_Text_Activator', 'activate']);
@@ -52,6 +53,10 @@ add_action('admin_init', function() {
 					Auto_Alt_Text_OpenAI::get_privacy_policy_content()['content']
 			);
 	}
+});
+
+add_action('init', function() {
+	new Auto_Alt_Text_Page_Builders();
 });
 
 add_filter('wp_privacy_personal_data_exporters', function($exporters) {
