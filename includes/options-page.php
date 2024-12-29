@@ -12,6 +12,9 @@ if (!@include_once(plugin_dir_path(__FILE__) . 'config.php')) {
     if (!defined('AUTO_ALT_TEXT_LANGUAGE_OPTION')) {
         define('AUTO_ALT_TEXT_LANGUAGE_OPTION', 'language');
     }
+    if (!defined('AUTO_ALT_TEXT_AUTO_GENERATE_OPTION')) {
+        define('AUTO_ALT_TEXT_AUTO_GENERATE_OPTION', 'auto_alt_text_auto_generate');
+    }
 }
 
 add_action('admin_menu', 'auto_alt_text_menu');
@@ -111,6 +114,31 @@ function auto_alt_text_options() {
             ?>
 
             <div class="card">
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="auto_generate">
+                                <?php _e('Auto-generate on Upload', 'auto-alt-text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    id="auto_generate"
+                                    name="auto_alt_text_auto_generate"
+                                    value="1"
+                                    <?php checked(get_option('auto_alt_text_auto_generate', true)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('When enabled, alt text will be automatically generated when new images are uploaded.', 'auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card">
                 <h2><?php _e('API Configuration', 'wp-auto-alt-text'); ?></h2>
                 <?php
                 $encrypted_key = get_option('auto_alt_text_api_key');
@@ -167,12 +195,20 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row"><?php _e('Custom Template', 'wp-auto-alt-text'); ?></th>
                         <td>
-                            <textarea name="alt_text_prompt_template" id="alt-text-prompt-template" class="large-text code" rows="4"><?php echo esc_textarea(get_option('alt_text_prompt_template', 'You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text that:
-                                1. Is specific and descriptive
-                                2. Keeps it concise
-                                3. Includes relevant keywords
-                                4. Maintains proper grammar and syntax
-                                5. Focuses on the main subject and important details')); ?>
+                            <textarea name="alt_text_prompt_template" id="alt-text-prompt-template" class="large-text code" rows="4">
+                                <?php echo esc_textarea(get_option('alt_text_prompt_template',
+                                'You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {LANGUAGE} tailored to the following requirements:
+
+                                    1. Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
+                                    2. Do not include phrases like "image of" or "picture of".
+                                    3. Write the text in {LANGUAGE} language with correct grammar and syntax.
+                                    4. For ambiguous images, describe them neutrally.
+                                    5. Use plain and easy-to-understand language.
+                                    6. If {LANGUAGE} is unsupported, default to English.
+                                    7. Maintain proper grammar and syntax in {LANGUAGE}
+
+                                    Output:
+                                    A single, SEO-friendly alt text description')); ?>
                             </textarea>
                             <div id="template-counter" class="description">
                                 <div>Characters: <span id="char-count">0</span>/1000</div>
@@ -219,6 +255,15 @@ function auto_alt_text_register_settings() {
         SETTINGS_GROUP,
         'alt_text_prompt_template',     // New setting for prompt template
         'auto_alt_text_sanitize'
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'auto_alt_text_auto_generate',
+        [
+            'type' => 'boolean',
+            'default' => true,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
     );
 }
 
