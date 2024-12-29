@@ -329,3 +329,8 @@
   background-color: #0073aa;
   transition: width .3s ease-in-out;
 }
+
+.log-level-error { background-color: #ffebee !important; }
+.log-level-warning { background-color: #fff3e0 !important; }
+.log-level-info { background-color: #e8f5e9 !important; }
+.log-level-debug { background-color: #f5f5f5 !important; }

@@ -104,6 +104,11 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
+        Auto_Alt_Text_Logger::log("Starting alt text generation", "info", [
+            'attachment_id' => $attachment_id,
+            'type' => $generation_type,
+            'preview' => $preview_mode
+        ]);
 
         if (!get_option('auto_alt_text_auto_generate', true)) {
             return null;
@@ -164,6 +169,11 @@ class Auto_Alt_Text_OpenAI  {
                     set_transient($cache_key, $generated_text, DAY_IN_SECONDS);
                 }
 
+                Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
+                    'attachment_id' => $attachment_id,
+                    'tokens_used' => $tokens_used
+                ]);
+
                 return $generated_text;
             }
 
@@ -171,6 +181,10 @@ class Auto_Alt_Text_OpenAI  {
 
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
+            Auto_Alt_Text_Logger::log("API call failed", "error", [
+                'error' => $e->getMessage(),
+                'attachment_id' => $attachment_id
+            ]);
             return null;
         }
     }

@@ -6,6 +6,10 @@ class Auto_Alt_Text_Ajax_Handler {
     }
 
     public function generate_alt_text_for_attachment() {
+        Auto_Alt_Text_Logger::log("AJAX request received", "debug", [
+            'attachment_id' => $_POST['attachment_id'] ?? null
+        ]);
+
         check_ajax_referer('auto_alt_text_nonce', 'nonce');
 
         $attachment_id = intval($_POST['attachment_id']);

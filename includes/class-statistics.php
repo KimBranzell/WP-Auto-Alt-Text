@@ -43,6 +43,12 @@ class Auto_Alt_Text_Statistics {
     public function track_generation($image_id, $generated_text, $tokens_used, $generation_type, $is_applied = false, $is_edited = false, $edited_text = null) {
         global $wpdb;
 
+        Auto_Alt_Text_Logger::log("Tracking generation stats", "debug", [
+            'image_id' => $image_id,
+            'tokens' => $tokens_used,
+            'type' => $generation_type
+        ]);
+
         return $wpdb->insert(
             $this->table_name,
             [
