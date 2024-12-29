@@ -16,6 +16,20 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - Support for multiple image formats
 - Clean and intuitive user interface
 
+### API Key Responsibility
+
+Users must provide their own OpenAI API key. This plugin does not include or share API keys.
+Protect your API key by keeping it private and not sharing it with others.
+
+#### Compliance with OpenAI Terms of Use
+
+By using this plugin, you agree to comply with OpenAI’s Terms of Use.
+Ensure that your use of the OpenAI API aligns with OpenAI’s guidelines and restrictions.
+
+#### No Liability
+
+The developers of this plugin are not responsible for any misuse of the OpenAI API or non-compliance with OpenAI’s policies by end-users.
+
 ## Installation
 
 ### Standard Installation
