@@ -29,6 +29,7 @@ require_once __DIR__ . '/includes/class-statistics.php';
 require_once __DIR__ . '/includes/class-statistics-page.php';
 require_once __DIR__ . '/includes/class-ajax-handler.php';
 require_once __DIR__ . '/includes/class-image-process.php';
+require_once __DIR__ . '/includes/class-dashboard-widget.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
 register_activation_hook(__FILE__, ['Auto_Alt_Text_Activator', 'activate']);
@@ -38,6 +39,7 @@ $admin = new Auto_Alt_Text_Admin();
 $statistics = new Auto_Alt_Text_Statistics();
 $statistics_page = new Auto_Alt_Text_Statistics_Page();
 $ajax_handler = new Auto_Alt_Text_Ajax_Handler();
+$dashboard_widget = new Auto_Alt_Text_Dashboard_Widget();
 $image_processor = new Auto_Alt_Text_Image_Process($openai);
 
 

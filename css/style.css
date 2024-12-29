@@ -318,3 +318,14 @@
   display: block;
   margin-bottom: 4px;
 }
+.tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+}
+
+.progress-bar {
+  height: 20px;
+  background-color: #0073aa;
+  transition: width .3s ease-in-out;
+}

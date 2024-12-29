@@ -119,7 +119,12 @@ function auto_alt_text_options() {
                 ?>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('OpenAI API Key', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row">
+                            <label for="api_key">
+                            <?php _e('OpenAI API Key', 'wp-auto-alt-text'); ?>
+                            <span class="tooltip" data-tip="Enter your OpenAI API key here. You can get one from OpenAI's website.">?</span>
+                            </label>
+                        </th>
                         <td>
                             <input type="text"
                                 name="auto_alt_text_api_key"
