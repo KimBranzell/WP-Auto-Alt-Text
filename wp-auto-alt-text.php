@@ -8,8 +8,8 @@ Description:          Automatically generates alt text for images in the Media L
 Version:              1.0
 Requires at least:    6.0
 Requires PHP:         8.0
-License:              Do What The F*ck You Want To Public License v2 (WTFPL-2.0)
-License URI:          http://www.wtfpl.net/
+License:              Apache License 2.0 (Apache-2.0)
+License URI:          https://www.apache.org/licenses/LICENSE-2.0
 Text Domain:          auto-alt-text-plugin
 Domain Path:          /languages
 */
