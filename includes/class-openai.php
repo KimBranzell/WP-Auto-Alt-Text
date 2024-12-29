@@ -74,6 +74,21 @@ class Auto_Alt_Text_OpenAI  {
         return $this->last_error;
     }
 
+    public function test_api_key() {
+        try {
+            $response = $this->callAPI([
+                'model' => self::MODEL,
+                'messages' => [
+                    ['role' => 'user', 'content' => 'Test connection']
+                ],
+                'max_tokens' => 5
+            ]);
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
     public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
 
         $cache_key = $this->get_cache_key($image_source);

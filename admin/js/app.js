@@ -368,3 +368,36 @@ document.addEventListener('DOMContentLoaded', function() {
         updateCounter();
     }
 });
+
+class AutoAltTextBulkProcessor {
+    constructor() {
+        this.progressBar = document.querySelector('.aat-progress-bar');
+        this.progressText = document.querySelector('.aat-progress-text');
+        this.processButton = document.querySelector('.aat-process-button');
+    }
+
+    async processBatch(attachmentIds) {
+        this.showProgress();
+
+        for (let i = 0; i < attachmentIds.length; i++) {
+            const response = await this.processImage(attachmentIds[i]);
+            this.updateProgress(response);
+        }
+
+        this.hideProgress();
+    }
+
+    updateProgress(response) {
+        this.progressBar.style.width = `${response.percentage}%`;
+        this.progressText.textContent = `Processing: ${response.processed} of ${response.total} images`;
+    }
+
+    showProgress() {
+        this.progressBar.style.display = 'block';
+        this.processButton.disabled = true;
+    }
+
+    hideProgress() {
+        this.processButton.disabled = false;
+    }
+}
