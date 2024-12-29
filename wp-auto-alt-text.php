@@ -25,12 +25,14 @@ require_once __DIR__ . '/includes/class-openai.php';
 require_once __DIR__ . '/includes/class-rate-limiter.php';
 require_once __DIR__ . '/includes/options-page.php';
 require_once __DIR__ . '/includes/class-activator.php';
+require_once __DIR__ . '/includes/class-batch-processor.php';
 require_once __DIR__ . '/includes/class-statistics.php';
 require_once __DIR__ . '/includes/class-statistics-page.php';
 require_once __DIR__ . '/includes/class-ajax-handler.php';
 require_once __DIR__ . '/includes/class-image-process.php';
 require_once __DIR__ . '/includes/class-dashboard-widget.php';
 require_once __DIR__ . '/includes/class-page-builders.php';
+require_once __DIR__ . '/includes/class-woocommerce.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
 register_activation_hook(__FILE__, ['Auto_Alt_Text_Activator', 'activate']);
@@ -73,6 +75,11 @@ function myplugin_load_textdomain() {
 
 add_action( 'plugins_loaded', 'myplugin_load_textdomain' );
 add_action(	'plugins_loaded', ['Auto_Alt_Text_Activator', 'activate'] );
+add_action('plugins_loaded', function() {
+	if (class_exists('WooCommerce')) {
+			new Auto_Alt_Text_WooCommerce();
+	}
+});
 add_action(	'wp_ajax_apply_alt_text', [$ajax_handler, 'apply_alt_text']	);
 
 
