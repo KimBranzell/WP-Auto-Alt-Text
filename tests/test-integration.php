@@ -6,7 +6,7 @@ class IntegrationTest extends WP_UnitTestCase {
 
   public function setUp(): void {
       parent::setUp();
-      $this->openai = new OpenAI();
+      $this->openai = new Auto_Alt_Text_OpenAI();
       $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
       $this->batch_processor = new Auto_Alt_Text_Batch_Processor();
   }

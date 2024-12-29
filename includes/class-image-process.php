@@ -3,28 +3,31 @@
 class Auto_Alt_Text_Image_Process {
   private $openai;
 
-  public function __construct(OpenAI $openai) {
+  public function __construct(Auto_Alt_Text_OpenAI $openai) {
       $this->openai = $openai;
       add_action('add_attachment', array($this, 'handle_new_attachment'));
       add_filter('attachment_fields_to_edit', array($this, 'add_custom_generate_alt_text_button'), 10, 2);
       add_action('wp_ajax_generate_alt_text_for_attachment', array($this, 'generate_alt_text_for_attachment'));
+      add_action('wp_ajax_process_image_batch', array($this, 'process_image_batch'));
   }
 
   /**
    * Automatically generate alt text when a new image is uploaded.
    */
   public function auto_generate_alt_text_on_upload($attachment_id) {
+
     // Ensure the attachment is an image
-    if (wp_attachment_is_image($attachment_id)) {
-      // Get the image metadata or any relevant description
-      $attachment = get_post($attachment_id);
-      $image_description = $attachment->post_title; // or any other source of description
+    if (!wp_attachment_is_image($attachment_id)) {
+      return;
+    }
 
-      // Generate alt text using your function
-      $alt_text = $this->openai->generate_alt_text_with_openai($image_description);
+    // Get full server path instead of URL
+    $image_path = get_attached_file($attachment_id);
 
-      // Update the image's alt text
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+    $alt_text = $this->openai->generate_alt_text($image_path, $attachment_id, 'upload');
+
+    if ($alt_text) {
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
     }
   }
 
@@ -35,7 +38,7 @@ class Auto_Alt_Text_Image_Process {
 
     try {
         $image_url = $this->get_image_url_for_openai($attachment_id);
-        $alt_text = $this->openai->get_image_description($image_url);
+        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
 
         if (empty($alt_text)) {
             throw new Exception('Failed to generate alt text');
@@ -73,7 +76,7 @@ class Auto_Alt_Text_Image_Process {
         return $form_fields;
     }
 
-    $nonce = wp_create_nonce('generate_alt_text_nonce');
+    $nonce = wp_create_nonce('auto_alt_text_nonce');
     $form_fields['generate_alt_text'] = array(
         'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
         'input' => 'html',
@@ -100,50 +103,52 @@ class Auto_Alt_Text_Image_Process {
   }
 
   public function generate_alt_text_for_attachment() {
-    // Check for the required POST variables and nonce verification
     if (!isset($_POST['attachment_id']) || !isset($_POST['nonce'])) {
-      wp_die('Missing attachment ID or nonce verification failed.');
+      wp_send_json_error('Missing attachment ID or nonce verification failed.');
     }
 
     $attachment_id = intval($_POST['attachment_id']);
     $image_url = $this->get_image_url_for_openai($attachment_id);
     $nonce = sanitize_text_field($_POST['nonce']);
 
-    // Verify the nonce
     if (!wp_verify_nonce($nonce, 'generate_alt_text_nonce')) {
-      wp_die('Nonce verification failed.');
+      wp_send_json_error('Nonce verification failed.');
     }
 
     if (!$image_url) {
-        wp_die('Invalid attachment ID.');
+      wp_send_json_error('Invalid attachment ID.');
     }
 
-    // Assuming OpenAI class is correctly set up and included
-    $openai = new OpenAI();
-    $alt_text = $openai->get_image_description($image_url);
+    $openai = new Auto_Alt_Text_OpenAI();
+    $alt_text = $openai->generate_alt_text($image_url, $attachment_id);
 
-    echo sanitize_text_field($alt_text);
-    wp_die();
+
+    if ($alt_text) {
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+        wp_send_json_success(array('alt_text' => $alt_text));
+    } else {
+        wp_send_json_error('Failed to generate alt text');
+    }
   }
 
-    /**
-     * Get the image URL for OpenAI processing.
-     */
-    public function get_image_url_for_openai($attachment_id) {
-      if ($this->is_local_environment()) {
-        $path = get_attached_file($attachment_id);
+  /**
+   * Get the image URL for OpenAI processing.
+   */
+  public function get_image_url_for_openai($attachment_id) {
+    if ($this->is_local_environment()) {
+      $path = get_attached_file($attachment_id);
 
-        if (file_exists($path)) {
-            $type = pathinfo($path, PATHINFO_EXTENSION);
-            $data = file_get_contents($path);
-            return 'data:image/' . $type . ';base64,' . base64_encode($data);
-        } else {
-            throw new Exception('Image not found or could not be read.');
-        }
+      if (file_exists($path)) {
+          $type = pathinfo($path, PATHINFO_EXTENSION);
+          $data = file_get_contents($path);
+          return 'data:image/' . $type . ';base64,' . base64_encode($data);
       } else {
-          return wp_get_attachment_url($attachment_id);
+          throw new Exception('Image not found or could not be read.');
       }
+    } else {
+        return wp_get_attachment_url($attachment_id);
     }
+  }
 
   /**
    * Check if the WordPress instance is running in a local environment.
@@ -151,6 +156,25 @@ class Auto_Alt_Text_Image_Process {
   private function is_local_environment() {
 	$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
 	return strpos($host, '.ddev.site') !== false || strpos($host, '.test') !== false;
+  }
+
+  public function process_image_batch() {
+    check_ajax_referer('auto_alt_text_batch_nonce', 'nonce');
+
+    $ids = json_decode(stripslashes($_POST['ids']));
+    $results = [];
+
+    foreach ($ids as $id) {
+      $image_url = $this->get_image_url_for_openai($id);
+      $alt_text = $this->openai->generate_alt_text($image_url, $id, 'batch');
+
+      if ($alt_text) {
+        update_post_meta($id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+        $results[$id] = $alt_text;
+      }
+    }
+
+    wp_send_json_success($results);
   }
 }
 

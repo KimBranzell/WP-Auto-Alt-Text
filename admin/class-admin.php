@@ -1,15 +1,37 @@
 <?php
 class Auto_Alt_Text_Admin {
   private const SCRIPT_HANDLE = 'auto-alt-text-admin-js';
-  private const SCRIPT_PATH = 'js/admin.js';
+  private const SCRIPT_PATH = 'js/app.js';
   private const STYLE_HANDLE = 'auto_alt_text_css';
 
   /**
    * Constructor for the admin class.
    */
   public function __construct() {
+      add_action('bulk_actions-upload', [$this, 'add_bulk_actions']);
+      add_filter('handle_bulk_actions-upload', [$this, 'handle_bulk_actions'], 10, 3);
       add_action('admin_enqueue_scripts', [$this, 'enqueueAutoAltTextScript']);
       add_action('admin_enqueue_scripts', [$this, 'enqueueStyles']);
+  }
+
+  public function add_bulk_actions($bulk_actions) {
+    $bulk_actions['generate_alt_text'] = __('Generate Alt Text', 'wp-auto-alt-text');
+    return $bulk_actions;
+  }
+
+  public function handle_bulk_actions($redirect_to, $doaction, $post_ids) {
+      if ($doaction !== 'generate_alt_text') {
+          return $redirect_to;
+      }
+
+      $this->enqueueAutoAltTextScript();
+
+      return add_query_arg([
+          'bulk_generate_alt_text' => count($post_ids),
+          'bulk_ids' => implode(',', $post_ids),
+          'processed' => 0,
+          'failed' => 0
+      ], $redirect_to);
   }
 
   /**
@@ -26,14 +48,21 @@ class Auto_Alt_Text_Admin {
    * Enqueue the Auto Alt Text script for the admin area.
    */
   public function enqueueAutoAltTextScript(): void {
-      $scriptUrl = plugin_dir_url(__FILE__) . self::SCRIPT_PATH;
-      wp_enqueue_script(self::SCRIPT_HANDLE, $scriptUrl, ['jquery'], '1.0.0', true);
+    $scriptUrl = plugin_dir_url(__FILE__) . self::SCRIPT_PATH;
+    wp_enqueue_script(
+        self::SCRIPT_HANDLE,
+        $scriptUrl,
+        [],
+        '1.0.0',
+        true
+    );
 
-      // Localize the script with new data
-      wp_localize_script(self::SCRIPT_HANDLE, 'autoAltTextData', [
-          'ajaxurl' => admin_url('admin-ajax.php'),
-          // 'nonce' => wp_create_nonce('your_nonce') // Uncomment if using a nonce
-      ]);
+    wp_script_add_data(self::SCRIPT_HANDLE, 'type', 'module');
+
+    wp_localize_script(self::SCRIPT_HANDLE, 'autoAltTextData', [
+        'ajaxurl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('auto_alt_text_batch_nonce')
+    ]);
   }
 
   /**
@@ -60,4 +89,6 @@ class Auto_Alt_Text_Admin {
 
       wp_send_json_success($results);
   }
+
+
 }
