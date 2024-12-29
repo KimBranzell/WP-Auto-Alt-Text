@@ -42,7 +42,6 @@ $ajax_handler = new Auto_Alt_Text_Ajax_Handler();
 $dashboard_widget = new Auto_Alt_Text_Dashboard_Widget();
 $image_processor = new Auto_Alt_Text_Image_Process($openai);
 
-
 add_action('admin_enqueue_scripts', [$admin, 'enqueueAutoAltTextScript']);
 
 add_action('admin_init', function() {
@@ -69,7 +68,6 @@ function myplugin_load_textdomain() {
 
 add_action( 'plugins_loaded', 'myplugin_load_textdomain' );
 add_action(	'plugins_loaded', ['Auto_Alt_Text_Activator', 'activate'] );
-add_action(	'add_attachment', [$image_processor, 'auto_generate_alt_text_on_upload'] );
 add_action(	'wp_ajax_apply_alt_text', [$ajax_handler, 'apply_alt_text']	);
 
 

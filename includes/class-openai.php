@@ -80,7 +80,8 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     private function get_cache_key($image_source) {
-        return 'alt_text_' . md5($image_source);
+        $timestamp = current_time('timestamp');
+        return 'auto_alt_text_' . md5($image_source . $timestamp);
     }
 
     public function get_last_error() {
@@ -153,7 +154,8 @@ class Auto_Alt_Text_OpenAI  {
                     $attachment_id,
                     $generated_text,
                     $tokens_used,
-                    $generation_type
+                    $generation_type,
+                    !$preview_mode
                 );
 
                 // Only save alt text if not in preview mode
