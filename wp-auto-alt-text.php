@@ -37,6 +37,7 @@ require_once __DIR__ . '/includes/class-page-builders.php';
 require_once __DIR__ . '/includes/class-woocommerce.php';
 require_once __DIR__ . '/includes/class-cli.php';
 require_once __DIR__ . '/includes/class-rest-api.php';
+require_once __DIR__ . '/includes/class-logger.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
 register_activation_hook(__FILE__, ['Auto_Alt_Text_Activator', 'activate']);
@@ -66,6 +67,10 @@ add_action('admin_init', function() {
 
 add_action('init', function() {
 	new Auto_Alt_Text_Page_Builders();
+});
+
+add_action('init', function() {
+	new Auto_Alt_Text_Logger();
 });
 
 add_action('init', function() {

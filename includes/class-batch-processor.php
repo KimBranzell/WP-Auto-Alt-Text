@@ -15,6 +15,10 @@ class Auto_Alt_Text_Batch_Processor {
      */
     public function process_batch($attachment_ids) {
 
+        Auto_Alt_Text_Logger::log("Starting batch processing", "info", [
+            'batch_size' => count($attachment_ids)
+        ]);
+
         // Verify nonce
         if (!check_ajax_referer('wp_auto_alt_text_nonce', 'nonce', false)) {
             wp_send_json_error('Invalid security token');
@@ -30,6 +34,8 @@ class Auto_Alt_Text_Batch_Processor {
 
         foreach ($chunks as $chunk) {
             foreach ($attachment_ids as $attachment_id) {
+                Auto_Alt_Text_Logger::log("Processing attachment", "debug", ['id' => $attachment_id]);
+
                 $image_url = wp_get_attachment_url($attachment_id);
                 if ($image_url) {
                     $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);

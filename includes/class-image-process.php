@@ -12,7 +12,9 @@ class Auto_Alt_Text_Image_Process {
   }
 
   public function handle_new_attachment($attachment_id) {
-    error_log('Beginning alt text generation for: ' . $attachment_id);
+    Auto_Alt_Text_Logger::log("Processing new image upload", "info", [
+      'attachment_id' => $attachment_id
+    ]);
 
     $recently_processed = get_transient('recently_processed_' . $attachment_id);
     if ($recently_processed) {
@@ -155,6 +157,9 @@ class Auto_Alt_Text_Image_Process {
     $results = [];
 
     foreach ($ids as $id) {
+      Auto_Alt_Text_Logger::log("Processing new batch image upload", "info", [
+        'attachment_id' => $id
+      ]);
       $image_url = $this->get_image_url_for_openai($id);
       $alt_text = $this->openai->generate_alt_text($image_url, $id, 'batch');
 
