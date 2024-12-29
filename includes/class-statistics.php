@@ -77,7 +77,7 @@ class Auto_Alt_Text_Statistics {
             ],
             'recent_generations' => $wpdb->get_results("
                 SELECT t1.*,
-                       (SELECT COUNT(*)
+                        (SELECT COUNT(*)
                         FROM {$this->table_name} t2
                         WHERE t2.image_id = t1.image_id
                         AND t2.generation_time <= t1.generation_time) as update_number

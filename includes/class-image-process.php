@@ -11,34 +11,21 @@ class Auto_Alt_Text_Image_Process {
       add_action('wp_ajax_process_image_batch', array($this, 'process_image_batch'));
   }
 
-  /**
-   * Automatically generate alt text when a new image is uploaded.
-   */
-  public function auto_generate_alt_text_on_upload($attachment_id) {
-
-    // Ensure the attachment is an image
-    if (!wp_attachment_is_image($attachment_id)) {
-      return;
-    }
-
-    // Get full server path instead of URL
-    $image_path = get_attached_file($attachment_id);
-
-    $alt_text = $this->openai->generate_alt_text($image_path, $attachment_id, 'upload');
-
-    if ($alt_text) {
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
-    }
-  }
-
   public function handle_new_attachment($attachment_id) {
+    error_log('Beginning alt text generation for: ' . $attachment_id);
+
+    $recently_processed = get_transient('recently_processed_' . $attachment_id);
+    if ($recently_processed) {
+        return;
+    }
+
     if (!wp_attachment_is_image($attachment_id)) {
         return;
     }
 
     try {
         $image_url = $this->get_image_url_for_openai($attachment_id);
-        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
+        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'upload');
 
         if (empty($alt_text)) {
             throw new Exception('Failed to generate alt text');
@@ -51,6 +38,9 @@ class Auto_Alt_Text_Image_Process {
             echo '<p>Alt text successfully generated and applied.</p>';
             echo '</div>';
         });
+        error_log('Alt text generated and applied for attachment ID: ' . $attachment_id);
+        // Set a transient to prevent duplicate processing
+        set_transient('recently_processed_' . $attachment_id, true, 30);
     } catch (Exception $e) {
         add_action('admin_notices', function() use ($e) {
             echo '<div class="notice notice-error is-dismissible">';

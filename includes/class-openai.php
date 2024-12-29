@@ -4,6 +4,7 @@ class Auto_Alt_Text_OpenAI  {
     private const MODEL = 'gpt-4o';
     private const CACHE_EXPIRATION = DAY_IN_SECONDS;
     private const MAX_TOKENS = 300;
+    private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
 
     private $api_key;
     private $last_error;
@@ -31,6 +32,18 @@ class Auto_Alt_Text_OpenAI  {
         }
         $iv = substr(AUTH_SALT, 0, 16);
         return openssl_decrypt(base64_decode($encrypted_key), 'AES-256-CBC', AUTH_SALT, 0, $iv);
+    }
+
+    public function register_settings() {
+        register_setting(
+            'auto_alt_text_settings',
+            self::AUTO_GENERATE_OPTION,
+            [
+                'type' => 'boolean',
+                'default' => true,
+                'sanitize_callback' => 'rest_sanitize_boolean'
+            ]
+        );
     }
 
     public static function get_privacy_policy_content() {
@@ -67,7 +80,8 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     private function get_cache_key($image_source) {
-        return 'alt_text_' . md5($image_source);
+        $timestamp = current_time('timestamp');
+        return 'auto_alt_text_' . md5($image_source . $timestamp);
     }
 
     public function get_last_error() {
@@ -90,6 +104,10 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
+
+        if (!get_option('auto_alt_text_auto_generate', true)) {
+            return null;
+        }
 
         $cache_key = $this->get_cache_key($image_source);
         $cached_result = get_transient($cache_key);
@@ -136,7 +154,8 @@ class Auto_Alt_Text_OpenAI  {
                     $attachment_id,
                     $generated_text,
                     $tokens_used,
-                    $generation_type
+                    $generation_type,
+                    !$preview_mode
                 );
 
                 // Only save alt text if not in preview mode
