@@ -19,20 +19,31 @@ if (!defined('WPINC')) {
     die;
 }
 
+
+
 // Include dependencies
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/class-openai.php';
 require_once __DIR__ . '/includes/class-rate-limiter.php';
 require_once __DIR__ . '/includes/options-page.php';
 require_once __DIR__ . '/includes/class-activator.php';
+require_once __DIR__ . '/includes/class-batch-processor.php';
 require_once __DIR__ . '/includes/class-statistics.php';
 require_once __DIR__ . '/includes/class-statistics-page.php';
 require_once __DIR__ . '/includes/class-ajax-handler.php';
 require_once __DIR__ . '/includes/class-image-process.php';
 require_once __DIR__ . '/includes/class-dashboard-widget.php';
+require_once __DIR__ . '/includes/class-page-builders.php';
+require_once __DIR__ . '/includes/class-woocommerce.php';
+require_once __DIR__ . '/includes/class-cli.php';
+require_once __DIR__ . '/includes/class-rest-api.php';
 require_once __DIR__ . '/admin/class-admin.php';
 
 register_activation_hook(__FILE__, ['Auto_Alt_Text_Activator', 'activate']);
+
+if (defined('WP_CLI') && WP_CLI) {
+	WP_CLI::add_command('auto-alt-text', 'Auto_Alt_Text_CLI');
+}
 
 $openai = new Auto_Alt_Text_OpenAI();
 $admin = new Auto_Alt_Text_Admin();
@@ -53,6 +64,14 @@ add_action('admin_init', function() {
 	}
 });
 
+add_action('init', function() {
+	new Auto_Alt_Text_Page_Builders();
+});
+
+add_action('init', function() {
+	new Auto_Alt_Text_REST_API();
+});
+
 add_filter('wp_privacy_personal_data_exporters', function($exporters) {
 	$exporters['wp-auto-alt-text'] = array(
 			'exporter_friendly_name' => __('WP Auto Alt Text Generated Content'),
@@ -68,6 +87,11 @@ function myplugin_load_textdomain() {
 
 add_action( 'plugins_loaded', 'myplugin_load_textdomain' );
 add_action(	'plugins_loaded', ['Auto_Alt_Text_Activator', 'activate'] );
+add_action('plugins_loaded', function() {
+	if (class_exists('WooCommerce')) {
+			new Auto_Alt_Text_WooCommerce();
+	}
+});
 add_action(	'wp_ajax_apply_alt_text', [$ajax_handler, 'apply_alt_text']	);
 
 
