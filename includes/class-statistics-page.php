@@ -13,18 +13,32 @@ class Auto_Alt_Text_Statistics_Page {
         add_action('admin_menu', [$this, 'add_statistics_page']);
     }
 
+    /**
+     * Adds a new submenu page for the Alt Text Statistics under the "Auto Alt Text" admin menu.
+     *
+     * This method is hooked to the 'admin_menu' action and creates a new submenu page with the title "Alt Text Statistics"
+     * and the menu title "Statistics". The page is accessible to users with the 'manage_options' capability and has the
+     * menu slug 'auto-alt-text-stats'. The 'render_statistics_page' method is called when the page is accessed.
+     */
     public function add_statistics_page() {
-      add_submenu_page(
-          'auto-alt-text',           // Parent slug
-          'Alt Text Statistics',     // Page title
-          'Statistics',              // Menu title
-          'manage_options',          // Capability
-          'auto-alt-text-stats',     // Menu slug
-          [$this, 'render_statistics_page'],
-          8
-      );
+        add_submenu_page(
+            'auto-alt-text',           // Parent slug
+            'Alt Text Statistics',     // Page title
+            'Statistics',              // Menu title
+            'manage_options',          // Capability
+            'auto-alt-text-stats',     // Menu slug
+            [$this, 'render_statistics_page'],
+            8
+        );
     }
 
+    /**
+     * Renders the Alt Text Generation Statistics page in the WordPress admin.
+     *
+     * This method is responsible for displaying the statistics related to the auto-generated alt text, including the total
+     * number of generations, total tokens used, generation types, and a history of recent generations. It also provides
+     * functionality to clean up any orphaned records from deleted images.
+     */
     public function render_statistics_page() {
         global $wpdb;
 
@@ -124,6 +138,15 @@ class Auto_Alt_Text_Statistics_Page {
         <?php
     }
 
+    /**
+     * Generates a text diff between the old and new text.
+     *
+     * This private function is used to generate a text diff between the old and new text. It uses the Text_Diff and Text_Diff_Renderer_Inline classes to generate the diff.
+     *
+     * @param string $old_text The old text to compare.
+     * @param string $new_text The new text to compare.
+     * @return string The rendered text diff.
+     */
     private function text_diff($old_text, $new_text) {
         $old_words = preg_split('/\s+/', $old_text);
         $new_words = preg_split('/\s+/', $new_text);

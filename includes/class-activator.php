@@ -1,5 +1,10 @@
 <?php
 class Auto_Alt_Text_Activator {
+    /**
+     * Activates the plugin by creating or updating the necessary database tables.
+     *
+     * @return void
+     */
     public static function activate() {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();

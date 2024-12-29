@@ -9,6 +9,15 @@ class Auto_Alt_Text_REST_API {
         add_action('rest_api_init', [$this, 'register_routes']);
     }
 
+    /**
+     * Registers the REST API routes for the Auto Alt Text plugin.
+     *
+     * Includes two routes:
+     * - '/generate': Generates alt text for a single image attachment.
+     * - '/batch': Generates alt text for a batch of image attachments.
+     *
+     * Both routes require the 'upload_files' capability to access.
+     */
     public function register_routes() {
         register_rest_route($this->namespace, '/generate', [
             'methods' => 'POST',
@@ -38,10 +47,21 @@ class Auto_Alt_Text_REST_API {
         ]);
     }
 
+    /**
+     * Checks if the current user has the 'upload_files' capability, which is required to access the REST API routes.
+     *
+     * @return bool True if the current user has the 'upload_files' capability, false otherwise.
+     */
     public function check_permission() {
         return current_user_can('upload_files');
     }
 
+    /**
+     * Generates alt text for a single image attachment using the OpenAI API.
+     *
+     * @param WP_REST_Request $request The REST API request object, containing the 'attachment_id' parameter.
+     * @return WP_REST_Response A response object with the generated alt text or an error message.
+     */
     public function generate_alt_text($request) {
         $attachment_id = $request->get_param('attachment_id');
         $image_url = wp_get_attachment_url($attachment_id);
@@ -62,6 +82,12 @@ class Auto_Alt_Text_REST_API {
         ], 400);
     }
 
+    /**
+     * Processes a batch of image attachment IDs, generates alt text for each image using the OpenAI API, and returns the results.
+     *
+     * @param WP_REST_Request $request The REST API request object, containing the 'attachment_ids' parameter.
+     * @return WP_REST_Response A response object with the generated alt text for each image or an error message.
+     */
     public function process_batch($request) {
         $attachment_ids = $request->get_param('attachment_ids');
         $results = [];

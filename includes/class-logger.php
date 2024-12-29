@@ -3,22 +3,45 @@ class Auto_Alt_Text_Logger {
     private $table_name;
     const LOG_LEVELS = ['debug', 'info', 'warning', 'error'];
 
+    /**
+     * Checks if the plugin is in debug mode.
+     *
+     * @return bool True if the plugin is in debug mode, false otherwise.
+     */
     private static function is_debug_mode() {
         return defined('AUTO_ALT_TEXT_DEBUG') && AUTO_ALT_TEXT_DEBUG;
     }
 
+    /**
+     * Logs a debug message if the plugin is in debug mode.
+     *
+     * @param string $message The message to log.
+     * @param array $context Optional. Additional context to include in the log entry.
+     */
     public static function debug($message, $context = []) {
         if (self::is_debug_mode()) {
             self::log($message, 'debug', $context);
         }
     }
 
+    /**
+     * Initializes the Auto_Alt_Text_Logger class.
+     *
+     * Retrieves the WordPress database prefix and stores it in the `$table_name` property.
+     * Adds an action to the 'admin_menu' hook to add a logs page to the WordPress admin menu.
+     */
     public function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'auto_alt_text_logs';
         add_action('admin_menu', [$this, 'add_logs_page']);
     }
 
+    /**
+     * Adds a submenu page to the WordPress admin menu for viewing the Auto Alt Text logs.
+     *
+     * This method is hooked to the 'admin_menu' action and creates a new submenu page under the 'auto-alt-text' parent menu item.
+     * The submenu page allows users with the 'manage_options' capability to view the Auto Alt Text logs.
+     */
     public function add_logs_page() {
         add_submenu_page(
             'auto-alt-text',
@@ -30,6 +53,13 @@ class Auto_Alt_Text_Logger {
         );
     }
 
+    /**
+     * Renders the Auto Alt Text logs page in the WordPress admin.
+     *
+     * This method is responsible for handling the display and functionality of the Auto Alt Text logs page.
+     * It checks the user's capabilities, handles log export and clearing actions, retrieves the current logs based on
+     * filters, and renders the logs table.
+     */
     public function render_logs_page() {
         if (!current_user_can('manage_options')) {
             return;
@@ -131,6 +161,21 @@ class Auto_Alt_Text_Logger {
         <?php
     }
 
+    /**
+     * Retrieves a set of logs based on the provided arguments.
+     *
+     * @param array $args {
+     *     Optional. An array of arguments to customize the log query.
+     *
+     *     @type string $level     The log level to filter by.
+     *     @type string $search    The search term to filter logs by message or context.
+     *     @type int    $per_page  The number of logs to retrieve per page.
+     *     @type int    $page      The page number to retrieve.
+     *     @type string $orderby   The column to order the results by.
+     *     @type string $order     The order direction (ASC or DESC).
+     * }
+     * @return array An array of log objects.
+     */
     public function get_logs($args = []) {
         global $wpdb;
 
@@ -168,6 +213,12 @@ class Auto_Alt_Text_Logger {
         );
     }
 
+    /**
+     * Exports the logs stored in the database to a CSV file.
+     *
+     * This method retrieves the log entries from the database, formats them as a CSV file,
+     * and sends the file to the client for download.
+     */
     public function export_logs() {
         global $wpdb;
 
@@ -206,11 +257,25 @@ class Auto_Alt_Text_Logger {
         die();
     }
 
+    /**
+     * Clears all logs from the database table.
+     *
+     * This method truncates the database table where the logs are stored, effectively
+     * removing all log entries.
+     */
     public function clear_logs() {
         global $wpdb;
         return $wpdb->query("TRUNCATE TABLE {$this->table_name}");
     }
 
+    /**
+     * Cleans up old logs from the database table.
+     *
+     * This method deletes log entries from the database table that are older than the specified number of days.
+     *
+     * @param int $days The number of days to keep logs for. Defaults to 30 days.
+     * @return int The number of rows deleted from the database table.
+     */
     public function cleanup_old_logs($days = 30) {
         global $wpdb;
         return $wpdb->query($wpdb->prepare(
@@ -219,6 +284,17 @@ class Auto_Alt_Text_Logger {
         ));
     }
 
+    /**
+     * Logs a message to the debug log and the database.
+     *
+     * This method logs a message with the specified level and context to both the debug.log file
+     * and the database table for logging. The log entry is formatted with the current timestamp,
+     * the log level, the message, and the context (if provided).
+     *
+     * @param string $message The message to log.
+     * @param string $level The log level, defaults to 'info'.
+     * @param array $context Additional context information to include with the log entry.
+     */
     public static function log($message, $level = 'info', $context = []) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'auto_alt_text_logs';

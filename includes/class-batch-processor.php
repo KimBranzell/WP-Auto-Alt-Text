@@ -3,15 +3,18 @@ class Auto_Alt_Text_Batch_Processor {
     private $batch_size = 10;
     private $openai;
 
+    /**
+     * Initializes the Auto_Alt_Text_OpenAI instance for the batch processor.
+     */
     public function __construct() {
         $this->openai = new Auto_Alt_Text_OpenAI();
     }
 
     /**
-     * Processes a batch of attachment IDs to generate and update the alt text for the corresponding images.
+     * Processes a batch of attachment IDs, generating alternative text for each attachment.
      *
      * @param array $attachment_ids The IDs of the attachments to process.
-     * @return array The generated alt text for each processed attachment.
+     * @return array The generated alternative text for each attachment, keyed by attachment ID.
      */
     public function process_batch($attachment_ids) {
 

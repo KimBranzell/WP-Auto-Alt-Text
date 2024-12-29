@@ -1,5 +1,4 @@
 <?php
-
 class Auto_Alt_Text_Image_Process {
   private $openai;
 
@@ -11,6 +10,17 @@ class Auto_Alt_Text_Image_Process {
       add_action('wp_ajax_process_image_batch', array($this, 'process_image_batch'));
   }
 
+  /**
+   * Handles the processing of a newly uploaded attachment.
+   *
+   * This method is called when a new attachment is uploaded to the WordPress media library.
+   * It checks if the attachment is an image, generates alternative text for the image using the OpenAI API,
+   * and updates the `_wp_attachment_image_alt` post meta with the generated alt text.
+   * If the alt text generation is successful, a success notice is displayed in the WordPress admin.
+   * If there is an error, an error notice is displayed instead.
+   *
+   * @param int $attachment_id The ID of the newly uploaded attachment.
+   */
   public function handle_new_attachment($attachment_id) {
     Auto_Alt_Text_Logger::log("Processing new image upload", "info", [
       'attachment_id' => $attachment_id
@@ -52,6 +62,17 @@ class Auto_Alt_Text_Image_Process {
     }
   }
 
+  /**
+   * Adds a custom "Generate Alt Text" button to the WordPress media library attachment form.
+   *
+   * This method checks if the OpenAI API key is configured. If not, it displays a warning notice
+   * instead of the button. If the API key is set, it creates a button that, when clicked, triggers
+   * the generation of alternative text for the attachment using the OpenAI API.
+   *
+   * @param array $form_fields The attachment form fields.
+   * @param WP_Post $post The attachment post object.
+   * @return array The modified attachment form fields.
+   */
   public function add_custom_generate_alt_text_button($form_fields, $post) {
     $api_key = get_option('auto_alt_text_api_key');
 
@@ -94,6 +115,16 @@ class Auto_Alt_Text_Image_Process {
     return $form_fields;
   }
 
+  /**
+   * Generates alternative text for an attachment using the OpenAI API.
+   *
+   * This method first verifies the attachment ID and nonce, then retrieves the image URL for the
+   * attachment. It then uses the Auto_Alt_Text_OpenAI class to generate alternative text for the
+   * image. If the generation is successful, the alternative text is saved as post metadata for the
+   * attachment. The method then returns a JSON response with the generated alternative text.
+   *
+   * @return void
+   */
   public function generate_alt_text_for_attachment() {
     if (!isset($_POST['attachment_id']) || !isset($_POST['nonce'])) {
       wp_send_json_error('Missing attachment ID or nonce verification failed.');
@@ -125,6 +156,16 @@ class Auto_Alt_Text_Image_Process {
 
   /**
    * Get the image URL for OpenAI processing.
+   *
+   * This method checks if the current environment is a local environment, and if so, it retrieves the
+   * attached file path for the given attachment ID. It then reads the file contents, encodes them in
+   * base64, and returns a data URL for the image. If the file does not exist, it throws an exception.
+   * If the environment is not a local environment, it simply returns the attachment URL using the
+   * `wp_get_attachment_url()` function.
+   *
+   * @param int $attachment_id The ID of the attachment to get the image URL for.
+   * @return string The image URL for OpenAI processing.
+   * @throws Exception If the image file does not exist or could not be read.
    */
   public function get_image_url_for_openai($attachment_id) {
     if ($this->is_local_environment()) {
@@ -143,13 +184,26 @@ class Auto_Alt_Text_Image_Process {
   }
 
   /**
-   * Check if the WordPress instance is running in a local environment.
+   * Checks if the current WordPress instance is running in a local environment.
+   *
+   * This method checks the HTTP host or server name to determine if the site is running on a local
+   * development environment, such as a `.ddev.site` or `.test` domain.
+   *
+   * @return bool True if the site is running in a local environment, false otherwise.
    */
   private function is_local_environment() {
 	$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
 	return strpos($host, '.ddev.site') !== false || strpos($host, '.test') !== false;
   }
 
+  /**
+   * Processes a batch of image uploads and generates alt text for each image.
+   *
+   * This method is called via AJAX to process a batch of image uploads. It retrieves the IDs of the
+   * uploaded images from the request, generates alt text for each image using the OpenAI API, and
+   * updates the post metadata with the generated alt text. The method then returns a success response
+   * with the generated alt text for each image.
+   */
   public function process_image_batch() {
     check_ajax_referer('auto_alt_text_batch_nonce', 'nonce');
 

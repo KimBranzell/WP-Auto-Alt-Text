@@ -12,7 +12,7 @@ class Auto_Alt_Text_CLI {
     /**
      * Generates alt text for images in the media library
      *
-     * ## OPTIONS
+     * ### Options
      *
      * [--limit=<number>]
      * : Maximum number of images to process. Default: all images
@@ -20,11 +20,13 @@ class Auto_Alt_Text_CLI {
      * [--skip-existing]
      * : Skip images that already have alt text
      *
-     * ## EXAMPLES
+     * ### Examples
      *
-     *     wp auto-alt-text generate
-     *     wp auto-alt-text generate --limit=50
-     *     wp auto-alt-text generate --skip-existing
+     *     `wp auto-alt-text generate`
+     *
+     *     `wp auto-alt-text generate --limit=50`
+     *
+     *     `wp auto-alt-text generate --skip-existing`
      */
     public function generate($args, $assoc_args) {
         $limit = isset($assoc_args['limit']) ? (int) $assoc_args['limit'] : -1;
@@ -68,7 +70,14 @@ class Auto_Alt_Text_CLI {
     }
 
     /**
-     * Shows statistics about generated alt texts
+     * Shows statistics about generated alt texts.
+     *
+     * This method retrieves various statistics related to the generated alt texts, such as the total number of generated alt texts, the number of successfully applied alt texts, the number of user-edited alt texts, the average number of tokens used per image, the total number of tokens used, and the estimated total cost based on GPT-4 Vision pricing.
+     *
+     * The statistics are formatted and displayed in a table format using the WP-CLI utility.
+     *
+     * ### Usage
+     * `wp auto-alt-text stats`
      */
     public function stats($args, $assoc_args) {
       global $wpdb;

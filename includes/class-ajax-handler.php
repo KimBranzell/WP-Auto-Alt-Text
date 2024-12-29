@@ -1,10 +1,23 @@
 <?php
 class Auto_Alt_Text_Ajax_Handler {
+    /**
+     * Registers AJAX actions for generating alt text for attachments and processing image batches.
+     */
     public function __construct() {
         add_action('wp_ajax_generate_alt_text_for_attachment', [$this, 'generate_alt_text_for_attachment']);
         add_action('wp_ajax_process_image_batch', [$this, 'process_image_batch']);
     }
 
+    /**
+     * Generates alt text for an attachment using the OpenAI API.
+     *
+     * This function is called via an AJAX request to generate alt text for a specific attachment.
+     * It checks the user's permissions, retrieves the attachment's image URL, and then uses the
+     * Auto_Alt_Text_OpenAI class to generate the alt text. The generated alt text is then
+     * returned as a JSON response.
+     *
+     * @return void
+     */
     public function generate_alt_text_for_attachment() {
         Auto_Alt_Text_Logger::log("AJAX request received", "debug", [
             'attachment_id' => $_POST['attachment_id'] ?? null
@@ -31,6 +44,15 @@ class Auto_Alt_Text_Ajax_Handler {
         }
     }
 
+    /**
+     * Processes a batch of image attachments and generates alt text for them using the OpenAI API.
+     *
+     * This function is called via an AJAX request to generate alt text for a batch of image attachments.
+     * It first checks the user's permissions to ensure they have the necessary privileges to upload files.
+     * It then retrieves the IDs of the images to be processed from the request, and for each image, it
+     * generates the alt text using the Auto_Alt_Text_OpenAI class. The generated alt text is then
+     * returned as a JSON response.
+     */
     public function process_image_batch() {
         check_ajax_referer('auto_alt_text_batch_nonce', 'nonce');
 
@@ -60,6 +82,15 @@ class Auto_Alt_Text_Ajax_Handler {
 
         wp_send_json_success($results);
     }
+    /**
+     * Applies the generated alt text to the specified image attachment.
+     *
+     * This function is called via an AJAX request to update the alt text for a specific image attachment.
+     * It first checks the security token to ensure the request is valid. It then retrieves the necessary
+     * parameters from the request, including the attachment ID, the generated alt text, and whether the
+     * text was manually edited. It updates the alt text for the attachment and also updates the statistics
+     * record for the generated text. Finally, it returns a success response with the updated alt text.
+     */
     public function apply_alt_text() {
         try {
             if (!check_ajax_referer('auto_alt_text_nonce', 'nonce', false)) {
@@ -92,18 +123,18 @@ class Auto_Alt_Text_Ajax_Handler {
 
             $wpdb->query($wpdb->prepare(
                 "UPDATE {$table_name}
-                 SET is_applied = 1,
-                     is_edited = %d,
-                     edited_text = %s
-                 WHERE image_id = %d
-                 AND generated_text = %s
-                 AND generation_time = (
-                     SELECT max_time FROM (
-                         SELECT MAX(generation_time) as max_time
-                         FROM {$table_name}
-                         WHERE image_id = %d
-                     ) as sub
-                 )",
+                    SET is_applied = 1,
+                        is_edited = %d,
+                        edited_text = %s
+                    WHERE image_id = %d
+                    AND generated_text = %s
+                    AND generation_time = (
+                        SELECT max_time FROM (
+                            SELECT MAX(generation_time) as max_time
+                            FROM {$table_name}
+                            WHERE image_id = %d
+                        ) as sub
+                    )",
                 $is_edited,
                 $is_edited ? $alt_text : null,
                 $attachment_id,
