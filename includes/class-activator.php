@@ -6,6 +6,9 @@ class Auto_Alt_Text_Activator {
      * @return void
      */
 
+    private const CURRENT_DB_VERSION = '1.0';
+    private const COLUMN_VERSION = 'db_version';
+
     private const COLUMN_GENERATION_TYPE = 'generation_type';
     private const COLUMN_IS_EDITED = 'is_edited';
     private const COLUMN_EDITED_TEXT = 'edited_text';
@@ -35,6 +38,17 @@ class Auto_Alt_Text_Activator {
         return $columns !== false && in_array($column, $columns);
     }
 
+    private static function add_version_tracking($table) {
+        $wpdb = self::get_db();
+
+        if (!self::column_exists($table, self::COLUMN_VERSION)) {
+            $result = $wpdb->query("ALTER TABLE {$table} ADD COLUMN " . self::COLUMN_VERSION . " varchar(10) NOT NULL DEFAULT '" . self::CURRENT_DB_VERSION . "'");
+            if ($result === false) {
+                throw new Exception('Failed to add version tracking column');
+            }
+        }
+    }
+
     public static function activate() {
         $wpdb = self::get_db();
         $charset_collate = $wpdb->get_charset_collate();
@@ -42,6 +56,10 @@ class Auto_Alt_Text_Activator {
         $logs_table = self::get_logs_table_name();
 
         try {
+            // Add version tracking to both tables
+            self::add_version_tracking($stats_table);
+            self::add_version_tracking($logs_table);
+
             // Add generation_type column
             if (!self::column_exists($stats_table, self::COLUMN_GENERATION_TYPE)) {
                 $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL DEFAULT 'manual'");
