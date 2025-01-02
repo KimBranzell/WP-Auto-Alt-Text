@@ -16,10 +16,24 @@ class Auto_Alt_Text_Activator {
     private const COLUMN_TOKENS_USED = 'tokens_used';
     private const COLUMN_GENERATION_TIME = 'generation_time';
 
+    private static function get_db() {
+        global $wpdb;
+        return $wpdb;
+    }
+
+    private static function get_stats_table_name() {
+        return self::get_db()->prefix . 'auto_alt_text_stats';
+    }
+
+    private static function get_logs_table_name() {
+        return self::get_db()->prefix . 'auto_alt_text_logs';
+    }
+
     public static function activate() {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
-        $stats_table = $wpdb->prefix . 'auto_alt_text_stats';
+        $stats_table = self::get_stats_table_name();
+        $logs_table = self::get_logs_table_name();
 
         try {
             // Check and add columns
