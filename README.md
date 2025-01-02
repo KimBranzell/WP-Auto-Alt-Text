@@ -1,4 +1,4 @@
-# Auto Alt Text
+# WP Auto Alt Text
 
 Generate high-quality, AI-powered alternative text for your WordPress images automatically using OpenAI's advanced image recognition capabilities.
 
