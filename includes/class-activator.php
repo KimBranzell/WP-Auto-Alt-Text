@@ -5,6 +5,17 @@ class Auto_Alt_Text_Activator {
      *
      * @return void
      */
+
+    private const COLUMN_GENERATION_TYPE = 'generation_type';
+    private const COLUMN_IS_EDITED = 'is_edited';
+    private const COLUMN_EDITED_TEXT = 'edited_text';
+    private const COLUMN_IS_APPLIED = 'is_applied';
+    private const COLUMN_IMAGE_ID = 'image_id';
+    private const COLUMN_USER_ID = 'user_id';
+    private const COLUMN_GENERATED_TEXT = 'generated_text';
+    private const COLUMN_TOKENS_USED = 'tokens_used';
+    private const COLUMN_GENERATION_TIME = 'generation_time';
+
     public static function activate() {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
@@ -18,32 +29,32 @@ class Auto_Alt_Text_Activator {
             }
 
             // Add generation_type column
-            if (!in_array('generation_type', $columns)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN generation_type varchar(50) NOT NULL DEFAULT 'manual'");
+            if (!in_array(self::COLUMN_GENERATION_TYPE, $columns)) {
+                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL DEFAULT 'manual'");
                 if ($result === false) {
                     throw new Exception('Failed to add generation_type column');
                 }
             }
 
             // Add is_edited column
-            if (!in_array('is_edited', $columns)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN is_edited TINYINT(1) NOT NULL DEFAULT 0");
+            if (!in_array(self::COLUMN_IS_EDITED, $columns)) {
+                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_EDITED . " TINYINT(1) NOT NULL DEFAULT 0");
                 if ($result === false) {
                     throw new Exception('Failed to add is_edited column');
                 }
             }
 
             // Add edited_text column
-            if (!in_array('edited_text', $columns)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN edited_text TEXT DEFAULT NULL");
+            if (!in_array(self::COLUMN_EDITED_TEXT, $columns)) {
+                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_EDITED_TEXT . " TEXT DEFAULT NULL");
                 if ($result === false) {
                     throw new Exception('Failed to add edited_text column');
                 }
             }
 
             // Add is_applied column
-            if (!in_array('is_applied', $columns)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN is_applied TINYINT(1) NOT NULL DEFAULT 0");
+            if (!in_array(self::COLUMN_IS_APPLIED, $columns)) {
+                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_APPLIED . " TINYINT(1) NOT NULL DEFAULT 0");
                 if ($result === false) {
                     throw new Exception('Failed to add is_applied column');
                 }
@@ -55,15 +66,15 @@ class Auto_Alt_Text_Activator {
 
             $sql = "CREATE TABLE IF NOT EXISTS $stats_table (
                 id bigint(20) NOT NULL AUTO_INCREMENT,
-                image_id bigint(20) NOT NULL,
-                user_id bigint(20) NOT NULL,
-                generated_text text NOT NULL,
-                tokens_used int(11) NOT NULL DEFAULT 0,
-                generation_type varchar(50) NOT NULL,
-                generation_time datetime NOT NULL,
-                is_applied tinyint(1) DEFAULT 0,
-                is_edited tinyint(1) DEFAULT 0,
-                edited_text text DEFAULT NULL,
+                " . self::COLUMN_IMAGE_ID . " bigint(20) NOT NULL,
+                " . self::COLUMN_USER_ID . " bigint(20) NOT NULL,
+                " . self::COLUMN_GENERATED_TEXT . " text NOT NULL,
+                " . self::COLUMN_TOKENS_USED . " int(11) NOT NULL DEFAULT 0,
+                " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL,
+                " . self::COLUMN_GENERATION_TIME . " datetime NOT NULL,
+                " . self::COLUMN_IS_APPLIED . " tinyint(1) DEFAULT 0,
+                " . self::COLUMN_IS_EDITED . " tinyint(1) DEFAULT 0,
+                " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL,
                 PRIMARY KEY  (id)
             ) $charset_collate;";
 
@@ -86,6 +97,7 @@ class Auto_Alt_Text_Activator {
             if (empty($logs_result)) {
                 throw new Exception('Failed to create or update logs table');
             }
+
         } catch (Exception $e) {
             error_log('Auto Alt Text Activation Error: ' . $e->getMessage());
             add_action('admin_notices', function() use ($e) {
