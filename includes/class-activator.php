@@ -29,21 +29,21 @@ class Auto_Alt_Text_Activator {
         return self::get_db()->prefix . 'auto_alt_text_logs';
     }
 
+    private static function column_exists($table, $column) {
+        $wpdb = self::get_db();
+        $columns = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
+        return $columns !== false && in_array($column, $columns);
+    }
+
     public static function activate() {
-        global $wpdb;
+        $wpdb = self::get_db();
         $charset_collate = $wpdb->get_charset_collate();
         $stats_table = self::get_stats_table_name();
         $logs_table = self::get_logs_table_name();
 
         try {
-            // Check and add columns
-            $columns = $wpdb->get_col("SHOW COLUMNS FROM {$stats_table}");
-            if ($columns === false) {
-                throw new Exception('Failed to retrieve columns from stats table');
-            }
-
             // Add generation_type column
-            if (!in_array(self::COLUMN_GENERATION_TYPE, $columns)) {
+            if (!self::column_exists($stats_table, self::COLUMN_GENERATION_TYPE)) {
                 $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL DEFAULT 'manual'");
                 if ($result === false) {
                     throw new Exception('Failed to add generation_type column');
@@ -51,7 +51,7 @@ class Auto_Alt_Text_Activator {
             }
 
             // Add is_edited column
-            if (!in_array(self::COLUMN_IS_EDITED, $columns)) {
+            if (!self::column_exists($stats_table, self::COLUMN_IS_EDITED)) {
                 $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_EDITED . " TINYINT(1) NOT NULL DEFAULT 0");
                 if ($result === false) {
                     throw new Exception('Failed to add is_edited column');
@@ -59,15 +59,15 @@ class Auto_Alt_Text_Activator {
             }
 
             // Add edited_text column
-            if (!in_array(self::COLUMN_EDITED_TEXT, $columns)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_EDITED_TEXT . " TEXT DEFAULT NULL");
+            if (!self::column_exists($stats_table, self::COLUMN_IS_EDITED)) {
+                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_EDITED . " TINYINT(1) NOT NULL DEFAULT 0");
                 if ($result === false) {
-                    throw new Exception('Failed to add edited_text column');
+                    throw new Exception('Failed to add is_edited column');
                 }
             }
 
             // Add is_applied column
-            if (!in_array(self::COLUMN_IS_APPLIED, $columns)) {
+            if (!self::column_exists($stats_table, self::COLUMN_IS_APPLIED)) {
                 $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_APPLIED . " TINYINT(1) NOT NULL DEFAULT 0");
                 if ($result === false) {
                     throw new Exception('Failed to add is_applied column');
