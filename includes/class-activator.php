@@ -19,25 +19,55 @@ class Auto_Alt_Text_Activator {
     private const COLUMN_TOKENS_USED = 'tokens_used';
     private const COLUMN_GENERATION_TIME = 'generation_time';
 
+    /**
+     * Retrieves the global WordPress database object.
+     *
+     * @return wpdb The global WordPress database object.
+     */
     private static function get_db() {
         global $wpdb;
         return $wpdb;
     }
 
+    /**
+     * Retrieves the name of the stats table in the database.
+     *
+     * @return string The name of the stats table.
+     */
     private static function get_stats_table_name() {
         return self::get_db()->prefix . 'auto_alt_text_stats';
     }
 
+    /**
+     * Retrieves the name of the logs table in the database.
+     *
+     * @return string The name of the logs table.
+     */
     private static function get_logs_table_name() {
         return self::get_db()->prefix . 'auto_alt_text_logs';
     }
 
+    /**
+     * Checks if the specified column exists in the given database table.
+     *
+     * @param string $table The name of the database table.
+     * @param string $column The name of the column to check.
+     * @return bool True if the column exists, false otherwise.
+     */
     private static function column_exists($table, $column) {
         $wpdb = self::get_db();
         $columns = $wpdb->get_col("SHOW COLUMNS FROM {$table}");
         return $columns !== false && in_array($column, $columns);
     }
 
+    /**
+     * Adds a version tracking column to the specified database table.
+     *
+     * This method checks if the `COLUMN_VERSION` column exists in the table, and if not, adds it with the current database version as the default value.
+     *
+     * @param string $table The name of the database table to add the version tracking column to.
+     * @throws Exception If the version tracking column could not be added to the table.
+     */
     private static function add_version_tracking($table) {
         $wpdb = self::get_db();
 
@@ -49,6 +79,16 @@ class Auto_Alt_Text_Activator {
         }
     }
 
+    /**
+     * Activates the plugin by creating or updating the necessary database tables.
+     *
+     * This method performs the following tasks:
+     * - Adds version tracking columns to the stats and logs tables
+     * - Adds additional columns to the stats table (generation_type, is_edited, edited_text, is_applied)
+     * - Creates or updates the stats and logs tables with the necessary schema
+     *
+     * If any errors occur during the activation process, an error message is logged and displayed in the WordPress admin area.
+     */
     public static function activate() {
         $wpdb = self::get_db();
         $charset_collate = $wpdb->get_charset_collate();
