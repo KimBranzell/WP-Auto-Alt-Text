@@ -2,6 +2,9 @@
 class Auto_Alt_Text_Dashboard_Widget {
   private $statistics;
   public function __construct() {
+    if (!class_exists('Auto_Alt_Text_Statistics')) {
+      throw new RuntimeException('Required Statistics class not found');
+    }
     $this->statistics = new Auto_Alt_Text_Statistics();
     add_action('wp_dashboard_setup', [$this, 'register_dashboard_widget']);
   }
