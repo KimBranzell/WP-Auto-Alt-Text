@@ -15,6 +15,13 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - Simple integration with WordPress media library
 - Support for multiple image formats
 - Clean and intuitive user interface
+- Statistics dashboard showing usage metrics and generation history
+- Visual diff view for edited alt text changes
+- Support for WooCommerce product images
+- Automatic alt text generation on image upload (configurable)
+- Secure API key encryption
+- Generation type tracking (Manual, Upload, Batch)
+- Image caching system to prevent duplicate API calls
 
 ### API Key Responsibility
 
