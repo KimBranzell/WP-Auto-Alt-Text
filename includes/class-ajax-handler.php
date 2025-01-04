@@ -1,9 +1,16 @@
 <?php
 class Auto_Alt_Text_Ajax_Handler {
+    private const NONCE_ACTION = 'auto_alt_text_nonce';
+    private const LOG_TYPE = 'debug';
+    private const BATCH_NONCE_ACTION = 'auto_alt_text_batch_nonce';
+
+    private const ERROR_MISSING_ID = 'Missing attachment ID';
+    private const ERROR_INVALID_ATTACHMENT = 'Invalid attachment ID';
+    private const ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions';
     /**
      * Registers AJAX actions for generating alt text for attachments and processing image batches.
      */
-    public function __construct() {
+    public function __construct(): void {
         add_action('wp_ajax_generate_alt_text_for_attachment', [$this, 'generate_alt_text_for_attachment']);
         add_action('wp_ajax_process_image_batch', [$this, 'process_image_batch']);
     }
@@ -18,19 +25,29 @@ class Auto_Alt_Text_Ajax_Handler {
      *
      * @return void
      */
-    public function generate_alt_text_for_attachment() {
-        Auto_Alt_Text_Logger::log("AJAX request received", "debug", [
+    public function generate_alt_text_for_attachment(): void {
+        if (!isset($_POST['attachment_id'])) {
+            wp_send_json_error(['message' => self::ERROR_MISSING_ID]);
+            return;
+        }
+
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
+
+        Auto_Alt_Text_Logger::log("AJAX request received", self::LOG_TYPE, [
             'attachment_id' => $_POST['attachment_id'] ?? null
         ]);
 
-        check_ajax_referer('auto_alt_text_nonce', 'nonce');
+        check_ajax_referer(self::NONCE_ACTION, 'nonce');
 
         $attachment_id = intval($_POST['attachment_id']);
         $preview_mode = isset($_POST['preview']) && $_POST['preview'] === 'true';
         $image_url = wp_get_attachment_url($attachment_id);
 
         if (!$image_url) {
-            wp_send_json_error(['message' => 'Invalid attachment ID']);
+            wp_send_json_error(['message' => self::ERROR_INVALID_ATTACHMENT]);
             return;
         }
 
@@ -54,7 +71,7 @@ class Auto_Alt_Text_Ajax_Handler {
      * returned as a JSON response.
      */
     public function process_image_batch() {
-        check_ajax_referer('auto_alt_text_batch_nonce', 'nonce');
+        check_ajax_referer(self::BATCH_NONCE_ACTION, 'nonce');
 
         if (!current_user_can('upload_files')) {
             wp_send_json_error('Insufficient permissions');
@@ -93,7 +110,7 @@ class Auto_Alt_Text_Ajax_Handler {
      */
     public function apply_alt_text() {
         try {
-            if (!check_ajax_referer('auto_alt_text_nonce', 'nonce', false)) {
+            if (!check_ajax_referer(self::NONCE_ACTION, 'nonce', false)) {
                 throw new Exception('Invalid security token');
             }
 
