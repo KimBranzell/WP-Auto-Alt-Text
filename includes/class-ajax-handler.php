@@ -10,7 +10,7 @@ class Auto_Alt_Text_Ajax_Handler {
     /**
      * Registers AJAX actions for generating alt text for attachments and processing image batches.
      */
-    public function __construct(): void {
+    public function __construct() {
         add_action('wp_ajax_generate_alt_text_for_attachment', [$this, 'generate_alt_text_for_attachment']);
         add_action('wp_ajax_process_image_batch', [$this, 'process_image_batch']);
     }
