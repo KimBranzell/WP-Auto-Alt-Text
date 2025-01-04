@@ -7,7 +7,7 @@ class Auto_Alt_Text_WooCommerce {
 
     public function __construct() {
         $this->openai = new Auto_Alt_Text_OpenAI();
-        $this->batch_processor = new Auto_Alt_Text_Batch_Processor();
+        $this->batch_processor = new Auto_Alt_Text_Batch_Processor($this->openai, 10);
         $this->statistics = new Auto_Alt_Text_Statistics();
 
         // Product creation and updates

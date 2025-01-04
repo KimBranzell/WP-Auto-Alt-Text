@@ -118,7 +118,8 @@ class Auto_Alt_Text_Admin {
         check_ajax_referer('auto_alt_text_batch_nonce', 'nonce');
 
         $attachment_ids = isset($_POST['ids']) ? array_map('intval', $_POST['ids']) : [];
-        $batch_processor = new Auto_Alt_Text_Batch_Processor();
+        $openai = new Auto_Alt_Text_OpenAI();
+        $batch_processor = new Auto_Alt_Text_Batch_Processor($openai, 10);
         $results = $batch_processor->process_batch($attachment_ids);
 
         wp_send_json_success($results);

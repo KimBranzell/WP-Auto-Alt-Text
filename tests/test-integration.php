@@ -8,7 +8,7 @@ class IntegrationTest extends WP_UnitTestCase {
       parent::setUp();
       $this->openai = new Auto_Alt_Text_OpenAI();
       $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
-      $this->batch_processor = new Auto_Alt_Text_Batch_Processor();
+      $this->batch_processor = new Auto_Alt_Text_Batch_Processor($this->openai, 10);
   }
 
   public function test_full_workflow() {
