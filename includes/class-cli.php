@@ -1,12 +1,23 @@
 <?php
 
-class Auto_Alt_Text_CLI {
+require_once dirname(__FILE__) . '/interfaces/interface-cli-command.php';
+
+class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
+    private const QUERY_POSTS_PER_PAGE = -1;
+    private const POST_TYPE = 'attachment';
+    private const POST_MIME_TYPE = 'image';
+    private const POST_STATUS = 'any';
+
     private $openai;
     private $statistics;
 
-    public function __construct() {
-        $this->openai = new Auto_Alt_Text_OpenAI();
-        $this->statistics = new Auto_Alt_Text_Statistics();
+    public function __construct(Auto_Alt_Text_OpenAI $openai = null, Auto_Alt_Text_Statistics $statistics = null) {
+        try {
+            $this->openai = $openai ?? new Auto_Alt_Text_OpenAI();
+            $this->statistics = $statistics ?? new Auto_Alt_Text_Statistics();
+        } catch (Exception $e) {
+            WP_CLI::error('Failed to initialize CLI: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -29,14 +40,14 @@ class Auto_Alt_Text_CLI {
      *     `wp auto-alt-text generate --skip-existing`
      */
     public function generate($args, $assoc_args) {
-        $limit = isset($assoc_args['limit']) ? (int) $assoc_args['limit'] : -1;
+        $limit = $this->validateLimit($assoc_args['limit'] ?? self::QUERY_POSTS_PER_PAGE);
         $skip_existing = isset($assoc_args['skip-existing']);
 
         $query = [
-            'post_type' => 'attachment',
-            'post_mime_type' => 'image',
+            'post_type' => self::POST_TYPE,
+            'post_mime_type' => self::POST_MIME_TYPE,
             'posts_per_page' => $limit,
-            'post_status' => 'any'
+            'post_status' => self::POST_STATUS
         ];
 
         $images = get_posts($query);
@@ -67,6 +78,20 @@ class Auto_Alt_Text_CLI {
 
         $progress->finish();
         WP_CLI::success('Alt text generation completed!');
+    }
+
+    /**
+     * Validates and sanitizes the limit parameter
+     *
+     * @param int $limit The limit to validate
+     * @return int Validated limit value
+     */
+    private function validateLimit($limit) {
+        $limit = (int) $limit;
+        if ($limit !== -1 && $limit < 1) {
+            WP_CLI::error('Limit must be -1 or a positive integer');
+        }
+        return $limit;
     }
 
     /**

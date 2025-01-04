@@ -68,7 +68,11 @@ class WP_Auto_Alt_Text_Plugin {
 		$this->register_hooks();
 
 		if (defined('WP_CLI') && WP_CLI) {
-			WP_CLI::add_command('auto-alt-text', 'Auto_Alt_Text_CLI');
+			$cli = new Auto_Alt_Text_CLI(
+				$this->components['openai'],
+				$this->components['statistics']
+			);
+			WP_CLI::add_command('auto-alt-text', $cli);
 		}
 	}
 
@@ -82,6 +86,7 @@ class WP_Auto_Alt_Text_Plugin {
   */
 	private function load_dependencies() {
 		require_once __DIR__ . '/includes/config.php';
+		require_once __DIR__ . '/includes/interfaces/interface-cli-command.php';
 		require_once __DIR__ . '/includes/class-openai.php';
 		require_once __DIR__ . '/includes/class-rate-limiter.php';
 		require_once __DIR__ . '/includes/options-page.php';
