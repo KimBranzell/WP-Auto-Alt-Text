@@ -210,20 +210,51 @@ class Auto_Alt_Text_Image_Process {
     $ids = json_decode(stripslashes($_POST['ids']));
     $results = [];
 
+    // Batch size validation
+    if (count($ids) > 50) {
+      wp_send_json_error('Batch size exceeds maximum limit of 50 images');
+      return;
+    }
+
     foreach ($ids as $id) {
       Auto_Alt_Text_Logger::log("Processing new batch image upload", "info", [
         'attachment_id' => $id
       ]);
-      $image_url = $this->get_image_url_for_openai($id);
-      $alt_text = $this->openai->generate_alt_text($image_url, $id, 'batch');
 
-      if ($alt_text) {
-        update_post_meta($id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
-        $results[$id] = $alt_text;
+      try {
+        $image_url = $this->get_image_url_for_openai($id);
+        $alt_text = $this->openai->generate_alt_text($image_url, $id, 'batch');
+
+        if ($alt_text) {
+          update_post_meta($id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+          $results[$id] = [
+            'alt_text' => $alt_text,
+            'status' => 'success',
+            'processed_at' => current_time('mysql')
+          ];
+        }
+
+        // Rate limiting between API calls
+        usleep(500000);
+
+      } catch (Exception $e) {
+        $results[$id] = [
+          'status' => 'error',
+          'error' => $e->getMessage(),
+          'processed_at' => current_time('mysql')
+        ];
+        continue;
       }
+
+      // Memory management
+      gc_collect_cycles();
     }
 
-    wp_send_json_success($results);
+    wp_send_json_success([
+      'results' => $results,
+      'total_processed' => count($results),
+      'batch_completed_at' => current_time('mysql')
+    ]);
   }
 }
 
