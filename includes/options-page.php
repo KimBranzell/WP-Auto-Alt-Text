@@ -1,5 +1,6 @@
 <?php
 require_once plugin_dir_path(__FILE__) . 'config.php';
+require_once plugin_dir_path(__FILE__) . 'class-format-checker.php';
 
 if (!@include_once(plugin_dir_path(__FILE__) . 'config.php')) {
     // Fallback definitions if config file fails to load
@@ -57,6 +58,15 @@ function auto_alt_text_menu() {
         'manage_options',        // Capability
         'auto-alt-text',         // Menu slug
         'auto_alt_text_options'  // Function
+    );
+
+    add_submenu_page(
+        'auto-alt-text',         // Parent slug
+        'Status',                // Page title
+        'Status',                // Menu title
+        'manage_options',        // Capability
+        'auto-alt-text-status',  // Menu slug
+        'add_format_compatibility_section'  // Function
     );
 }
 
@@ -229,6 +239,73 @@ function auto_alt_text_options() {
     </div>
     <?php
 
+}
+
+function add_format_compatibility_section() {
+    ?>
+    <div class="card">
+        <h2><?php _e('Image Format Support', 'wp-auto-alt-text'); ?></h2>
+        <table class="form-table">
+            <tr>
+                <th scope="row"><?php _e('Supported Formats', 'wp-auto-alt-text'); ?></th>
+                <td>
+                    <ul class="format-status">
+                        <li>
+                            <span class="format-name">JPEG/JPG</span>
+                            <span class="status-badge supported">✓ Fully Supported</span>
+                        </li>
+                        <li>
+                            <span class="format-name">PNG</span>
+                            <span class="status-badge supported">✓ Fully Supported</span>
+                        </li>
+                        <li>
+                            <span class="format-name">WebP</span>
+                            <span class="status-badge supported">✓ Fully Supported</span>
+                        </li>
+                        <li>
+                            <span class="format-name">AVIF</span>
+                            <div>
+                            <span class="status-badge partial">⚠ Auto-converts to JPEG for processing</span>
+                            </div>
+                        </li>
+                    </ul>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div class="card">
+        <h2><?php _e('AVIF Support Status', 'wp-auto-alt-text'); ?></h2>
+        <?php
+        $avif_status = Auto_Alt_Text_Format_Checker::get_avif_status();
+        ?>
+        <table class="form-table">
+            <tr>
+                <td>
+                    <ul class="format-status">
+                        <li>
+                            <span class="format-name">Server Support</span>
+                            <span class="status-badge <?php echo $avif_status['server_support'] ? 'supported' : 'not-supported'; ?>">
+                                <?php echo $avif_status['server_support'] ? '✓ Available' : '⚠ Not Available'; ?>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="format-name">GD Library</span>
+                            <span class="status-badge <?php echo $avif_status['gd_support'] ? 'supported' : 'not-supported'; ?>">
+                                <?php echo $avif_status['gd_support'] ? '✓ Supported' : '⚠ Not Supported'; ?>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="format-name">WordPress</span>
+                            <span class="status-badge <?php echo $avif_status['wordpress_support'] ? 'supported' : 'not-supported'; ?>">
+                                <?php echo $avif_status['wordpress_support'] ? '✓ Compatible' : '⚠ Not Compatible'; ?>
+                            </span>
+                        </li>
+                    </ul>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <?php
 }
 
 /**

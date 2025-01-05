@@ -184,6 +184,43 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
+     * Converts an AVIF image to a temporary JPEG file.
+     *
+     * This private function checks the MIME type of the provided image URL. If the MIME type is 'image/avif',
+     * it creates a unique temporary JPEG file, converts the AVIF image to the temporary JPEG, and returns
+     * an array with information about the conversion. If the MIME type is not 'image/avif', it returns an
+     * array indicating that no conversion was performed.
+     *
+     * @param string $image_url The URL of the image to be converted.
+     * @return array An array with information about the conversion, including whether the conversion was
+     *               performed, the path to the temporary JPEG file, and the original image URL.
+     */
+    private function convert_if_avif($image_path) {
+        $mime_type = wp_check_filetype($image_path)['type'];
+
+        if ($mime_type === 'image/avif') {
+            // Create unique temp file name
+            $upload_dir = wp_upload_dir();
+            $temp_jpg_path = $upload_dir['path'] . '/temp_' . uniqid() . '.jpg';
+
+            // Convert AVIF to temporary JPG
+            $image = imagecreatefromavif($image_path);
+            imagejpeg($image, $temp_jpg_path, 90);
+            imagedestroy($image);
+
+            return [
+                'path' => $temp_jpg_path,
+                'is_temp' => true
+            ];
+        }
+
+        return [
+            'path' => $image_path,
+            'is_temp' => false
+        ];
+    }
+
+    /**
      * Generates alt text for an image using the OpenAI API.
      *
      * This method is responsible for generating alt text for an image by sending a request to the OpenAI API.
@@ -223,8 +260,11 @@ class Auto_Alt_Text_OpenAI  {
         // Always get file path from attachment ID
         $image_path = get_attached_file($attachment_id);
 
+        // Handle AVIF conversion if needed
+        $processed_image = $this->convert_if_avif($image_path);
+
         // Convert file to base64
-        $image_data = base64_encode(file_get_contents($image_path));
+        $image_data = base64_encode(file_get_contents($processed_image['path']));
         $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
@@ -267,6 +307,11 @@ class Auto_Alt_Text_OpenAI  {
                     'tokens_used' => $tokens_used
                 ]);
 
+                // Clean up temporary file if one was created
+                if ($processed_image['is_temp'] && file_exists($processed_image['path'])) {
+                    unlink($processed_image['path']);
+                }
+
                 return $generated_text;
             }
 
@@ -278,8 +323,16 @@ class Auto_Alt_Text_OpenAI  {
                 'error' => $e->getMessage(),
                 'attachment_id' => $attachment_id
             ]);
+
+            // Clean up temporary file if one was created
+            if ($processed_image['is_temp'] && file_exists($processed_image['path'])) {
+                unlink($processed_image['path']);
+            }
+
             return null;
         }
+
+
     }
 
     /**

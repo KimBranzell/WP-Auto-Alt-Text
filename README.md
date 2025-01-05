@@ -7,13 +7,13 @@ Generate high-quality, AI-powered alternative text for your WordPress images aut
 
 WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intelligence to automatically generate meaningful and descriptive alt text for your images. This improves your site's accessibility, SEO, and user experience with minimal effort.
 
-### Key Features
+## Key Features
 
 - One-click AI-powered alt text generation
 - Bulk processing capabilities
 - Rate limiting to manage API costs
 - Simple integration with WordPress media library
-- Support for multiple image formats
+- Support for multiple image formats (including AVIF and WebP)
 - Clean and intuitive user interface
 - Statistics dashboard showing usage metrics and generation history
 - Visual diff view for edited alt text changes
@@ -23,17 +23,17 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - Generation type tracking (Manual, Upload, Batch)
 - Image caching system to prevent duplicate API calls
 
-### API Key Responsibility
+## API Key Responsibility
 
 Users must provide their own OpenAI API key. This plugin does not include or share API keys.
 Protect your API key by keeping it private and not sharing it with others.
 
-#### Compliance with OpenAI Terms of Use
+### Compliance with OpenAI Terms of Use
 
 By using this plugin, you agree to comply with OpenAI’s Terms of Use.
 Ensure that your use of the OpenAI API aligns with OpenAI’s guidelines and restrictions.
 
-#### No Liability
+### No Liability
 
 The developers of this plugin are not responsible for any misuse of the OpenAI API or non-compliance with OpenAI’s policies by end-users.
 
