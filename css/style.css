@@ -334,3 +334,50 @@
 .log-level-warning { background-color: #fff3e0 !important; }
 .log-level-info { background-color: #e8f5e9 !important; }
 .log-level-debug { background-color: #f5f5f5 !important; }
+
+.format-status {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.format-status li {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.format-name {
+  min-width: 100px;
+  font-weight: bold;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-left: 10px;
+}
+
+.status-badge.supported {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.not-supported {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.format-note {
+  margin: 2px 0 0 10px;
+  font-size: 0.9em;
+  color: #666;
+  display: block;
+}
+
