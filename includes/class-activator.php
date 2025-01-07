@@ -96,6 +96,43 @@ class Auto_Alt_Text_Activator {
         $logs_table = self::get_logs_table_name();
 
         try {
+			// Create or update tables
+			require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+			$sql = "CREATE TABLE IF NOT EXISTS $stats_table (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                " . self::COLUMN_IMAGE_ID . " bigint(20) NOT NULL,
+                " . self::COLUMN_USER_ID . " bigint(20) NOT NULL,
+                " . self::COLUMN_GENERATED_TEXT . " text NOT NULL,
+                " . self::COLUMN_TOKENS_USED . " int(11) NOT NULL DEFAULT 0,
+                " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL,
+                " . self::COLUMN_GENERATION_TIME . " datetime NOT NULL,
+                " . self::COLUMN_IS_APPLIED . " tinyint(1) DEFAULT 0,
+                " . self::COLUMN_IS_EDITED . " tinyint(1) DEFAULT 0,
+                " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL,
+                PRIMARY KEY  (id)
+            ) $charset_collate;";
+
+            $logs_table = $wpdb->prefix . 'auto_alt_text_logs';
+            $sql_logs = "CREATE TABLE IF NOT EXISTS $logs_table (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                timestamp datetime DEFAULT CURRENT_TIMESTAMP,
+                level varchar(10) NOT NULL,
+                message text NOT NULL,
+                context text,
+                PRIMARY KEY  (id)
+            ) $charset_collate;";
+
+            $stats_result = dbDelta($sql);
+            if (empty($stats_result)) {
+                throw new Exception('Failed to create or update stats table');
+            }
+
+            $logs_result = dbDelta($sql_logs);
+            if (empty($logs_result)) {
+                throw new Exception('Failed to create or update logs table');
+            }
+
             // Add version tracking to both tables
             self::add_version_tracking($stats_table);
             self::add_version_tracking($logs_table);
@@ -132,43 +169,6 @@ class Auto_Alt_Text_Activator {
                 }
             }
 
-            // Create or update tables
-            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-
-
-            $sql = "CREATE TABLE IF NOT EXISTS $stats_table (
-                id bigint(20) NOT NULL AUTO_INCREMENT,
-                " . self::COLUMN_IMAGE_ID . " bigint(20) NOT NULL,
-                " . self::COLUMN_USER_ID . " bigint(20) NOT NULL,
-                " . self::COLUMN_GENERATED_TEXT . " text NOT NULL,
-                " . self::COLUMN_TOKENS_USED . " int(11) NOT NULL DEFAULT 0,
-                " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL,
-                " . self::COLUMN_GENERATION_TIME . " datetime NOT NULL,
-                " . self::COLUMN_IS_APPLIED . " tinyint(1) DEFAULT 0,
-                " . self::COLUMN_IS_EDITED . " tinyint(1) DEFAULT 0,
-                " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL,
-                PRIMARY KEY  (id)
-            ) $charset_collate;";
-
-            $logs_table = $wpdb->prefix . 'auto_alt_text_logs';
-            $sql_logs = "CREATE TABLE IF NOT EXISTS $logs_table (
-                id bigint(20) NOT NULL AUTO_INCREMENT,
-                timestamp datetime DEFAULT CURRENT_TIMESTAMP,
-                level varchar(10) NOT NULL,
-                message text NOT NULL,
-                context text,
-                PRIMARY KEY  (id)
-            ) $charset_collate;";
-
-            $stats_result = dbDelta($sql);
-            if (empty($stats_result)) {
-                throw new Exception('Failed to create or update stats table');
-            }
-
-            $logs_result = dbDelta($sql_logs);
-            if (empty($logs_result)) {
-                throw new Exception('Failed to create or update logs table');
-            }
 
         } catch (Exception $e) {
             error_log('Auto Alt Text Activation Error: ' . $e->getMessage());
