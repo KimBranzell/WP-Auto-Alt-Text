@@ -10,12 +10,14 @@ class Auto_Alt_Text_OpenAI  {
     private $last_error;
     private $rate_limiter;
     private $statistics;
+    private $language_manager;
 
     public function __construct() {
         $encrypted_key = get_option('auto_alt_text_api_key');
         $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
         $this->statistics = new Auto_Alt_Text_Statistics();
+        $this->language_manager = new Auto_Alt_Text_Language_Manager();
     }
 
     /**
@@ -244,6 +246,7 @@ class Auto_Alt_Text_OpenAI  {
             return null;
         }
 
+        $current_language = $this->language_manager->get_current_language();
         $cache_key = $this->get_cache_key($image_source);
         $cached_result = get_transient($cache_key);
 
@@ -302,6 +305,10 @@ class Auto_Alt_Text_OpenAI  {
                     set_transient($cache_key, $generated_text, DAY_IN_SECONDS);
                 }
 
+                if (!$preview_mode && $generated_text) {
+                    $this->language_manager->sync_alt_text($attachment_id, $generated_text);
+                }
+
                 Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
                     'attachment_id' => $attachment_id,
                     'tokens_used' => $tokens_used
@@ -356,13 +363,19 @@ class Auto_Alt_Text_OpenAI  {
 
         return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {$language_name} tailored to the following requirements:
 
-            1. Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
-            2. Don't include phrases like 'image of' or 'picture of'.
-            3. Write the text in {$language} language.
-            4. For ambiguous images, describe them neutrally.
-            5. Use plain and easy-to-understand language.
-            6. If {$language} is unsupported, default to English.
-            7. Maintain proper grammar and syntax in {$language_name}
+            1. First detect if there is any text in the image
+            2. If text is present, identify its language and include it in your response
+            3. Generate a concise alt text in {$language_name} that:
+                - Describes the image content
+                - Includes any detected text (maintaining original language)
+                - Maintains cultural context
+            4. Keep it under 2 sentences
+            5. Don't include phrases like 'image of' or 'picture of'.
+            6. Write the text in {$language_name} language.
+            7. For ambiguous images, describe them neutrally.
+            8. Use plain and easy-to-understand language.
+            9. If {$language_name} is unsupported, default to English.
+            10. Maintain proper grammar and syntax in {$language_name}
 
             Output:
             A single, SEO-friendly alt text description";
