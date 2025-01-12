@@ -87,6 +87,7 @@ class WP_Auto_Alt_Text_Plugin {
 	private function load_dependencies() {
 		require_once __DIR__ . '/includes/config.php';
 		require_once __DIR__ . '/includes/interfaces/interface-cli-command.php';
+		require_once __DIR__ . '/includes/class-language-manager.php';
 		require_once __DIR__ . '/includes/class-openai.php';
 		require_once __DIR__ . '/includes/class-rate-limiter.php';
 		require_once __DIR__ . '/includes/options-page.php';
@@ -113,13 +114,17 @@ class WP_Auto_Alt_Text_Plugin {
   * and image processing.
   */
 	private function initialize_core_components() {
+		$this->components['language_manager'] = new Auto_Alt_Text_Language_Manager();
     $this->components['openai'] 					= new Auto_Alt_Text_OpenAI();
     $this->components['admin']						= new Auto_Alt_Text_Admin();
     $this->components['statistics'] 			= new Auto_Alt_Text_Statistics();
     $this->components['statistics_page'] 	= new Auto_Alt_Text_Statistics_Page();
     $this->components['ajax_handler'] 		= new Auto_Alt_Text_Ajax_Handler();
     $this->components['dashboard_widget'] = new Auto_Alt_Text_Dashboard_Widget();
-    $this->components['image_processor'] 	= new Auto_Alt_Text_Image_Process($this->components['openai']);
+    $this->components['image_processor'] 	= new Auto_Alt_Text_Image_Process(
+			$this->components['openai'],
+			$this->components['language_manager']
+		);
 	}
 
 	/**
@@ -137,6 +142,10 @@ class WP_Auto_Alt_Text_Plugin {
 		add_action('init', [$this, 'initialize_features']);
 		add_action('admin_enqueue_scripts', [$this->components['admin'], 'enqueueAutoAltTextScript']);
 		add_action('wp_ajax_apply_alt_text', [$this->components['ajax_handler'], 'apply_alt_text']);
+
+		add_action('add_attachment', [$this->components['image_processor'], 'handle_new_attachment']);
+    add_action('edit_attachment', [$this->components['image_processor'], 'handle_attachment_update']);
+
 
 		add_action('admin_init', function() {
 			if (function_exists('wp_add_privacy_policy_content')) {

@@ -222,6 +222,30 @@ class Auto_Alt_Text_OpenAI  {
         ];
     }
 
+    public function translate_alt_text($prompt) {
+        $response_data = $this->callAPI([
+            'model' => self::MODEL,
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'You are a professional translator. Translate the given image description accurately while maintaining its descriptive quality.'
+                ],
+                [
+                    'role' => 'user',
+                    'content' => $prompt
+                ]
+            ],
+            'max_tokens' => 150,
+            'temperature' => 0.7
+        ]);
+
+        if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
+            return trim($response_data['choices'][0]['message']['content']);
+        }
+
+        return null;
+    }
+
     /**
      * Generates alt text for an image using the OpenAI API.
      *

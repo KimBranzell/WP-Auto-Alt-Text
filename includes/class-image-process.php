@@ -1,9 +1,12 @@
 <?php
 class Auto_Alt_Text_Image_Process {
   private $openai;
+  private $language_manager;
 
-  public function __construct(Auto_Alt_Text_OpenAI $openai) {
+  public function __construct(Auto_Alt_Text_OpenAI $openai, Auto_Alt_Text_Language_Manager $language_manager) {
       $this->openai = $openai;
+      $this->language_manager = $language_manager;
+
       add_action('add_attachment', array($this, 'handle_new_attachment'));
       add_filter('attachment_fields_to_edit', array($this, 'add_custom_generate_alt_text_button'), 10, 2);
       add_action('wp_ajax_generate_alt_text_for_attachment', array($this, 'generate_alt_text_for_attachment'));
@@ -22,43 +25,100 @@ class Auto_Alt_Text_Image_Process {
    * @param int $attachment_id The ID of the newly uploaded attachment.
    */
   public function handle_new_attachment($attachment_id) {
-    Auto_Alt_Text_Logger::log("Processing new image upload", "info", [
-      'attachment_id' => $attachment_id
-    ]);
+    $upload_language = $this->language_manager->get_current_language();
+    error_log('Upload Language: ' . $upload_language);
+    $source_language = $this->language_manager->get_default_language();
+    error_log('Source Language: ' . $source_language);
 
-    $recently_processed = get_transient('recently_processed_' . $attachment_id);
-    if ($recently_processed) {
-        return;
+    // Force set the attachment to the upload language
+    if (function_exists('pll_set_post_language')) {
+      pll_set_post_language($attachment_id, $upload_language);
     }
+
+    $attachment_language = $this->language_manager->get_post_language($attachment_id);
+
+    error_log('Attachment Language: ' . $attachment_language);
+
+
+    // If no language is set, this is likely the source image
+    $is_source = empty($attachment_language) && $upload_language === $source_language;
+
+    error_log('is_source: ' . $is_source);
+
+    Auto_Alt_Text_Logger::log("Processing new image upload", "info", [
+      'attachment_id' => $attachment_id,
+      'upload_language' => $upload_language,
+      'attachment_language' => $attachment_language,
+      'source_language' => $source_language,
+      'is_source' => $is_source
+    ]);
 
     if (!wp_attachment_is_image($attachment_id)) {
         return;
     }
 
+    error_log('is_source before if: ' . $is_source);
+    error_log('$upload_language === $attachment_language: ' . ($upload_language === $attachment_language));
+
+    // Only generate alt text for the source language image
+    if ($upload_language === $attachment_language) {
+        try {
+            $image_url = $this->get_image_url_for_openai($attachment_id);
+            $base_alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'upload');
+
+            if (empty($base_alt_text)) {
+                throw new Exception('Failed to generate alt text');
+            }
+
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($base_alt_text));
+
+            // Generate translations for all other languages
+            $translations = $this->language_manager->generate_multilingual_alt_text($attachment_id, $base_alt_text);
+
+            Auto_Alt_Text_Logger::log("Alt text generated with translations", "info", [
+                'attachment_id' => $attachment_id,
+                'source_language' => $source_language,
+                'translations' => $translations
+            ]);
+        } catch (Exception $e) {
+            Auto_Alt_Text_Logger::log("Alt text generation failed", "error", [
+                'attachment_id' => $attachment_id,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+  }
+
+  public function handle_attachment_update($attachment_id) {
+    if (!wp_attachment_is_image($attachment_id)) {
+        return;
+    }
+
+    Auto_Alt_Text_Logger::log("Processing attachment update", "info", [
+        'attachment_id' => $attachment_id
+    ]);
+
     try {
         $image_url = $this->get_image_url_for_openai($attachment_id);
-        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'upload');
+        $current_alt_text = get_post_meta($attachment_id, '_wp_attachment_image_alt', true);
 
-        if (empty($alt_text)) {
-            throw new Exception('Failed to generate alt text');
+        if ($current_alt_text) {
+            // Generate translations for all active languages
+            $translation = $this->language_manager->generate_multilingual_alt_text(
+                $attachment_id,
+                $current_alt_text
+            );
+
+            Auto_Alt_Text_Logger::log("Alt text translations updated", "info", [
+                'attachment_id' => $attachment_id,
+                'translated_alt_text' => $translation
+            ]);
         }
-
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
-
-        add_action('admin_notices', function() {
-            echo '<div class="notice notice-success is-dismissible">';
-            echo '<p>Alt text successfully generated and applied.</p>';
-            echo '</div>';
-        });
-        error_log('Alt text generated and applied for attachment ID: ' . $attachment_id);
-        // Set a transient to prevent duplicate processing
-        set_transient('recently_processed_' . $attachment_id, true, 30);
     } catch (Exception $e) {
-        add_action('admin_notices', function() use ($e) {
-            echo '<div class="notice notice-error is-dismissible">';
-            echo '<p>Error generating alt text: ' . esc_html($e->getMessage()) . '</p>';
-            echo '</div>';
-        });
+        Auto_Alt_Text_Logger::log("Attachment update error", "error", [
+            'attachment_id' => $attachment_id,
+            'error' => $e->getMessage()
+        ]);
     }
   }
 
@@ -128,30 +188,35 @@ class Auto_Alt_Text_Image_Process {
   public function generate_alt_text_for_attachment() {
     if (!isset($_POST['attachment_id']) || !isset($_POST['nonce'])) {
       wp_send_json_error('Missing attachment ID or nonce verification failed.');
-    }
+  }
 
-    $attachment_id = intval($_POST['attachment_id']);
-    $image_url = $this->get_image_url_for_openai($attachment_id);
-    $nonce = sanitize_text_field($_POST['nonce']);
+  $attachment_id = intval($_POST['attachment_id']);
+  $image_url = $this->get_image_url_for_openai($attachment_id);
+  $nonce = sanitize_text_field($_POST['nonce']);
 
-    if (!wp_verify_nonce($nonce, 'generate_alt_text_nonce')) {
+  if (!wp_verify_nonce($nonce, 'generate_alt_text_nonce')) {
       wp_send_json_error('Nonce verification failed.');
-    }
+  }
 
-    if (!$image_url) {
+  if (!$image_url) {
       wp_send_json_error('Invalid attachment ID.');
-    }
+  }
 
-    $openai = new Auto_Alt_Text_OpenAI();
-    $alt_text = $openai->generate_alt_text($image_url, $attachment_id);
+  $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
 
+  if ($alt_text) {
+      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
 
-    if ($alt_text) {
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
-        wp_send_json_success(array('alt_text' => $alt_text));
-    } else {
-        wp_send_json_error('Failed to generate alt text');
-    }
+      // Generate translations after successful alt text generation
+      $translations = $this->language_manager->generate_multilingual_alt_text($attachment_id, $alt_text);
+
+      wp_send_json_success([
+          'alt_text' => $alt_text,
+          'translations' => $translations
+      ]);
+  } else {
+      wp_send_json_error('Failed to generate alt text');
+  }
   }
 
   /**
