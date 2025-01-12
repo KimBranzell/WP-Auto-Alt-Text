@@ -71,6 +71,16 @@ class Auto_Alt_Text_Language_Manager {
         return call_user_func($handler);
     }
 
+    /**
+     * Retrieves the post language based on the active language plugin.
+     *
+     * This method checks the active language plugin and calls the appropriate handler function to
+     * retrieve the post language. If no language plugin is active or the plugin is not supported,
+     * it returns the default language.
+     *
+     * @param int $post_id The ID of the post to retrieve the language for.
+     * @return string The post language.
+     */
     public function get_post_language($post_id) {
         switch ($this->active_plugin['name']) {
             case 'wpml':
@@ -86,6 +96,15 @@ class Auto_Alt_Text_Language_Manager {
         }
     }
 
+    /**
+     * Retrieves the default language based on the active language plugin.
+     *
+     * This method checks the active language plugin and returns the default language
+     * for that plugin. If no language plugin is active, it returns the default language
+     * set in the class.
+     *
+     * @return string The default language.
+     */
     public function get_default_language() {
         switch ($this->active_plugin['name']) {
             case 'wpml':
@@ -101,6 +120,16 @@ class Auto_Alt_Text_Language_Manager {
         }
     }
 
+    /**
+     * Retrieves the post translations for the given post ID based on the active language plugin.
+     *
+     * This method checks the active language plugin and calls the appropriate handler function to
+     * retrieve the post translations. If no language plugin is active or the plugin is not supported,
+     * it returns an array with the default language and the given post ID.
+     *
+     * @param int $post_id The ID of the post to retrieve translations for.
+     * @return array An array of post IDs keyed by language codes.
+     */
     public function get_post_translations($post_id) {
         switch ($this->active_plugin['name']) {
             case 'wpml':
@@ -466,6 +495,17 @@ class Auto_Alt_Text_Language_Manager {
         }
     }
 
+    /**
+     * Generates multilingual alternative text (alt text) for an attachment.
+     *
+     * This method retrieves the current language for the attachment, stores the original alt text in the current language,
+     * and then uses the OpenAI API to translate the alt text to the current language, maintaining the same descriptive quality.
+     * If the translation is successful, the method stores the translated alt text for the current language.
+     *
+     * @param int    $attachment_id The ID of the attachment.
+     * @param string $base_alt_text The original alternative text to be translated.
+     * @return string|null The translated alternative text, or null if the translation failed.
+     */
     public function generate_multilingual_alt_text($attachment_id, $base_alt_text) {
         $current_language = $this->get_post_language($attachment_id);
 
@@ -496,6 +536,17 @@ class Auto_Alt_Text_Language_Manager {
         return $translated_alt;
     }
 
+    /**
+     * Retrieves the alternative text (alt text) for an attachment in a specific language.
+     *
+     * This method first checks if a language is provided. If not, it uses the current language.
+     * It then retrieves the alt text for the attachment in the specified language. If the translation
+     * does not exist, it falls back to the default language.
+     *
+     * @param int    $attachment_id The ID of the attachment.
+     * @param string $language      The language code for the alt text (optional).
+     * @return string The alternative text for the attachment in the specified language.
+     */
     public function get_alt_text($attachment_id, $language = null) {
         if (!$language) {
             $language = $this->get_current_language();
@@ -519,6 +570,16 @@ class Auto_Alt_Text_Language_Manager {
         return $alt_text;
     }
 
+    /**
+     * Generates translations for the alternative text (alt text) of multiple attachments.
+     *
+     * This method iterates through the provided attachment IDs, retrieves the base alt text
+     * for the default language, and then generates the translated alt text for each available
+     * language using the `generate_multilingual_alt_text()` method.
+     *
+     * @param int[] $attachment_ids The IDs of the attachments to generate translations for.
+     * @return array An associative array mapping attachment IDs to their translated alt text.
+     */
     public function bulk_generate_translations($attachment_ids) {
         $results = [];
 

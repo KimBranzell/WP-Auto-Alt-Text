@@ -222,6 +222,16 @@ class Auto_Alt_Text_OpenAI  {
         ];
     }
 
+    /**
+     * Translates the given image description using the OpenAI API.
+     *
+     * This method sends a request to the OpenAI API to translate the provided image description prompt. It sets the
+     * system message to indicate that the AI should act as a professional translator, and passes the prompt as the
+     * user message. The translated text is then returned, or null if an error occurs.
+     *
+     * @param string $prompt The image description prompt to be translated.
+     * @return string|null The translated image description, or null if an error occurred.
+     */
     public function translate_alt_text($prompt) {
         $response_data = $this->callAPI([
             'model' => self::MODEL,

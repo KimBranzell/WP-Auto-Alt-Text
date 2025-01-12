@@ -89,6 +89,15 @@ class Auto_Alt_Text_Image_Process {
     }
   }
 
+  /**
+   * Handles the update of an attachment in the WordPress media library.
+   *
+   * This method is responsible for generating and updating the alternative text (alt text) for an
+   * image attachment when it is updated. It retrieves the current alt text, generates translations
+   * for all active languages, and updates the alt text metadata for the attachment.
+   *
+   * @param int $attachment_id The ID of the attachment being updated.
+   */
   public function handle_attachment_update($attachment_id) {
     if (!wp_attachment_is_image($attachment_id)) {
         return;
@@ -188,35 +197,35 @@ class Auto_Alt_Text_Image_Process {
   public function generate_alt_text_for_attachment() {
     if (!isset($_POST['attachment_id']) || !isset($_POST['nonce'])) {
       wp_send_json_error('Missing attachment ID or nonce verification failed.');
-  }
+    }
 
-  $attachment_id = intval($_POST['attachment_id']);
-  $image_url = $this->get_image_url_for_openai($attachment_id);
-  $nonce = sanitize_text_field($_POST['nonce']);
+    $attachment_id = intval($_POST['attachment_id']);
+    $image_url = $this->get_image_url_for_openai($attachment_id);
+    $nonce = sanitize_text_field($_POST['nonce']);
 
-  if (!wp_verify_nonce($nonce, 'generate_alt_text_nonce')) {
-      wp_send_json_error('Nonce verification failed.');
-  }
+    if (!wp_verify_nonce($nonce, 'generate_alt_text_nonce')) {
+        wp_send_json_error('Nonce verification failed.');
+    }
 
-  if (!$image_url) {
-      wp_send_json_error('Invalid attachment ID.');
-  }
+    if (!$image_url) {
+        wp_send_json_error('Invalid attachment ID.');
+    }
 
-  $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
+    $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id);
 
-  if ($alt_text) {
-      update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
+    if ($alt_text) {
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($alt_text));
 
-      // Generate translations after successful alt text generation
-      $translations = $this->language_manager->generate_multilingual_alt_text($attachment_id, $alt_text);
+        // Generate translations after successful alt text generation
+        $translations = $this->language_manager->generate_multilingual_alt_text($attachment_id, $alt_text);
 
-      wp_send_json_success([
-          'alt_text' => $alt_text,
-          'translations' => $translations
-      ]);
-  } else {
-      wp_send_json_error('Failed to generate alt text');
-  }
+        wp_send_json_success([
+            'alt_text' => $alt_text,
+            'translations' => $translations
+        ]);
+    } else {
+        wp_send_json_error('Failed to generate alt text');
+    }
   }
 
   /**
@@ -257,8 +266,8 @@ class Auto_Alt_Text_Image_Process {
    * @return bool True if the site is running in a local environment, false otherwise.
    */
   private function is_local_environment() {
-	$host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
-	return strpos($host, '.ddev.site') !== false || strpos($host, '.test') !== false;
+    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'];
+    return strpos($host, '.ddev.site') !== false || strpos($host, '.test') !== false;
   }
 
   /**
