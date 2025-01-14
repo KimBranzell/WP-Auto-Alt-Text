@@ -34,22 +34,6 @@ class Auto_Alt_Text_Language_Manager {
             ];
         }
 
-        if (defined('TRP_PLUGIN_VERSION')) {
-            return [
-                'name' => 'translatepress',
-                'version' => TRP_PLUGIN_VERSION,
-                'handler' => [$this, 'handle_translatepress']
-            ];
-        }
-
-        if (defined('WEGLOT_VERSION')) {
-            return [
-                'name' => 'weglot',
-                'version' => WEGLOT_VERSION,
-                'handler' => [$this, 'handle_weglot']
-            ];
-        }
-
         return null;
     }
 
@@ -87,10 +71,6 @@ class Auto_Alt_Text_Language_Manager {
                 return $this->get_wpml_language($post_id);
             case 'polylang':
                 return $this->get_polylang_language($post_id);
-            case 'translatepress':
-                return $this->get_translatepress_language($post_id);
-            case 'weglot':
-                return $this->get_weglot_language($post_id);
             default:
                 return $this->default_language;
         }
@@ -111,10 +91,6 @@ class Auto_Alt_Text_Language_Manager {
                 return apply_filters('wpml_default_language', null);
             case 'polylang':
                 return pll_default_language();
-            case 'translatepress':
-                return TRP_Settings::get_default_language();
-            case 'weglot':
-                return weglot_get_original_language();
             default:
                 return $this->default_language;
         }
@@ -136,10 +112,6 @@ class Auto_Alt_Text_Language_Manager {
                 return $this->get_wpml_translations($post_id);
             case 'polylang':
                 return $this->get_polylang_translations($post_id);
-            case 'translatepress':
-                return $this->get_translatepress_translations($post_id);
-            case 'weglot':
-                return $this->get_weglot_translations($post_id);
             default:
                 return [$this->default_language => $post_id];
         }
@@ -267,126 +239,6 @@ class Auto_Alt_Text_Language_Manager {
     }
 
     /**
-     * TranslatePress
-     */
-
-    /**
-     * Retrieves the translations for the given post ID using the TranslatePress plugin.
-     *
-     * This method retrieves the translation languages configured in the TranslatePress settings,
-     * and maps the given post ID to each of those languages. The resulting array maps language
-     * codes to the post ID.
-     *
-     * @param int $post_id The ID of the post to retrieve translations for.
-     * @return array An array of post IDs keyed by language codes.
-     */
-    private function get_translatepress_translations($post_id) {
-        global $TRP_LANGUAGE;
-        $translations = [];
-
-        // Get TranslatePress settings
-        $settings = get_option('trp_settings', []);
-        $languages = $settings['translation-languages'] ?? [$this->default_language];
-
-        foreach ($languages as $language) {
-            // TranslatePress uses the same post ID across languages
-            $translations[$language] = $post_id;
-        }
-
-        Auto_Alt_Text_Logger::log("TranslatePress translations mapped", "debug", [
-            'post_id' => $post_id,
-            'languages' => $languages
-        ]);
-
-        return $translations;
-    }
-
-    /**
-     * Retrieves the current language using the TranslatePress plugin.
-     *
-     * This method is used to get the current language when the TranslatePress plugin is active.
-     * It first checks the global `$TRP_LANGUAGE` variable, and if that is not set, it falls back
-     * to the default language.
-     *
-     * @param int $post_id The ID of the post to retrieve the language for.
-     * @return string The language code for the post, or the default language if not found.
-     */
-    private function get_translatepress_language($post_id) {
-        global $TRP_LANGUAGE;
-
-        $language = !empty($TRP_LANGUAGE) ? $TRP_LANGUAGE : $this->default_language;
-
-        Auto_Alt_Text_Logger::log("TranslatePress language detected", "debug", [
-            'post_id' => $post_id,
-            'language' => $language
-        ]);
-
-        return $language;
-    }
-
-    /**
-     * WeGlot
-     */
-
-    /**
-     * Retrieves the translations for the given post ID using the Weglot plugin.
-     *
-     * This method checks if the Weglot plugin is active and available, and then retrieves the list of
-     * available languages and the original language. It then maps the post ID to each available language
-     * and returns an array of post IDs keyed by language codes.
-     *
-     * If the Weglot plugin is not active or available, the method returns an array with the default
-     * language and the given post ID.
-     *
-     * @param int $post_id The ID of the post to retrieve the translations for.
-     * @return array An array of post IDs keyed by language codes.
-     */
-    private function get_weglot_translations($post_id) {
-        $translations = [];
-
-        if (function_exists('weglot_get_languages_available')) {
-            $languages = weglot_get_languages_available();
-            $original_language = weglot_get_original_language();
-
-            foreach ($languages as $language) {
-                // Weglot uses same post ID across languages like TranslatePress
-                $translations[$language] = $post_id;
-            }
-
-            Auto_Alt_Text_Logger::log("Weglot translations mapped", "debug", [
-                'post_id' => $post_id,
-                'languages' => $languages,
-                'original_language' => $original_language
-            ]);
-        }
-
-        return !empty($translations) ? $translations : [$this->default_language => $post_id];
-    }
-
-    /**
-     * Retrieves the current language using the Weglot plugin.
-     *
-     * This method is used as the handler for the 'weglot' active plugin in the `get_current_language()` method.
-     * It checks if the `weglot_get_current_language` function exists, and if so, it calls that function to get the current language.
-     * If the function does not exist, it returns the default language.
-     *
-     * @param int $post_id The ID of the post to retrieve the language for.
-     * @return string The current language.
-     */
-    private function get_weglot_language($post_id) {
-        $language = function_exists('weglot_get_current_language')
-            ? weglot_get_current_language()
-            : $this->default_language;
-
-        Auto_Alt_Text_Logger::log("Weglot language detected", "debug", [
-            'post_id' => $post_id,
-            'language' => $language
-        ]);
-
-        return $language;
-    }
-
-    /**
      * Retrieves the current language using the WPML plugin.
      *
      * This method is used as the handler for the 'wpml' active plugin in the `get_current_language()` method.
@@ -395,7 +247,23 @@ class Auto_Alt_Text_Language_Manager {
      * @return string The current language.
      */
     private function handle_wpml() {
-        return apply_filters('wpml_current_language', null);
+        // Try admin language context first
+        $admin_lang = apply_filters('wpml_current_language', null, array('admin' => true));
+        if (!empty($admin_lang)) {
+            Auto_Alt_Text_Logger::log("WPML admin language detected", "debug", [
+                'language' => $admin_lang
+            ]);
+            return $admin_lang;
+        }
+
+        // Fallback to standard language context
+        $current_lang = apply_filters('wpml_current_language', null);
+
+        Auto_Alt_Text_Logger::log("WPML language detected", "debug", [
+            'language' => $current_lang ?: $this->default_language
+        ]);
+
+        return $current_lang ?: $this->default_language;
     }
 
     /**
@@ -414,41 +282,20 @@ class Auto_Alt_Text_Language_Manager {
         // Try admin language first during uploads
         $admin_lang = pll_current_language('admin');
         if (!empty($admin_lang)) {
+            Auto_Alt_Text_Logger::log("Polylang admin language detected", "debug", [
+                'language' => $admin_lang
+            ]);
             return $admin_lang;
         }
 
         // Fallback to standard language detection
         $current_lang = pll_current_language();
 
+        Auto_Alt_Text_Logger::log("Polylang language detected", "debug", [
+            'language' => $current_lang ?: $this->default_language
+        ]);
+
         return $current_lang ?: $this->default_language;
-    }
-
-    /**
-     * Retrieves the current language using the TranslatePress plugin.
-     *
-     * This method is used as the handler for the 'translatepress' active plugin in the `get_current_language()` method.
-     * It checks the global `$TRP_LANGUAGE` variable to get the current language, and returns the default language if the variable is empty.
-     *
-     * @return string The current language.
-     */
-    private function handle_translatepress() {
-        global $TRP_LANGUAGE;
-        return !empty($TRP_LANGUAGE) ? $TRP_LANGUAGE : $this->default_language;
-    }
-
-    /**
-     * Retrieves the current language using the Weglot plugin.
-     *
-     * This method is used as the handler for the 'weglot' active plugin in the `get_current_language()` method.
-     * It calls the `weglot_get_current_language` function to get the current language, or returns the default language if the function does not exist.
-     *
-     * @return string The current language.
-     */
-    private function handle_weglot() {
-        if (function_exists('weglot_get_current_language')) {
-            return weglot_get_current_language();
-        }
-        return $this->default_language;
     }
 
     /**
@@ -465,11 +312,6 @@ class Auto_Alt_Text_Language_Manager {
                 return apply_filters('wpml_active_languages', null);
             case 'polylang':
                 return function_exists('pll_languages_list') ? pll_languages_list(['fields' => 'locale']) : [];
-            case 'translatepress':
-                global $TRP_LANGUAGE;
-                return !empty($TRP_LANGUAGE) ? get_option('trp_settings')['translation-languages'] : [];
-            case 'weglot':
-                return function_exists('weglot_get_languages_available') ? weglot_get_languages_available() : [];
             default:
                 return [$this->default_language];
         }
@@ -622,11 +464,6 @@ class Auto_Alt_Text_Language_Manager {
                 if ($translated_id) {
                     update_post_meta($translated_id, '_wp_attachment_image_alt', $alt_text);
                 }
-                break;
-
-            case 'translatepress':
-                // TranslatePress uses its own translation storage system
-                $this->store_translatepress_alt_text($attachment_id, $language, $alt_text);
                 break;
         }
     }
