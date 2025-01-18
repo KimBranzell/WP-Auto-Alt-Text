@@ -200,6 +200,31 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
+                <h2><?php _e('Cache Settings', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="cache_duration">
+                                <?php _e('Cache Duration (days)', 'wp-auto-alt-text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <input type="number"
+                                id="cache_duration"
+                                name="aat_cache_expiration"
+                                value="<?php echo esc_attr(get_option('aat_cache_expiration', 30)); ?>"
+                                min="1"
+                                max="365"
+                            />
+                            <p class="description">
+                                <?php _e('Number of days to cache generated alt text. Lower values use more API calls but keep content fresher.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card">
                 <h2><?php _e('AI Prompt Template', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
@@ -338,6 +363,18 @@ function auto_alt_text_register_settings() {
         SETTINGS_GROUP,
         'alt_text_prompt_template',     // New setting for prompt template
         'auto_alt_text_sanitize'
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_cache_expiration',
+        [
+            'type' => 'integer',
+            'default' => 30,
+            'sanitize_callback' => function($input) {
+                $value = absint($input);
+                return max(1, min(365, $value)); // Ensure value is between 1 and 365
+            }
+        ]
     );
     register_setting(
         SETTINGS_GROUP,

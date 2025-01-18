@@ -2,7 +2,6 @@
 class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/chat/completions';
     private const MODEL = 'gpt-4o';
-    private const CACHE_EXPIRATION = DAY_IN_SECONDS;
     private const MAX_TOKENS = 300;
     private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
 
@@ -129,22 +128,6 @@ class Auto_Alt_Text_OpenAI  {
     public function save_api_key($key) {
         $encrypted_key = $this->encrypt_api_key($key);
         update_option('auto_alt_text_api_key', $encrypted_key);
-    }
-
-    /**
-     * Generates a cache key for the given image source.
-     *
-     * The cache key is constructed by combining the image source and the current timestamp,
-     * and then hashing the result using the MD5 algorithm. This ensures that each image
-     * source has a unique cache key, which can be used to store and retrieve the generated
-     * alt text for that image.
-     *
-     * @param string $image_source The source of the image, such as the image URL or file path.
-     * @return string The cache key for the given image source.
-     */
-    private function get_cache_key($image_source) {
-        $timestamp = current_time('timestamp');
-        return 'auto_alt_text_' . md5($image_source . $timestamp);
     }
 
     /**
@@ -280,14 +263,22 @@ class Auto_Alt_Text_OpenAI  {
             return null;
         }
 
-        $current_language = $this->language_manager->get_current_language();
-        $cache_key = $this->get_cache_key($image_source);
-        $cached_result = get_transient($cache_key);
+        // Get file path from attachment ID
+        $image_path = get_attached_file($attachment_id);
 
-
-        if ($cached_result !== false && !$preview_mode) {
-            return $cached_result;
+        // Check cache first using our enhanced Cache Manager
+        if (!$preview_mode) {
+            $cached_response = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path);
+            if ($cached_response !== false) {
+                Auto_Alt_Text_Logger::log("Retrieved alt text from cache", "info", [
+                    'attachment_id' => $attachment_id
+                ]);
+                return $cached_response;
+            }
         }
+
+        $current_language = $this->language_manager->get_current_language();
+
 
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
@@ -336,10 +327,14 @@ class Auto_Alt_Text_OpenAI  {
                 // Only save alt text if not in preview mode
                 if (!$preview_mode) {
                     update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
-                    set_transient($cache_key, $generated_text, DAY_IN_SECONDS);
                 }
 
                 if (!$preview_mode && $generated_text) {
+                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text);
+                    Auto_Alt_Text_Logger::log("Cached generated alt text", "info", [
+                        'attachment_id' => $attachment_id,
+                        'generated_text' => $generated_text
+                    ]);
                     $this->language_manager->sync_alt_text($attachment_id, $generated_text);
                 }
 
@@ -459,26 +454,5 @@ class Auto_Alt_Text_OpenAI  {
         }
 
         return $response_data;
-    }
-
-    /**
-     * Clears the cache for a specific image URL or all cached alt text.
-     *
-     * If an image URL is provided, it deletes the transient for that specific image.
-     * If no image URL is provided, it deletes all transients for automatically generated alt text.
-     *
-     * @param string|null $image_url The URL of the image to clear the cache for, or null to clear all cached alt text.
-     */
-    public function clear_cache($image_url = null) {
-        if ($image_url) {
-            delete_transient($this->get_cache_key($image_url));
-            return;
-        }
-
-        global $wpdb;
-        $wpdb->query(
-            "DELETE FROM {$wpdb->options}
-            WHERE option_name LIKE '_transient_auto_alt_text_%'"
-        );
     }
 }
