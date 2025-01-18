@@ -56,7 +56,17 @@ class Auto_Alt_Text_Batch_Processor {
         }
 
         try {
-            return $this->processBatchItems($attachment_ids);
+            $language_manager = new Auto_Alt_Text_Language_Manager();
+            $results = $this->processBatchItems($attachment_ids);
+
+            // Generate translations for successful results
+            foreach ($results as $attachment_id => $alt_text) {
+                if (!empty($alt_text)) {
+                    $language_manager->generate_multilingual_alt_text($attachment_id, $alt_text);
+                }
+            }
+
+            return $results;
         } catch (Exception $e) {
             Auto_Alt_Text_Logger::log("Batch processing error", "error", [
                 'message' => $e->getMessage()

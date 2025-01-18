@@ -413,7 +413,7 @@ function updateProgressBar(progress) {
 document.addEventListener('DOMContentLoaded', function() {
     const templateInput = document.getElementById('alt-text-prompt-template');
     const charCount = document.getElementById('char-count');
-    const maxLength = 1000;
+    const maxLength = 10000;
 
     if (templateInput && charCount) {
         // Add progress bar element

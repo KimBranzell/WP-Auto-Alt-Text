@@ -2,7 +2,6 @@
 class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/chat/completions';
     private const MODEL = 'gpt-4o';
-    private const CACHE_EXPIRATION = DAY_IN_SECONDS;
     private const MAX_TOKENS = 300;
     private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
 
@@ -10,12 +9,14 @@ class Auto_Alt_Text_OpenAI  {
     private $last_error;
     private $rate_limiter;
     private $statistics;
+    private $language_manager;
 
     public function __construct() {
         $encrypted_key = get_option('auto_alt_text_api_key');
         $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
         $this->statistics = new Auto_Alt_Text_Statistics();
+        $this->language_manager = new Auto_Alt_Text_Language_Manager();
     }
 
     /**
@@ -130,22 +131,6 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Generates a cache key for the given image source.
-     *
-     * The cache key is constructed by combining the image source and the current timestamp,
-     * and then hashing the result using the MD5 algorithm. This ensures that each image
-     * source has a unique cache key, which can be used to store and retrieve the generated
-     * alt text for that image.
-     *
-     * @param string $image_source The source of the image, such as the image URL or file path.
-     * @return string The cache key for the given image source.
-     */
-    private function get_cache_key($image_source) {
-        $timestamp = current_time('timestamp');
-        return 'auto_alt_text_' . md5($image_source . $timestamp);
-    }
-
-    /**
      * Returns the last error that occurred during the API call.
      *
      * This method can be used to retrieve the error message that was generated
@@ -221,6 +206,40 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
+     * Translates the given image description using the OpenAI API.
+     *
+     * This method sends a request to the OpenAI API to translate the provided image description prompt. It sets the
+     * system message to indicate that the AI should act as a professional translator, and passes the prompt as the
+     * user message. The translated text is then returned, or null if an error occurs.
+     *
+     * @param string $prompt The image description prompt to be translated.
+     * @return string|null The translated image description, or null if an error occurred.
+     */
+    public function translate_alt_text($prompt) {
+        $response_data = $this->callAPI([
+            'model' => self::MODEL,
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'You are a professional translator. Translate the given image description accurately while maintaining its descriptive quality.'
+                ],
+                [
+                    'role' => 'user',
+                    'content' => $prompt
+                ]
+            ],
+            'max_tokens' => 150,
+            'temperature' => 0.7
+        ]);
+
+        if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
+            return trim($response_data['choices'][0]['message']['content']);
+        }
+
+        return null;
+    }
+
+    /**
      * Generates alt text for an image using the OpenAI API.
      *
      * This method is responsible for generating alt text for an image by sending a request to the OpenAI API.
@@ -244,13 +263,22 @@ class Auto_Alt_Text_OpenAI  {
             return null;
         }
 
-        $cache_key = $this->get_cache_key($image_source);
-        $cached_result = get_transient($cache_key);
+        // Get file path from attachment ID
+        $image_path = get_attached_file($attachment_id);
 
-
-        if ($cached_result !== false && !$preview_mode) {
-            return $cached_result;
+        // Check cache first using our enhanced Cache Manager
+        if (!$preview_mode) {
+            $cached_response = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path);
+            if ($cached_response !== false) {
+                Auto_Alt_Text_Logger::log("Retrieved alt text from cache", "info", [
+                    'attachment_id' => $attachment_id
+                ]);
+                return $cached_response;
+            }
         }
+
+        $current_language = $this->language_manager->get_current_language();
+
 
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
@@ -299,7 +327,15 @@ class Auto_Alt_Text_OpenAI  {
                 // Only save alt text if not in preview mode
                 if (!$preview_mode) {
                     update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
-                    set_transient($cache_key, $generated_text, DAY_IN_SECONDS);
+                }
+
+                if (!$preview_mode && $generated_text) {
+                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text);
+                    Auto_Alt_Text_Logger::log("Cached generated alt text", "info", [
+                        'attachment_id' => $attachment_id,
+                        'generated_text' => $generated_text
+                    ]);
+                    $this->language_manager->sync_alt_text($attachment_id, $generated_text);
                 }
 
                 Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
@@ -356,13 +392,19 @@ class Auto_Alt_Text_OpenAI  {
 
         return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {$language_name} tailored to the following requirements:
 
-            1. Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
-            2. Don't include phrases like 'image of' or 'picture of'.
-            3. Write the text in {$language} language.
-            4. For ambiguous images, describe them neutrally.
-            5. Use plain and easy-to-understand language.
-            6. If {$language} is unsupported, default to English.
-            7. Maintain proper grammar and syntax in {$language_name}
+            1. First detect if there is any text in the image
+            2. If text is present, identify its language and include it in your response
+            3. Generate a concise alt text in {$language_name} that:
+                - Describes the image content
+                - Includes any detected text (maintaining original language)
+                - Maintains cultural context
+            4. Keep it under 2 sentences
+            5. Don't include phrases like 'image of' or 'picture of'.
+            6. Write the text in {$language_name} language.
+            7. For ambiguous images, describe them neutrally.
+            8. Use plain and easy-to-understand language.
+            9. If {$language_name} is unsupported, default to English.
+            10. Maintain proper grammar and syntax in {$language_name}
 
             Output:
             A single, SEO-friendly alt text description";
@@ -412,26 +454,5 @@ class Auto_Alt_Text_OpenAI  {
         }
 
         return $response_data;
-    }
-
-    /**
-     * Clears the cache for a specific image URL or all cached alt text.
-     *
-     * If an image URL is provided, it deletes the transient for that specific image.
-     * If no image URL is provided, it deletes all transients for automatically generated alt text.
-     *
-     * @param string|null $image_url The URL of the image to clear the cache for, or null to clear all cached alt text.
-     */
-    public function clear_cache($image_url = null) {
-        if ($image_url) {
-            delete_transient($this->get_cache_key($image_url));
-            return;
-        }
-
-        global $wpdb;
-        $wpdb->query(
-            "DELETE FROM {$wpdb->options}
-            WHERE option_name LIKE '_transient_auto_alt_text_%'"
-        );
     }
 }

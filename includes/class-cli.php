@@ -81,6 +81,31 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     }
 
     /**
+     * Generates alt text translations for specified attachments
+     *
+     * ## OPTIONS
+     *
+     * [--ids=<attachment-ids>]
+     * : Comma-separated list of attachment IDs to process
+     *
+     * [--all]
+     * : Process all images in the media library
+     */
+    public function translate($args, $assoc_args) {
+        $language_manager = new Auto_Alt_Text_Language_Manager();
+
+        if (isset($assoc_args['all'])) {
+            $attachment_ids = $this->get_all_attachment_ids();
+        } else {
+            $attachment_ids = explode(',', $assoc_args['ids']);
+        }
+
+        $results = $language_manager->bulk_generate_translations($attachment_ids);
+
+        WP_CLI::success(sprintf('Processed %d images with translations', count($results)));
+    }
+
+    /**
      * Validates and sanitizes the limit parameter
      *
      * @param int $limit The limit to validate
