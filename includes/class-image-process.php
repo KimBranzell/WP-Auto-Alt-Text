@@ -26,9 +26,7 @@ class Auto_Alt_Text_Image_Process {
    */
   public function handle_new_attachment($attachment_id) {
     $upload_language = $this->language_manager->get_current_language();
-    error_log('Upload Language: ' . $upload_language);
     $source_language = $this->language_manager->get_default_language();
-    error_log('Source Language: ' . $source_language);
 
     // Force set the attachment to the upload language
     if (function_exists('pll_set_post_language')) {
@@ -37,13 +35,9 @@ class Auto_Alt_Text_Image_Process {
 
     $attachment_language = $this->language_manager->get_post_language($attachment_id);
 
-    error_log('Attachment Language: ' . $attachment_language);
-
 
     // If no language is set, this is likely the source image
     $is_source = empty($attachment_language) && $upload_language === $source_language;
-
-    error_log('is_source: ' . $is_source);
 
     Auto_Alt_Text_Logger::log("Processing new image upload", "info", [
       'attachment_id' => $attachment_id,
@@ -56,9 +50,6 @@ class Auto_Alt_Text_Image_Process {
     if (!wp_attachment_is_image($attachment_id)) {
         return;
     }
-
-    error_log('is_source before if: ' . $is_source);
-    error_log('$upload_language === $attachment_language: ' . ($upload_language === $attachment_language));
 
     // Only generate alt text for the source language image
     if ($upload_language === $attachment_language) {

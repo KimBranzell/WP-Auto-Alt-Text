@@ -209,19 +209,25 @@ function auto_alt_text_options() {
                                 <?php echo esc_textarea(get_option('alt_text_prompt_template',
                                 'You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {LANGUAGE} tailored to the following requirements:
 
-                                    1. Keep it short (1-2 sentences) and descriptive, focusing on the essential elements in the image.
-                                    2. Do not include phrases like "image of" or "picture of".
-                                    3. Write the text in {LANGUAGE} language with correct grammar and syntax.
-                                    4. For ambiguous images, describe them neutrally.
-                                    5. Use plain and easy-to-understand language.
-                                    6. If {LANGUAGE} is unsupported, default to English.
-                                    7. Maintain proper grammar and syntax in {LANGUAGE}
+                                1. First detect if there is any text in the image
+                                2. If text is present, identify its language and include it in your response
+                                3. Generate a concise alt text in {LANGUAGE} that:
+                                    - Describes the image content
+                                    - Includes any detected text (maintaining original language)
+                                    - Maintains cultural context
+                                4. Keep it under 2 sentences
+                                5. Don\'t include phrases like "image of" or "picture of".
+                                6. Write the text in {LANGUAGE} language.
+                                7. For ambiguous images, describe them neutrally.
+                                8. Use plain and easy-to-understand language.
+                                9. If {LANGUAGE} is unsupported, default to English.
+                                10. Maintain proper grammar and syntax in {LANGUAGE}
 
-                                    Output:
-                                    A single, SEO-friendly alt text description')); ?>
+                                Output:
+                                A single, SEO-friendly alt text description')); ?>
                             </textarea>
                             <div id="template-counter" class="description">
-                                <div>Characters: <span id="char-count">0</span>/1000</div>
+                                <div>Characters: <span id="char-count">0</span>/10000</div>
                             </div>
                             <p class="description">
                                 <?php _e('Use {LANGUAGE} in your template to automatically insert the selected language.', 'wp-auto-alt-text'); ?>
@@ -385,7 +391,7 @@ function auto_alt_text_sanitize($input) {
 
         case 'sanitize_option_alt_text_prompt_template':
             $min_length = 50;
-            $max_length = 1000;
+            $max_length = 10000;
             $required_keywords = ['alt text', 'descriptive', 'concise'];
 
             if (strlen($input) < $min_length || strlen($input) > $max_length) {

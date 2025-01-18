@@ -171,7 +171,6 @@ class Auto_Alt_Text_Activator {
 
 
         } catch (Exception $e) {
-            error_log('Auto Alt Text Activation Error: ' . $e->getMessage());
             add_action('admin_notices', function() use ($e) {
                 echo '<div class="error"><p>Auto Alt Text activation error: ' . esc_html($e->getMessage()) . '</p></div>';
             });

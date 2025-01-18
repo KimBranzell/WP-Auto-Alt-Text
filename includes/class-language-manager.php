@@ -369,8 +369,6 @@ class Auto_Alt_Text_Language_Manager {
 
         $translated_alt = $openai->translate_alt_text($prompt);
 
-        error_log('Translated alt text: ' . $translated_alt);
-
         if ($translated_alt) {
             $this->store_language_specific_alt_text($attachment_id, $current_language, $translated_alt);
         }
