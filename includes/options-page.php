@@ -124,6 +124,39 @@ function auto_alt_text_options() {
             ?>
 
             <div class="card">
+                <div class="brand-settings-section">
+                    <h2>Brand Settings</h2>
+                    <table class="form-table">
+                        <tr>
+                            <th>Brand Name</th>
+                            <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <th>Brand Description</th>
+                            <td><textarea name="aat_brand_description" rows="3" placeholder="Enter a description of your brand"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
+                        </tr>
+                        <tr>
+                            <th>Brand Position</th>
+                            <td>
+                                <select name="aat_brand_position">
+                                    <option value="start" <?php selected(get_option('aat_brand_position'), 'start'); ?>>Start of text</option>
+                                    <option value="middle" <?php selected(get_option('aat_brand_position'), 'middle'); ?>>Middle of text</option>
+                                    <option value="end" <?php selected(get_option('aat_brand_position'), 'end'); ?>>End of text</option>
+                                    <option value="random" <?php selected(get_option('aat_brand_position'), 'random'); ?>>Random position</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Product Keywords</th>
+                            <td>
+                                <textarea name="aat_product_keywords" rows="3" placeholder="Enter product-related keywords, comma-separated"><?php echo esc_textarea(get_option('aat_product_keywords')); ?></textarea>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
                 <table class="form-table">
                     <tr>
                         <th scope="row">
@@ -224,7 +257,7 @@ function auto_alt_text_options() {
                 </table>
             </div>
 
-            <div class="card">
+            <!-- <div class="card">
                 <h2><?php _e('AI Prompt Template', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
@@ -263,7 +296,7 @@ function auto_alt_text_options() {
                         </td>
                     </tr>
                 </table>
-            </div>
+            </div> -->
 
             <?php submit_button(); ?>
         </form>
@@ -359,9 +392,29 @@ function auto_alt_text_register_settings() {
         'language',
         'auto_alt_text_sanitize'
     );
+    // register_setting(
+    //     SETTINGS_GROUP,
+    //     'alt_text_prompt_template',     // New setting for prompt template
+    //     'auto_alt_text_sanitize'
+    // );
     register_setting(
         SETTINGS_GROUP,
-        'alt_text_prompt_template',     // New setting for prompt template
+        'aat_brand_name',
+        'auto_alt_text_sanitize'
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_brand_position',
+        'auto_alt_text_sanitize'
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_product_keywords',
+        'auto_alt_text_sanitize'
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_brand_description',
         'auto_alt_text_sanitize'
     );
     register_setting(
@@ -426,31 +479,31 @@ function auto_alt_text_sanitize($input) {
             $encrypted = $openai->encrypt_api_key($trimmed_input);
             return $encrypted;
 
-        case 'sanitize_option_alt_text_prompt_template':
-            $min_length = 50;
-            $max_length = 10000;
-            $required_keywords = ['alt text', 'descriptive', 'concise'];
+        // case 'sanitize_option_alt_text_prompt_template':
+        //     $min_length = 50;
+        //     $max_length = 10000;
+        //     $required_keywords = ['alt text', 'descriptive', 'concise'];
 
-            if (strlen($input) < $min_length || strlen($input) > $max_length) {
-                add_settings_error(
-                    'alt_text_prompt_template',
-                    'invalid_prompt_length',
-                    sprintf(__('Prompt template must be between %d and %d characters.', 'wp-auto-alt-text'), $min_length, $max_length)
-                );
-                return get_option('alt_text_prompt_template');
-            }
+        //     if (strlen($input) < $min_length || strlen($input) > $max_length) {
+        //         add_settings_error(
+        //             'alt_text_prompt_template',
+        //             'invalid_prompt_length',
+        //             sprintf(__('Prompt template must be between %d and %d characters.', 'wp-auto-alt-text'), $min_length, $max_length)
+        //         );
+        //         return get_option('alt_text_prompt_template');
+        //     }
 
-            foreach ($required_keywords as $keyword) {
-                if (stripos($input, $keyword) === false) {
-                    add_settings_error(
-                        'alt_text_prompt_template',
-                        'missing_keyword',
-                        sprintf(__('Prompt template must include the keyword "%s".', 'wp-auto-alt-text'), $keyword)
-                    );
-                    return get_option('alt_text_prompt_template');
-                }
-            }
-            return sanitize_textarea_field($input);
+        //     foreach ($required_keywords as $keyword) {
+        //         if (stripos($input, $keyword) === false) {
+        //             add_settings_error(
+        //                 'alt_text_prompt_template',
+        //                 'missing_keyword',
+        //                 sprintf(__('Prompt template must include the keyword "%s".', 'wp-auto-alt-text'), $keyword)
+        //             );
+        //             return get_option('alt_text_prompt_template');
+        //         }
+        //     }
+        //     return sanitize_textarea_field($input);
 
         case AUTO_ALT_TEXT_LANGUAGE_OPTION:
             if (!in_array($input, ['en', 'sv'])) {
