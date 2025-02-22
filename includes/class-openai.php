@@ -384,30 +384,46 @@ class Auto_Alt_Text_OpenAI  {
     private function get_instruction() {
         $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
         $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
-        $template = get_option('alt_text_prompt_template');
+        // $template = get_option('alt_text_prompt_template');
 
-        if (!empty($template)) {
-            return str_replace('{LANGUAGE}', $language_name, $template);
+        $brand_name = get_option('aat_brand_name');
+        $brand_position = get_option('aat_brand_position');
+        $product_keywords = get_option('aat_product_keywords');
+        $brand_description = get_option('aat_brand_description');
+
+        // if (!empty($template)) {
+        //     return str_replace('{LANGUAGE}', $language_name, $template);
+        // }
+
+        $prompt = "You are an expert in accessibility, SEO optimization, and product marketing, tasked with generating alt text for images";
+
+        if (!empty($brand_name)) {
+            $prompt .= "from '{$brand_name}'";
         }
 
-        return "You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {$language_name} tailored to the following requirements:
+        if (!empty($brand_description)) {
+            $prompt .= ", '{$brand_description}.'";
+        }
 
-            1. First detect if there is any text in the image
-            2. If text is present, identify its language and include it in your response
-            3. Generate a concise alt text in {$language_name} that:
-                - Describes the image content
-                - Includes any detected text (maintaining original language)
-                - Maintains cultural context
-            4. Keep it under 2 sentences
-            5. Don't include phrases like 'image of' or 'picture of'.
-            6. Write the text in {$language_name} language.
-            7. For ambiguous images, describe them neutrally.
-            8. Use plain and easy-to-understand language.
-            9. If {$language_name} is unsupported, default to English.
-            10. Maintain proper grammar and syntax in {$language_name}
+        $prompt .= "Your job is to analyze the provided image and generate a concise, SEO-friendly, and accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
 
-            Output:
-            A single, SEO-friendly alt text description";
+        $prompt .= "<h1>Key Requirements</h1>\n";
+        $prompt .= "- Keep it between 25-40 words to balance clarity and detail.\n";
+        $prompt .= "- Use object-action-context structure, where:\n";
+        $prompt .= "-- Object: Identify the main subject or focus of the image.\n";
+        $prompt .= "-- Action: Describe the action or interaction depicted in the image.\n";
+        $prompt .= "-- Context: Provide additional context or details about the image.\n";
+        if (!empty($brand_name)) { $prompt .= "- Include \"{$brand_name}\" naturally at varying positions (beginning, middle or end).\n"; }
+        $prompt .= "- Mention product-specific details, such as material, function, or unique features.\n";
+        $prompt .= "- Include the image filename as a keyword for SEO optimization.\n";
+        $prompt .= "- If the image contains text, transcribe it accurately, even if it exceeds the word limit.\n";
+        $prompt .= "- Avoid generic descriptions – make the text informative and engaging.\n";
+        $prompt .= "- Do NOT include phrases like 'image of' or 'picture of'.\n";
+        $prompt .= "- For ambiguous images, describe them neutrally.\n";
+        $prompt .= "- Write in {$language_name}, defaulting to English if {$language_name} is unsupported.\n";
+        $prompt .= "- Ensure proper grammar and readability.\n";
+
+        return $prompt;
     }
 
     /**
