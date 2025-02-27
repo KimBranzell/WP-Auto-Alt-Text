@@ -367,8 +367,145 @@ class Auto_Alt_Text_OpenAI  {
 
             return null;
         }
+    }
 
+    /**
+     * Gets the human-readable language name from the language code.
+     *
+     * @param string $language_code The language code (e.g., 'en', 'es', 'fr').
+     * @return string The human-readable language name.
+     */
+    private function get_language_name($language_code) {
+        if (defined('AUTO_ALT_TEXT_LANGUAGES') && isset(AUTO_ALT_TEXT_LANGUAGES[$language_code])) {
+            return AUTO_ALT_TEXT_LANGUAGES[$language_code];
+        }
 
+        // Default to English if the language code is not found
+        return 'English';
+    }
+
+    /**
+     * Sends a chat completion request to the OpenAI API.
+     *
+     * This is a wrapper around callAPI that specifically handles chat completion requests,
+     * setting the model and other parameters consistently.
+     *
+     * @param array $data The data to be sent in the API request.
+     * @return array|null The response data from the API, or null if an error occurred.
+     * @throws Exception If the API request fails or the rate limit is exceeded.
+     */
+    private function send_chat_completion_request($data) {
+        // Add the model if not provided
+        if (!isset($data['model'])) {
+            $data['model'] = self::MODEL;
+        }
+
+        // Track this request with the rate limiter
+        if (!$this->rate_limiter->can_make_request()) {
+            throw new Exception('Rate limit exceeded. Please try again later.');
+        }
+
+        try {
+            $result = $this->callAPI($data);
+            return $result;
+        } catch (Exception $e) {
+            $this->last_error = $e->getMessage();
+            throw $e;
+        }
+    }
+
+    /**
+     * Regenerates alt text based on specific feedback.
+     *
+     * @param string $image_source The source of the image, such as the image URL or file path.
+     * @param int $attachment_id The ID of the attachment for which the alt text is being regenerated.
+     * @param string $improvement_type The type of improvement requested (more_descriptive, more_accessible, etc).
+     * @param string $custom_feedback Any custom feedback provided by the user.
+     * @param string $original_alt_text The original alt text that was generated.
+     * @return string|null The regenerated alt text, or null if an error occurred.
+     */
+    public function regenerate_alt_text_with_feedback($image_source, $attachment_id, $improvement_type, $custom_feedback = '', $original_alt_text = '') {
+        Auto_Alt_Text_Logger::log("Starting alt text regeneration with feedback", "info", [
+            'attachment_id' => $attachment_id,
+            'improvement_type' => $improvement_type
+        ]);
+
+        if (empty($image_source)) {
+            $this->last_error = 'Invalid image source';
+            return null;
+        }
+
+        try {
+            $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+            $lang_name = $this->get_language_name($language);
+
+            // Map improvement types to specific instructions
+            $improvement_instructions = $this->get_improvement_instructions($improvement_type);
+
+            // Build a custom prompt that includes the original alt text and feedback
+            $feedback_prompt = "You are an expert in creating image descriptions for accessibility. " .
+                "I need you to improve the following alt text for an image: \"{$original_alt_text}\". " .
+                "{$improvement_instructions} " .
+                ($custom_feedback ? "Additional feedback: {$custom_feedback}. " : "") .
+                "The description should be in {$lang_name}. " .
+                "Provide only the improved alt text without any additional explanations or quotes.";
+
+            $response_data = $this->send_chat_completion_request([
+                'messages' => [
+                    ['role' => 'system', 'content' => 'You are an expert in creating accessible and SEO-friendly image descriptions.'],
+                    ['role' => 'user', 'content' => $feedback_prompt]
+                ],
+                'max_tokens' => 150,
+                'temperature' => 0.7
+            ]);
+
+            if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
+                $regenerated_text = trim($response_data['choices'][0]['message']['content']);
+
+                // Track statistics for the regenerated alt text
+                if (!empty($regenerated_text)) {
+                    $statistics = new Auto_Alt_Text_Statistics();
+                    $statistics->update_feedback_regeneration_count();
+                }
+
+                return $regenerated_text;
+            }
+
+            $this->last_error = 'Failed to generate improved alt text';
+            return null;
+        } catch (Exception $e) {
+            $this->last_error = $e->getMessage();
+            Auto_Alt_Text_Logger::log("Alt text regeneration failed", "error", [
+                'attachment_id' => $attachment_id,
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Gets specific instructions based on the improvement type.
+     *
+     * @param string $improvement_type The type of improvement requested.
+     * @return string Instructions for the AI.
+     */
+    private function get_improvement_instructions($improvement_type) {
+        switch ($improvement_type) {
+            case 'more_descriptive':
+                return "Make the description more detailed and vivid, including more visual elements from the image.";
+            case 'more_concise':
+                return "Make the description shorter and more concise while maintaining key information.";
+            case 'more_accessible':
+                return "Optimize the description for screen readers and accessibility, focusing on spatial relationships and important context.";
+            case 'better_seo':
+                return "Improve the SEO value of the alt text by incorporating relevant keywords naturally while keeping it descriptive.";
+            case 'technical_accuracy':
+                return "Ensure technical accuracy in the description, especially for diagrams, charts, or specialized content.";
+            case 'brand_voice':
+                return "Adjust the tone to better match brand voice, making it more professional/casual as appropriate.";
+            default:
+                return "Please improve this alt text to be more effective and descriptive.";
+        }
     }
 
     /**

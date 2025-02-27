@@ -285,6 +285,21 @@ class Auto_Alt_Text_Logger {
     }
 
     /**
+     * Logs feedback-related events to track alt text improvement requests.
+     *
+     * @param string $improvement_type The type of improvement requested
+     * @param int $attachment_id The attachment ID
+     * @param array $context Additional context information
+     * @return void
+     */
+    public static function log_feedback_event($improvement_type, $attachment_id, $context = []) {
+        self::log("Alt text feedback: {$improvement_type}", "feedback", array_merge([
+            'attachment_id' => $attachment_id,
+            'improvement_type' => $improvement_type
+        ], $context));
+    }
+
+    /**
      * Logs a message to the debug log and the database.
      *
      * This method logs a message with the specified level and context to both the debug.log file

@@ -13,6 +13,7 @@ class Auto_Alt_Text_Ajax_Handler {
     public function __construct() {
         add_action('wp_ajax_generate_alt_text_for_attachment', [$this, 'generate_alt_text_for_attachment']);
         add_action('wp_ajax_process_image_batch', [$this, 'process_image_batch']);
+        add_action('wp_ajax_regenerate_alt_text_with_feedback', [$this, 'regenerate_alt_text_with_feedback']);
     }
 
     /**
@@ -171,6 +172,60 @@ class Auto_Alt_Text_Ajax_Handler {
                 'message' => $e->getMessage(),
                 'code' => $e->getCode()
             ]);
+        }
+    }
+
+    /**
+     * Regenerates alt text based on user feedback.
+     *
+     * This method takes the original alt text and user feedback to generate
+     * an improved version using more specific instructions to OpenAI.
+     */
+    public function regenerate_alt_text_with_feedback() {
+        check_ajax_referer(self::NONCE_ACTION, 'nonce');
+
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
+
+        if (!isset($_POST['attachment_id']) || !isset($_POST['improvement_type'])) {
+            wp_send_json_error(['message' => 'Missing required parameters']);
+            return;
+        }
+
+        $attachment_id = intval($_POST['attachment_id']);
+        $improvement_type = sanitize_text_field($_POST['improvement_type']);
+        $custom_feedback = isset($_POST['custom_feedback']) ? sanitize_textarea_field($_POST['custom_feedback']) : '';
+        $original_alt_text = isset($_POST['original_alt_text']) ? sanitize_textarea_field($_POST['original_alt_text']) : '';
+
+        $image_url = wp_get_attachment_url($attachment_id);
+
+        if (!$image_url) {
+            wp_send_json_error(['message' => self::ERROR_INVALID_ATTACHMENT]);
+            return;
+        }
+
+        Auto_Alt_Text_Logger::log("Alt text regeneration requested", "info", [
+            'attachment_id' => $attachment_id,
+            'improvement_type' => $improvement_type,
+            'custom_feedback' => $custom_feedback,
+            'original_text' => $original_alt_text
+        ]);
+
+        $openai = new Auto_Alt_Text_OpenAI();
+        $improved_alt_text = $openai->regenerate_alt_text_with_feedback(
+            $image_url,
+            $attachment_id,
+            $improvement_type,
+            $custom_feedback,
+            $original_alt_text
+        );
+
+        if ($improved_alt_text) {
+            wp_send_json_success(['alt_text' => $improved_alt_text]);
+        } else {
+            wp_send_json_error(['message' => $openai->get_last_error()]);
         }
     }
 }

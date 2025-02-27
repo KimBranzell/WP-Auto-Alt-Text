@@ -66,6 +66,16 @@ class Auto_Alt_Text_Statistics {
     }
 
     /**
+     * Updates the count of feedback-based regenerations.
+     *
+     * @return void
+     */
+    public function update_feedback_regeneration_count() {
+        $count = intval(get_option('alt_text_feedback_regeneration_count', 0));
+        update_option('alt_text_feedback_regeneration_count', $count + 1);
+    }
+
+    /**
      * Tracks the generation of text for a given image.
      *
      * This method logs the generation event and inserts a record into the statistics table.

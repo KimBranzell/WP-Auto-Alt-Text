@@ -257,6 +257,28 @@ function auto_alt_text_options() {
                 </table>
             </div>
 
+            <div class="card">
+                <h2><?php _e('Feedback Settings', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('Enable Feedback System', 'wp-auto-alt-text'); ?></th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    name="auto_alt_text_enable_feedback"
+                                    id="enable_feedback"
+                                    value="1"
+                                    <?php checked(get_option('auto_alt_text_enable_feedback', true)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('Allow users to provide feedback and request improvements to generated alt text.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
             <!-- <div class="card">
                 <h2><?php _e('AI Prompt Template', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">

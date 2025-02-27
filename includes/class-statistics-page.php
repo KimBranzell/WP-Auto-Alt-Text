@@ -139,6 +139,24 @@ class Auto_Alt_Text_Statistics_Page {
     }
 
     /**
+     * Renders the feedback statistics section.
+     */
+    private function render_feedback_stats() {
+        $feedback_count = intval(get_option('alt_text_feedback_regeneration_count', 0));
+        ?>
+        <div class="stat-box">
+            <h3><?php _e('Feedback & Improvement', 'wp-auto-alt-text'); ?></h3>
+            <div class="stat-content">
+                <div class="stat-item">
+                    <span class="stat-number"><?php echo $feedback_count; ?></span>
+                    <span class="stat-label"><?php _e('Improvement Requests', 'wp-auto-alt-text'); ?></span>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
      * Generates a text diff between the old and new text.
      *
      * This private function is used to generate a text diff between the old and new text. It uses the Text_Diff and Text_Diff_Renderer_Inline classes to generate the diff.

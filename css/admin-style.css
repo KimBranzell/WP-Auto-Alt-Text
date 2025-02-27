@@ -65,3 +65,80 @@
   margin: 10px 10px 10px 0;
 }
 
+/* Alt Text Feedback Section */
+.feedback-section {
+  margin: 15px 0;
+  padding: 15px;
+  border-top: 1px solid #ddd;
+  background-color: #f9f9f9;
+}
+
+.feedback-section h4 {
+  margin-top: 0;
+  font-size: 14px;
+  color: #1d2327;
+}
+
+.feedback-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.feedback-option {
+  font-size: 12px !important;
+  padding: 4px 8px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  line-height: 1.4 !important;
+  background-color: #f0f0f1;
+}
+
+.feedback-option:hover {
+  background-color: #e0e0e0;
+}
+
+.custom-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-feedback-text {
+  width: 100%;
+  min-height: 60px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #8c8f94;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.custom-feedback-submit {
+  align-self: flex-start;
+}
+
+.feedback-success {
+  padding: 6px 10px;
+  background-color: #edfaef;
+  border-left: 4px solid #00a32a;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #1d2327;
+}
+
+/* Adjust the preview dialog height to accommodate the new feedback section */
+.alt-text-preview-content {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.preview-actions {
+  margin-top: 15px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #ddd;
+  padding-top: 12px;
+}
