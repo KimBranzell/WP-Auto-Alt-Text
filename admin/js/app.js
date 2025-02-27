@@ -170,6 +170,23 @@ function showPreviewDialog(altText, attachmentId, isCached) {
         <div class="alt-text-preview-content">
             <h3>Preview Generated Alt Text ${isCached ? '<span class="cached-badge">Cached</span>' : ''}</h3>
             <textarea class="preview-text">${altText}</textarea>
+
+            <div class="feedback-section">
+                <h4>Not satisfied? Improve this alt text</h4>
+                <div class="feedback-options">
+                    <button class="button feedback-option" data-type="more_descriptive">More Descriptive</button>
+                    <button class="button feedback-option" data-type="more_concise">More Concise</button>
+                    <button class="button feedback-option" data-type="more_accessible">More Accessible</button>
+                    <button class="button feedback-option" data-type="better_seo">Better SEO</button>
+                    <button class="button feedback-option" data-type="technical_accuracy">Technical Accuracy</button>
+                    <button class="button feedback-option" data-type="brand_voice">Brand Voice</button>
+                </div>
+                <div class="custom-feedback">
+                    <textarea placeholder="Or provide your own feedback here..." class="custom-feedback-text"></textarea>
+                    <button class="button custom-feedback-submit">Submit Custom Feedback</button>
+                </div>
+            </div>
+
             <div class="preview-actions">
                 <button class="button button-primary apply-alt-text">Apply</button>
                 ${isCached ? '<button class="button regenerate-alt-text">Generate New</button>' : ''}
@@ -183,6 +200,24 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     const textarea = dialog.querySelector('.preview-text');
     textarea.focus();
     textarea.setSelectionRange(0, textarea.value.length);
+
+    // Add event listeners for feedback buttons
+    dialog.querySelectorAll('.feedback-option').forEach(button => {
+        button.addEventListener('click', () => {
+            const improvementType = button.dataset.type;
+            regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, '', altText, dialog);
+        });
+    });
+
+    // Add event listener for custom feedback
+    dialog.querySelector('.custom-feedback-submit').addEventListener('click', () => {
+        const customFeedback = dialog.querySelector('.custom-feedback-text').value;
+        if (customFeedback.trim()) {
+            regenerateAltTextWithFeedback(attachmentId, nonce, 'custom', customFeedback, altText, dialog);
+        } else {
+            alert('Please enter your feedback before submitting.');
+        }
+    });
 
     /**
      * Handles the click event on the "Apply" button in the alt text preview dialog.
@@ -255,6 +290,81 @@ function showPreviewDialog(altText, attachmentId, isCached) {
             dialog.remove();
             document.removeEventListener('keydown', handleEscape);
         }
+    });
+}
+
+/**
+ * Regenerates alt text based on user feedback.
+ *
+ * @param {string} attachmentId - The ID of the attachment.
+ * @param {string} nonce - The security nonce.
+ * @param {string} improvementType - The type of improvement requested.
+ * @param {string} customFeedback - Any custom feedback provided by the user.
+ * @param {string} originalAltText - The original alt text.
+ * @param {Element} dialog - The dialog element containing the preview.
+ */
+function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, customFeedback, originalAltText, dialog) {
+    // Show loading state
+    const textarea = dialog.querySelector('.preview-text');
+    const originalText = textarea.value;
+    textarea.disabled = true;
+    textarea.value = 'Generating improved alt text...';
+
+    // Disable all feedback buttons
+    const feedbackButtons = dialog.querySelectorAll('.feedback-option, .custom-feedback-submit');
+    feedbackButtons.forEach(btn => btn.disabled = true);
+
+    fetch(ajaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'regenerate_alt_text_with_feedback',
+            attachment_id: attachmentId,
+            nonce: nonce,
+            improvement_type: improvementType,
+            custom_feedback: customFeedback,
+            original_alt_text: originalAltText
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data.alt_text) {
+            // Update the preview with the new alt text
+            textarea.value = data.data.alt_text;
+
+            // Store the new generated text in session storage
+            sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
+
+            // Show success indicator
+            const feedbackSection = dialog.querySelector('.feedback-section');
+            const successMessage = document.createElement('div');
+            successMessage.className = 'feedback-success';
+            successMessage.textContent = 'Alt text improved successfully!';
+            feedbackSection.prepend(successMessage);
+
+            // Remove the success message after 3 seconds
+            setTimeout(() => {
+                if (successMessage.parentNode) {
+                    successMessage.parentNode.removeChild(successMessage);
+                }
+            }, 3000);
+        } else {
+            // Restore original text in case of error
+            textarea.value = originalText;
+            alert('Failed to improve alt text: ' + (data.data?.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        textarea.value = originalText;
+        alert('Error processing your feedback. Please try again.');
+    })
+    .finally(() => {
+        // Re-enable elements
+        textarea.disabled = false;
+        feedbackButtons.forEach(btn => btn.disabled = false);
     });
 }
 
