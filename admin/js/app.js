@@ -172,7 +172,10 @@ function showPreviewDialog(altText, attachmentId, isCached) {
             <textarea class="preview-text">${altText}</textarea>
 
             <div class="feedback-section">
-                <h4>Not satisfied? Improve this alt text</h4>
+                <div class="feedback-header">
+                    <h4>Not satisfied? Improve this alt text</h4>
+                    <small>Note: This will count as a new request, with the cost that comes with it.</small>
+                </div>
                 <div class="feedback-options">
                     <button class="button feedback-option" data-type="more_descriptive">More Descriptive</button>
                     <button class="button feedback-option" data-type="more_concise">More Concise</button>

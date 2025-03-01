@@ -296,7 +296,7 @@ class Auto_Alt_Text_OpenAI  {
         $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
-            $instruction = $this->get_instruction();
+            $instruction = $this->get_instruction($attachment_id);
             $response_data = $this->callAPI([
                 'model' => self::MODEL,
                 'messages' => [
@@ -439,6 +439,13 @@ class Auto_Alt_Text_OpenAI  {
             $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
             $lang_name = $this->get_language_name($language);
 
+            // Get the filename for SEO optimization
+            $filename = basename(get_attached_file($attachment_id));
+
+            // Clean up the filename for better readability
+            $clean_filename = pathinfo($filename, PATHINFO_FILENAME);
+            $clean_filename = str_replace(['-', '_'], ' ', $clean_filename);
+
             // Map improvement types to specific instructions
             $improvement_instructions = $this->get_improvement_instructions($improvement_type);
 
@@ -448,6 +455,7 @@ class Auto_Alt_Text_OpenAI  {
                 "{$improvement_instructions} " .
                 ($custom_feedback ? "Additional feedback: {$custom_feedback}. " : "") .
                 "The description should be in {$lang_name}. " .
+                "The image filename is \"{$clean_filename}\". Try to naturally incorporate relevant terms from the filename for SEO purposes. " .
                 "Provide only the improved alt text without any additional explanations or quotes.";
 
             $response_data = $this->send_chat_completion_request([
@@ -518,7 +526,7 @@ class Auto_Alt_Text_OpenAI  {
      *
      * @return string The generated instruction for the OpenAI API call.
      */
-    private function get_instruction() {
+    private function get_instruction($attachment_id = 0) {
         $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
         $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
         // $template = get_option('alt_text_prompt_template');
@@ -550,6 +558,18 @@ class Auto_Alt_Text_OpenAI  {
         $prompt .= "-- Object: Identify the main subject or focus of the image.\n";
         $prompt .= "-- Action: Describe the action or interaction depicted in the image.\n";
         $prompt .= "-- Context: Provide additional context or details about the image.\n";
+
+        // Add filename information if we have an attachment ID
+        if ($attachment_id > 0) {
+            $filename = basename(get_attached_file($attachment_id));
+            $clean_filename = pathinfo($filename, PATHINFO_FILENAME);
+            $clean_filename = str_replace(['-', '_'], ' ', $clean_filename);
+
+            if (!empty($clean_filename)) {
+                $prompt .= "- Image filename: \"{$clean_filename}\". Naturally incorporate relevant terms from this filename for better SEO.\n";
+            }
+        }
+
         if (!empty($brand_name)) { $prompt .= "- Include \"{$brand_name}\" naturally at varying positions (beginning, middle or end).\n"; }
         $prompt .= "- Mention product-specific details, such as material, function, or unique features.\n";
         $prompt .= "- Include the image filename as a keyword for SEO optimization.\n";
