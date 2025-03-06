@@ -31,7 +31,10 @@ class Auto_Alt_Text_OpenAI  {
         if (!defined('AUTH_SALT')) {
             return $key;
         }
-        $iv = substr(AUTH_SALT, 0, 16);
+
+        // Create a 16-byte IV by padding AUTH_SALT with zeros if needed
+        $iv = str_pad(substr(AUTH_SALT, 0, 16), 16, "\0");
+
         return base64_encode(openssl_encrypt($key, 'AES-256-CBC', AUTH_SALT, 0, $iv));
     }
 
@@ -47,7 +50,10 @@ class Auto_Alt_Text_OpenAI  {
         if (!defined('AUTH_SALT')) {
             return $encrypted_key;
         }
-        $iv = substr(AUTH_SALT, 0, 16);
+
+        // Create a 16-byte IV by padding AUTH_SALT with zeros if needed
+        $iv = str_pad(substr(AUTH_SALT, 0, 16), 16, "\0");
+
         return openssl_decrypt(base64_decode($encrypted_key), 'AES-256-CBC', AUTH_SALT, 0, $iv);
     }
 
