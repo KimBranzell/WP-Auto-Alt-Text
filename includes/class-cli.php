@@ -38,10 +38,21 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      *     `wp auto-alt-text generate --limit=50`
      *
      *     `wp auto-alt-text generate --skip-existing`
+     *
+     *     `wp auto-alt-text generate --brand-tonality`
      */
     public function generate($args, $assoc_args) {
         $limit = $this->validateLimit($assoc_args['limit'] ?? self::QUERY_POSTS_PER_PAGE);
         $skip_existing = isset($assoc_args['skip-existing']);
+        $brand_tonality = isset($assoc_args['brand-tonality']);
+
+        // Temporarily override the brand tonality setting for this CLI run
+        $original_setting = get_option('wp_auto_alt_text_enable_brand_tonality', false);
+        update_option('wp_auto_alt_text_enable_brand_tonality', $brand_tonality);
+
+        register_shutdown_function(function() use ($original_setting) {
+            update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
+        });
 
         $query = [
             'post_type' => self::POST_TYPE,
@@ -49,6 +60,12 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             'posts_per_page' => $limit,
             'post_status' => self::POST_STATUS
         ];
+
+        if ($brand_tonality) {
+            WP_CLI::log('Brand tonality mode: Generating SEO-optimized alt text with brand elements');
+        } else {
+            WP_CLI::log('Accessibility mode: Generating accessible alt text');
+        }
 
         $images = get_posts($query);
         $count = count($images);
@@ -77,6 +94,9 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
         }
 
         $progress->finish();
+
+        update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
+
         WP_CLI::success('Alt text generation completed!');
     }
 

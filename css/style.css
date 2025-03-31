@@ -471,3 +471,6 @@
   border-top: 1px solid #ddd;
   padding-top: 12px;
 }
+.brand-settings-section tr.disabled-field {
+  opacity: 0.6;
+}

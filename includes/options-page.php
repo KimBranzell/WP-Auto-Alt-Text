@@ -128,29 +128,28 @@ function auto_alt_text_options() {
                     <h2>Brand Settings</h2>
                     <table class="form-table">
                         <tr>
+                            <th scope="row"><?php _e('Enable Brand Tonality', 'wp-auto-alt-text'); ?></th>
+                            <td>
+                                <label class="switch">
+                                    <input type="checkbox"
+                                        name="wp_auto_alt_text_enable_brand_tonality"
+                                        id="enable_brand_tonality"
+                                        value="1"
+                                        <?php checked(get_option('wp_auto_alt_text_enable_brand_tonality', false)); ?>>
+                                    <span class="slider round"></span>
+                                </label>
+                                <p class="description">
+                                    <?php _e('When enabled, the alternative text will be search engine optimized with brand elements. Note: This may reduce accessibility for screen readers.', 'wp-auto-alt-text'); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
                             <th>Brand Name</th>
                             <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
                         </tr>
                         <tr>
                             <th>Brand Description</th>
                             <td><textarea name="aat_brand_description" rows="3" placeholder="Enter a description of your brand"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
-                        </tr>
-                        <tr>
-                            <th>Brand Position</th>
-                            <td>
-                                <select name="aat_brand_position">
-                                    <option value="start" <?php selected(get_option('aat_brand_position'), 'start'); ?>>Start of text</option>
-                                    <option value="middle" <?php selected(get_option('aat_brand_position'), 'middle'); ?>>Middle of text</option>
-                                    <option value="end" <?php selected(get_option('aat_brand_position'), 'end'); ?>>End of text</option>
-                                    <option value="random" <?php selected(get_option('aat_brand_position'), 'random'); ?>>Random position</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Product Keywords</th>
-                            <td>
-                                <textarea name="aat_product_keywords" rows="3" placeholder="Enter product-related keywords, comma-separated"><?php echo esc_textarea(get_option('aat_product_keywords')); ?></textarea>
-                            </td>
                         </tr>
                     </table>
                 </div>
@@ -322,6 +321,23 @@ function auto_alt_text_options() {
 
             <?php submit_button(); ?>
         </form>
+        <script>
+            jQuery(document).ready(function($) {
+                function toggleBrandFields() {
+                    var enabled = $('#enable_brand_tonality').is(':checked');
+                    var brandFields = $('.brand-settings-section tr:not(:first-child)');
+
+                    if (enabled) {
+                        brandFields.removeClass('disabled-field');
+                    } else {
+                        brandFields.addClass('disabled-field');
+                    }
+                }
+
+                $('#enable_brand_tonality').on('change', toggleBrandFields);
+                toggleBrandFields(); // Run on page load
+            });
+        </script>
     </div>
     <?php
 
@@ -422,6 +438,11 @@ function auto_alt_text_register_settings() {
     register_setting(
         SETTINGS_GROUP,
         'aat_brand_name',
+        'auto_alt_text_sanitize'
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'wp_auto_alt_text_enable_brand_tonality',
         'auto_alt_text_sanitize'
     );
     register_setting(

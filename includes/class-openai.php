@@ -535,28 +535,37 @@ class Auto_Alt_Text_OpenAI  {
     private function get_instruction($attachment_id = 0) {
         $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
         $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
-        // $template = get_option('alt_text_prompt_template');
 
-        $brand_name = get_option('aat_brand_name');
-        $brand_position = get_option('aat_brand_position');
-        $product_keywords = get_option('aat_product_keywords');
-        $brand_description = get_option('aat_brand_description');
+        // Check if brand tonality is enabled
+        $enable_brand_tonality = get_option('wp_auto_alt_text_enable_brand_tonality', false);
 
-        // if (!empty($template)) {
-        //     return str_replace('{LANGUAGE}', $language_name, $template);
-        // }
+        // Get brand info only if brand tonality is enabled
+        $brand_name = $enable_brand_tonality ? get_option('aat_brand_name') : '';
+        $brand_description = $enable_brand_tonality ? get_option('aat_brand_description') : '';
 
-        $prompt = "You are an expert in accessibility, SEO optimization, and product marketing, tasked with generating alt text for images";
+        $prompt = "You are an expert in accessibility";
 
-        if (!empty($brand_name)) {
+        // Only add SEO and marketing expertise if brand tonality is enabled
+        if ($enable_brand_tonality) {
+            $prompt .= ", SEO optimization, and product marketing";
+        }
+
+        $prompt .= ", tasked with generating alt text for images";
+
+        // Only include brand details if brand tonality is enabled and they exist
+        if ($enable_brand_tonality && !empty($brand_name)) {
             $prompt .= "from '{$brand_name}'";
         }
 
-        if (!empty($brand_description)) {
+        if ($enable_brand_tonality && !empty($brand_description)) {
             $prompt .= ", '{$brand_description}.'";
         }
 
-        $prompt .= "Your job is to analyze the provided image and generate a concise, SEO-friendly, and accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
+        if ($enable_brand_tonality) {
+            $prompt .= "Your job is to analyze the provided image and generate a concise, SEO-friendly, and accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
+        } else {
+            $prompt .= "Your job is to analyze the provided image and generate a concise, accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
+        }
 
         $prompt .= "<h1>Key Requirements</h1>\n";
         $prompt .= "- Keep it between 25-40 words to balance clarity and detail.\n";
@@ -565,26 +574,42 @@ class Auto_Alt_Text_OpenAI  {
         $prompt .= "-- Action: Describe the action or interaction depicted in the image.\n";
         $prompt .= "-- Context: Provide additional context or details about the image.\n";
 
-        // Add filename information if we have an attachment ID
         if ($attachment_id > 0) {
             $filename = basename(get_attached_file($attachment_id));
             $clean_filename = pathinfo($filename, PATHINFO_FILENAME);
             $clean_filename = str_replace(['-', '_'], ' ', $clean_filename);
 
             if (!empty($clean_filename)) {
-                $prompt .= "- Image filename: \"{$clean_filename}\". Naturally incorporate relevant terms from this filename for better SEO.\n";
+                $prompt .= "- Image filename: \"{$clean_filename}\". ";
+                if ($enable_brand_tonality) {
+                    $prompt .= "Use this filename only as inspiration for keywords and themes, don't explicitly include the filename in the alt text unless it's genuinely descriptive of the image content.\n";
+                } else {
+                    $prompt .= "Consider any relevant contextual information this might suggest, but prioritize describing what's actually visible in the image.\n";
+                }
             }
         }
 
-        if (!empty($brand_name)) { $prompt .= "- Include \"{$brand_name}\" naturally at varying positions (beginning, middle or end).\n"; }
-        $prompt .= "- Mention product-specific details, such as material, function, or unique features.\n";
-        $prompt .= "- Include the image filename as a keyword for SEO optimization.\n";
+        // Only include brand-specific and SEO instructions if brand tonality is enabled
+        if ($enable_brand_tonality) {
+            if (!empty($brand_name)) {
+                $prompt .= "- Include \"{$brand_name}\" naturally at varying positions (beginning, middle or end).\n";
+            }
+            $prompt .= "- Mention product-specific details, such as material, function, or unique features.\n";
+            $prompt .= "- Incorporate relevant keywords from the context while maintaining natural-sounding text.\n";
+        }
+
+        // Base accessibility-focused instructions for all cases
         $prompt .= "- If the image contains text, transcribe it accurately, even if it exceeds the word limit.\n";
         $prompt .= "- Avoid generic descriptions – make the text informative and engaging.\n";
         $prompt .= "- Do NOT include phrases like 'image of' or 'picture of'.\n";
         $prompt .= "- For ambiguous images, describe them neutrally.\n";
         $prompt .= "- Write in {$language_name}, defaulting to English if {$language_name} is unsupported.\n";
         $prompt .= "- Ensure proper grammar and readability.\n";
+
+        if (!$enable_brand_tonality) {
+            $prompt .= "- Focus on making the alt text accessible and descriptive rather than SEO-optimized.\n";
+            $prompt .= "- Prioritize information that would be helpful for someone using a screen reader.\n";
+        }
 
         return $prompt;
     }
