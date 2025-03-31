@@ -5,7 +5,7 @@ Plugin URI:           https://branzell.kim
 Author:               Kim Branzell
 Author URI:           https://branzell.kim
 Description:          Automatically generates alt text for images in the Media Library using OpenAI.
-Version:              1.0
+Version:              1.1.1
 Requires at least:    6.0
 Requires PHP:         8.0
 License:              Apache License 2.0 (Apache-2.0)
