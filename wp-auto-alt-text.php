@@ -104,6 +104,7 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-cli.php';
 		require_once __DIR__ . '/includes/class-rest-api.php';
 		require_once __DIR__ . '/includes/class-logger.php';
+		require_once __DIR__ . '/includes/class-wp-media-folder.php';
 		require_once __DIR__ . '/admin/class-admin.php';
 	}
 
@@ -193,6 +194,7 @@ class WP_Auto_Alt_Text_Plugin {
 		new Auto_Alt_Text_Page_Builders();
 		new Auto_Alt_Text_Logger();
 		new Auto_Alt_Text_REST_API();
+		new Auto_Alt_Text_WP_Media_Folder();
 	}
 }
 
