@@ -138,27 +138,39 @@ class Auto_Alt_Text_Statistics {
      *
      * @return array An associative array containing the requested statistics.
      */
-    public function get_stats() {
+    public function get_stats($per_page = 20, $offset = 0) {
         global $wpdb;
+        $table = $wpdb->prefix . 'auto_alt_text_stats';
+
+        // Get total generations, tokens, and types as before
+        $total_generations = (int) $wpdb->get_var("SELECT COUNT(*) FROM $table");
+        $total_tokens = (int) $wpdb->get_var("SELECT SUM(tokens_used) FROM $table");
+        $types = [
+            'manual' => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE generation_type = %s", 'manual')),
+            'upload' => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE generation_type = %s", 'upload')),
+            'batch'  => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE generation_type = %s", 'batch')),
+        ];
+
+        // Fetch paginated recent generations
+        $recent_generations = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table ORDER BY generation_time DESC LIMIT %d OFFSET %d",
+                $per_page,
+                $offset
+            )
+        );
 
         return [
-            'total_generations' => $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name}"),
-            'total_tokens' => $wpdb->get_var("SELECT SUM(tokens_used) FROM {$this->table_name}"),
-            'types' => [
-                'manual' => $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE generation_type = 'manual'"),
-                'upload' => $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE generation_type = 'upload'"),
-                'batch' => $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE generation_type = 'batch'")
-            ],
-            'recent_generations' => $wpdb->get_results("
-                SELECT t1.*,
-                        (SELECT COUNT(*)
-                        FROM {$this->table_name} t2
-                        WHERE t2.image_id = t1.image_id
-                        AND t2.generation_time <= t1.generation_time) as update_number
-                FROM {$this->table_name} t1
-                ORDER BY t1.generation_time DESC
-                LIMIT 10
-            ")
+            'total_generations'   => $total_generations,
+            'total_tokens'        => $total_tokens,
+            'types'               => $types,
+            'recent_generations'  => $recent_generations,
         ];
+    }
+
+    public function get_total_generations_count() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'auto_alt_text_stats';
+        return (int) $wpdb->get_var("SELECT COUNT(*) FROM $table");
     }
 }

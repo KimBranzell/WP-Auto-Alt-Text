@@ -166,15 +166,19 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-labelledby', 'preview-title');
 
+    const brandVoiceButton = (typeof autoAltTextData !== 'undefined' && autoAltTextData.brandTonalityEnabled)
+      ? `<button class="button feedback-option" data-type="brand_voice">Brand voice</button>`
+      : '';
+
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
-            <h3>Preview Generated Alt Text ${isCached ? '<span class="cached-badge">Cached</span>' : ''}</h3>
+            <h3>Förhandsgranska alternativ text ${isCached ? '<span class="cached-badge">Cachead</span>' : ''}</h3>
             <textarea class="preview-text">${altText}</textarea>
 
             <div class="feedback-section">
                 <div class="feedback-header">
                     <h4>Inte nöjd? Förbättra denna alt text</h4>
-                    <small>OBS: Detta kommer att räknas som en ny begäran, med kostnaden det innebär.</small>
+                    <small>OBS: Detta kommer att räknas som en ny begäran, med tillkommande kostnad.</small>
                 </div>
                 <div class="feedback-options">
                     <button class="button feedback-option" data-type="more_descriptive">Mer beskrivande</button>
@@ -182,7 +186,7 @@ function showPreviewDialog(altText, attachmentId, isCached) {
                     <button class="button feedback-option" data-type="more_accessible">Mer tillgänglig</button>
                     <button class="button feedback-option" data-type="better_seo">Sökmotorsanpassad</button>
                     <button class="button feedback-option" data-type="technical_accuracy">Teknisk noggrannhet</button>
-                    <button class="button feedback-option" data-type="brand_voice">Brand voice</button>
+                    ${brandVoiceButton}
                 </div>
                 <div class="custom-feedback">
                     <textarea placeholder="Eller skriv din egen feedback..." class="custom-feedback-text"></textarea>
@@ -191,9 +195,9 @@ function showPreviewDialog(altText, attachmentId, isCached) {
             </div>
 
             <div class="preview-actions">
-                <button class="button button-primary apply-alt-text">Apply</button>
-                ${isCached ? '<button class="button regenerate-alt-text">Generate New</button>' : ''}
-                <button class="button button-secondary cancel-alt-text">Cancel</button>
+                <button class="button button-primary apply-alt-text">Applicera</button>
+                ${isCached ? '<button class="button regenerate-alt-text">Generera ny alternativ text</button>' : ''}
+                <button class="button button-secondary cancel-alt-text">Avbryt</button>
             </div>
         </div>
     `;
@@ -311,7 +315,7 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
     const textarea = dialog.querySelector('.preview-text');
     const originalText = textarea.value;
     textarea.disabled = true;
-    textarea.value = 'Generating improved alt text...';
+    textarea.value = 'Genererar alternativ text efter feedback...';
 
     // Disable all feedback buttons
     const feedbackButtons = dialog.querySelectorAll('.feedback-option, .custom-feedback-submit');
@@ -344,7 +348,7 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
             const feedbackSection = dialog.querySelector('.feedback-section');
             const successMessage = document.createElement('div');
             successMessage.className = 'feedback-success';
-            successMessage.textContent = 'Alt text improved successfully!';
+            successMessage.textContent = 'Ny alternativ text har genererats';
             feedbackSection.prepend(successMessage);
 
             // Remove the success message after 3 seconds

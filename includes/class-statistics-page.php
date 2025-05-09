@@ -42,6 +42,11 @@ class Auto_Alt_Text_Statistics_Page {
     public function render_statistics_page() {
         global $wpdb;
 
+		// Pagination setup
+		$per_page = 20;
+		$current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+		$offset = ($current_page - 1) * $per_page;
+
         if (isset($_POST['cleanup_stats']) && check_admin_referer('auto_alt_text_cleanup')) {
             $deleted = $this->statistics->cleanup_orphaned_records();
             add_settings_error(
@@ -53,7 +58,10 @@ class Auto_Alt_Text_Statistics_Page {
         }
 
         $orphaned_count = $this->statistics->get_orphaned_records_count();
-        $stats = $this->statistics->get_stats();
+        $stats = $this->statistics->get_stats($per_page, $offset);
+
+		$total_items = $this->statistics->get_total_generations_count();
+		$total_pages = ceil($total_items / $per_page);
         ?>
         <div class="wrap">
             <h1>Alternativ text-statistik</h1>
@@ -88,52 +96,79 @@ class Auto_Alt_Text_Statistics_Page {
             </div>
 
             <h2>Genereringshistorik</h2>
-                <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th>Bild</th>
-                        <th>Genererad Text</th>
-                        <th>Typ</th>
-                        <th>Uppdatering #</th>
-                        <th>Status</th>
-                        <th>Användare</th>
-                        <th>Datum</th>
-                        <th>Tokens</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($stats['recent_generations'] as $generation): ?>
-                        <tr>
-                            <td><?php echo wp_get_attachment_image($generation->image_id, [50, 50]); ?></td>
-                            <td>
-                                <?php
-                                echo esc_html($generation->generated_text);
-                                if ($generation->is_edited) {
-                                    $diff = $this->text_diff($generation->generated_text, $generation->edited_text);
-                                    echo '<div class="edited-text">';
-                                    echo '<span class="diff-label">Changes:</span>';
-                                    echo '<div class="diff-view">' . $diff . '</div>';
-                                    echo '</div>';
-                                }
-                                ?>
-                            </td>
-                            <td><span class="generation-type <?php echo esc_attr($generation->generation_type); ?>"><?php echo esc_html($generation->generation_type); ?></span></td>
-                            <td><?php echo esc_html($generation->update_number); ?></td>
-                            <td>
-                                <?php if ($generation->is_applied): ?>
-                                    <span class="status-badge applied">Applied</span>
-                                <?php endif; ?>
-                                <?php if ($generation->is_edited): ?>
-                                    <span class="status-badge edited">Edited</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
-                            <td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' sedan'); ?></td>
-                            <td><?php echo esc_html($generation->tokens_used); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+			<table class="wp-list-table widefat fixed striped">
+				<thead>
+					<tr>
+						<th>Bild</th>
+						<th>Genererad Text</th>
+						<th>Typ</th>
+						<th>Uppdatering #</th>
+						<th>Status</th>
+						<th>Användare</th>
+						<th>Datum</th>
+						<th>Tokens</th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ($stats['recent_generations'] as $generation): ?>
+						<tr>
+							<td><?php echo wp_get_attachment_image($generation->image_id, [50, 50]); ?></td>
+							<td>
+								<?php
+								echo esc_html($generation->generated_text);
+								if ($generation->is_edited) {
+									$diff = $this->text_diff($generation->generated_text, $generation->edited_text);
+									echo '<div class="edited-text">';
+									echo '<span class="diff-label">Changes:</span>';
+									echo '<div class="diff-view">' . $diff . '</div>';
+									echo '</div>';
+								}
+								?>
+							</td>
+							<td><span class="generation-type <?php echo esc_attr($generation->generation_type); ?>"><?php echo esc_html($generation->generation_type); ?></span></td>
+							<td><?php echo esc_html($generation->update_number); ?></td>
+							<td>
+								<?php if ($generation->is_applied): ?>
+									<span class="status-badge applied">Applied</span>
+								<?php endif; ?>
+								<?php if ($generation->is_edited): ?>
+									<span class="status-badge edited">Edited</span>
+								<?php endif; ?>
+							</td>
+							<td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
+							<td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' sedan'); ?></td>
+							<td><?php echo esc_html($generation->tokens_used); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+
+			<?php if ($total_pages > 1): ?>
+            <div class="tablenav">
+                <div class="tablenav-pages">
+				<?php
+					$links = paginate_links([
+						'base'      => add_query_arg('paged', '%#%'),
+						'format'    => '',
+						'current'   => $current_page,
+						'total'     => $total_pages,
+						'prev_next' => true,
+						'prev_text' => __('&laquo; Föregående'),
+						'next_text' => __('Nästa &raquo;'),
+						'type'      => 'array',
+					]);
+					if ($links) {
+						foreach ($links as &$link) {
+							// Add button class to <a> and <span> elements
+							$link = str_replace('<a ', '<a class="button button-secondary" ', $link);
+							$link = str_replace('<span aria-current="page" class="page-numbers current"', '<span aria-current="page" class="button button-disabled current"', $link);
+							echo $link;
+						}
+					}
+				?>
+                </div>
+            </div>
+        <?php endif; ?>
         </div>
         <?php
     }
