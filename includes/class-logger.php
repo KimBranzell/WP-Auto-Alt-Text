@@ -45,8 +45,8 @@ class Auto_Alt_Text_Logger {
     public function add_logs_page() {
         add_submenu_page(
             'auto-alt-text',
-            'Logs',
-            'View Logs',
+            'WP Auto Alt Text-loggar',
+            'Loggar',
             'manage_options',
             'auto-alt-text-logs',
             [$this, 'render_logs_page']
@@ -101,22 +101,22 @@ class Auto_Alt_Text_Logger {
         // Render the page
         ?>
         <div class="wrap">
-            <h1>Auto Alt Text Logs</h1>
+            <h1>WP Auto Alt Text-loggar</h1>
 
             <div class="tablenav top">
                 <form method="get">
                     <input type="hidden" name="page" value="auto-alt-text-logs">
                     <div class="alignleft actions">
                         <select name="level">
-                            <option value="">All Levels</option>
+                            <option value="">Alla Nivåer</option>
                             <?php foreach (self::LOG_LEVELS as $log_level): ?>
                                 <option value="<?php echo esc_attr($log_level); ?>" <?php selected($level, $log_level); ?>>
                                     <?php echo esc_html(ucfirst($log_level)); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Search logs...">
-                        <?php submit_button('Filter', 'secondary', 'filter', false); ?>
+                        <input type="search" name="s" value="<?php echo esc_attr($search); ?>" placeholder="Sök loggar...">
+                        <?php submit_button('Filtrera', 'secondary', 'filter', false); ?>
                     </div>
                 </form>
 
@@ -124,13 +124,13 @@ class Auto_Alt_Text_Logger {
                     <form method="post" style="display: inline;">
                         <?php wp_nonce_field('auto_alt_text_logs_action'); ?>
                         <input type="hidden" name="action" value="export_logs">
-                        <?php submit_button('Export Logs', 'secondary', 'export', false); ?>
+                        <?php submit_button('Exportera loggar', 'secondary', 'export', false); ?>
                     </form>
 
                     <form method="post" style="display: inline;">
                         <?php wp_nonce_field('auto_alt_text_logs_action'); ?>
                         <input type="hidden" name="action" value="clear_logs">
-                        <?php submit_button('Clear Logs', 'delete', 'clear', false); ?>
+                        <?php submit_button('Rensa loggar', 'delete', 'clear', false); ?>
                     </form>
                 </div>
             </div>
@@ -138,10 +138,10 @@ class Auto_Alt_Text_Logger {
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
-                        <th>Level</th>
-                        <th>Message</th>
-                        <th>Context</th>
+                        <th>Tid</th>
+                        <th>Nivå</th>
+                        <th>Meddelande</th>
+                        <th>Kontext</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -241,7 +241,7 @@ class Auto_Alt_Text_Logger {
         $output = fopen('php://output', 'w');
 
         // Write headers
-        fputcsv($output, ['Timestamp', 'Level', 'Message', 'Context']);
+        fputcsv($output, ['Tid', 'Nivå', 'Meddelande', 'Kontext']);
 
         // Write data rows
         foreach ($logs as $log) {

@@ -322,6 +322,15 @@
   position: relative;
   display: inline-block;
   cursor: help;
+  border-radius: 50%;
+  padding: 4px;
+  background-color: #f0f0f1;
+  color: #666;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  width: 10px;
+  height: 10px;
 }
 
 .progress-bar {

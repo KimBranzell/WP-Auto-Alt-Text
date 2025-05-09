@@ -53,8 +53,8 @@ function auto_alt_text_menu() {
 
     add_submenu_page(
         'auto-alt-text',         // Parent slug
-        'Settings',              // Page title
-        'Settings',              // Menu title
+        'Inställningar',              // Page title
+        'Inställningar',              // Menu title
         'manage_options',        // Capability
         'auto-alt-text',         // Menu slug
         'auto_alt_text_options'  // Function
@@ -79,22 +79,21 @@ function auto_alt_text_menu() {
  */
 function get_supported_languages() {
     return [
-        'sv' => 'Swedish',
-        'no' => 'Norwegian',
-        'dk' => 'Danish',
-        'fi' => 'Finnish',
-        'en' => 'English',
-        'es' => 'Spanish',
-        'fr' => 'French',
-        'de' => 'German',
-        'it' => 'Italian',
-        'pt' => 'Portuguese',
-        'nl' => 'Dutch',
-        'ru' => 'Russian',
-        'ja' => 'Japanese',
-        'zh' => 'Chinese',
-        'ko' => 'Korean',
-        'ar' => 'Arabic',
+		'sv' => 'Svenska',
+		'no' => 'Norska',
+		'dk' => 'Danska',
+		'fi' => 'Finska',
+		'en' => 'Engelska',
+		'es' => 'Spanska',
+		'fr' => 'Franska',
+		'de' => 'Tyska',
+		'it' => 'Italienska',
+		'pt' => 'Portugisiska',
+		'nl' => 'Holländska',
+		'ja' => 'Japanska',
+		'zh' => 'Kinesiska',
+		'ko' => 'Koreanska',
+		'ar' => 'Arabiska',
     ];
 }
 
@@ -123,44 +122,12 @@ function auto_alt_text_options() {
             settings_errors();
             ?>
 
-            <div class="card">
-                <div class="brand-settings-section">
-                    <h2>Brand Settings</h2>
-                    <table class="form-table">
-                        <tr>
-                            <th scope="row"><?php _e('Enable Brand Tonality', 'wp-auto-alt-text'); ?></th>
-                            <td>
-                                <label class="switch">
-                                    <input type="checkbox"
-                                        name="wp_auto_alt_text_enable_brand_tonality"
-                                        id="enable_brand_tonality"
-                                        value="1"
-                                        <?php checked(get_option('wp_auto_alt_text_enable_brand_tonality', false)); ?>>
-                                    <span class="slider round"></span>
-                                </label>
-                                <p class="description">
-                                    <?php _e('When enabled, the alternative text will be search engine optimized with brand elements. Note: This may reduce accessibility for screen readers.', 'wp-auto-alt-text'); ?>
-                                </p>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Brand Name</th>
-                            <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
-                        </tr>
-                        <tr>
-                            <th>Brand Description</th>
-                            <td><textarea name="aat_brand_description" rows="3" placeholder="Enter a description of your brand"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-
-            <div class="card">
+			<div class="card">
                 <table class="form-table">
                     <tr>
                         <th scope="row">
                             <label for="auto_generate">
-                                <?php _e('Auto-generate on Upload', 'auto-alt-text'); ?>
+                                <?php _e('Aktivera generering av alt-texter', 'auto-alt-text'); ?>
                             </label>
                         </th>
                         <td>
@@ -173,7 +140,7 @@ function auto_alt_text_options() {
                                 <span class="slider round"></span>
                             </label>
                             <p class="description">
-                                <?php _e('When enabled, alt text will be automatically generated when new images are uploaded.', 'auto-alt-text'); ?>
+                                <?php _e('När detta alternativ är aktiverat kommer de alternativa texterna att automatiskt genereras.', 'auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -181,7 +148,41 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
-                <h2><?php _e('API Configuration', 'wp-auto-alt-text'); ?></h2>
+                <div class="brand-settings-section">
+                    <h2>Brand Settings</h2>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><?php _e('Aktivera brand-tonalitet', 'wp-auto-alt-text'); ?></th>
+                            <td>
+                                <label class="switch">
+                                    <input type="checkbox"
+                                        name="wp_auto_alt_text_enable_brand_tonality"
+                                        id="enable_brand_tonality"
+                                        value="1"
+                                        <?php checked(get_option('wp_auto_alt_text_enable_brand_tonality', false)); ?>>
+                                    <span class="slider round"></span>
+                                </label>
+                                <p class="description">
+                                    <?php _e('När detta alternativ är aktiverat kommer den alternativa texten att optimeras för sökmotorer med inspiration från varumärkesbeskrivningarna i fälten nedan.', 'wp-auto-alt-text'); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Varumärkets namn</th>
+                            <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <th><?php _e('Varumärkesbeskrivning', 'wp-auto-alt-text'); ?></th>
+                            <td><textarea name="aat_brand_description" rows="3" placeholder="<?php _e('Ange en beskrivning av ditt varumärke', 'wp-auto-alt-text'); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+
+
+            <div class="card">
+                <h2><?php _e('API', 'wp-auto-alt-text'); ?></h2>
                 <?php
                 $encrypted_key = get_option('auto_alt_text_api_key');
                 $openai = new Auto_Alt_Text_OpenAI();
@@ -191,8 +192,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="api_key">
-                            <?php _e('OpenAI API Key', 'wp-auto-alt-text'); ?>
-                            <span class="tooltip" data-tip="Enter your OpenAI API key here. You can get one from OpenAI's website.">?</span>
+                            <?php _e('OpenAI API-nyckel', 'wp-auto-alt-text'); ?>
                             </label>
                         </th>
                         <td>
@@ -207,10 +207,10 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
-                <h2><?php _e('Language Settings', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php _e('Språk', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Alt Text Language', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row"><?php _e('Alternativa textens språk', 'wp-auto-alt-text'); ?></th>
                         <td>
                             <select name="<?php echo AUTO_ALT_TEXT_LANGUAGE_OPTION; ?>" class="regular-text">
                                 <?php
@@ -225,19 +225,19 @@ function auto_alt_text_options() {
                                 }
                                 ?>
                             </select>
-                            <p class="description"><?php _e('Select the language for generated alt text descriptions', 'wp-auto-alt-text'); ?></p>
+                            <p class="description"><?php _e('Välj språket för genererade alternativa texter', 'wp-auto-alt-text'); ?></p>
                         </td>
                     </tr>
                 </table>
             </div>
 
             <div class="card">
-                <h2><?php _e('Cache Settings', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php _e('Cache', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
                         <th scope="row">
                             <label for="cache_duration">
-                                <?php _e('Cache Duration (days)', 'wp-auto-alt-text'); ?>
+                                <?php _e('Hur länge ska cache bevaras (i dagar)?', 'wp-auto-alt-text'); ?>
                             </label>
                         </th>
                         <td>
@@ -249,7 +249,7 @@ function auto_alt_text_options() {
                                 max="365"
                             />
                             <p class="description">
-                                <?php _e('Number of days to cache generated alt text. Lower values use more API calls but keep content fresher.', 'wp-auto-alt-text'); ?>
+                                <?php _e('Antal dagar för att cacha genererade alternativa texter. Lägre värden använder fler API-anrop men håller innehållet fräschare.', 'wp-auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -257,10 +257,10 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
-                <h2><?php _e('Feedback Settings', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php _e('Feedback', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Enable Feedback System', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row"><?php _e('Aktivera feedbacksystem', 'wp-auto-alt-text'); ?></th>
                         <td>
                             <label class="switch">
                                 <input type="checkbox"
@@ -271,7 +271,7 @@ function auto_alt_text_options() {
                                 <span class="slider round"></span>
                             </label>
                             <p class="description">
-                                <?php _e('Allow users to provide feedback and request improvements to generated alt text.', 'wp-auto-alt-text'); ?>
+                                <?php _e('Tillåt användare att ge feedback och begära förbättringar av genererade alternativa texter.', 'wp-auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>

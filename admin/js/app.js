@@ -173,20 +173,20 @@ function showPreviewDialog(altText, attachmentId, isCached) {
 
             <div class="feedback-section">
                 <div class="feedback-header">
-                    <h4>Not satisfied? Improve this alt text</h4>
-                    <small>Note: This will count as a new request, with the cost that comes with it.</small>
+                    <h4>Inte nöjd? Förbättra denna alt text</h4>
+                    <small>OBS: Detta kommer att räknas som en ny begäran, med kostnaden det innebär.</small>
                 </div>
                 <div class="feedback-options">
-                    <button class="button feedback-option" data-type="more_descriptive">More Descriptive</button>
-                    <button class="button feedback-option" data-type="more_concise">More Concise</button>
-                    <button class="button feedback-option" data-type="more_accessible">More Accessible</button>
-                    <button class="button feedback-option" data-type="better_seo">Better SEO</button>
-                    <button class="button feedback-option" data-type="technical_accuracy">Technical Accuracy</button>
-                    <button class="button feedback-option" data-type="brand_voice">Brand Voice</button>
+                    <button class="button feedback-option" data-type="more_descriptive">Mer beskrivande</button>
+                    <button class="button feedback-option" data-type="more_concise">Mer kortfattad</button>
+                    <button class="button feedback-option" data-type="more_accessible">Mer tillgänglig</button>
+                    <button class="button feedback-option" data-type="better_seo">Sökmotorsanpassad</button>
+                    <button class="button feedback-option" data-type="technical_accuracy">Teknisk noggrannhet</button>
+                    <button class="button feedback-option" data-type="brand_voice">Brand voice</button>
                 </div>
                 <div class="custom-feedback">
-                    <textarea placeholder="Or provide your own feedback here..." class="custom-feedback-text"></textarea>
-                    <button class="button custom-feedback-submit">Submit Custom Feedback</button>
+                    <textarea placeholder="Eller skriv din egen feedback..." class="custom-feedback-text"></textarea>
+                    <button class="button custom-feedback-submit">Skicka egen feedback</button>
                 </div>
             </div>
 

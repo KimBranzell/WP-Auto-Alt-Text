@@ -23,8 +23,8 @@ class Auto_Alt_Text_Statistics_Page {
     public function add_statistics_page() {
         add_submenu_page(
             'auto-alt-text',           // Parent slug
-            'Alt Text Statistics',     // Page title
-            'Statistics',              // Menu title
+            'Alternativ text-statistik',     // Page title
+            'Statistik',              // Menu title
             'manage_options',          // Capability
             'auto-alt-text-stats',     // Menu slug
             [$this, 'render_statistics_page'],
@@ -56,48 +56,48 @@ class Auto_Alt_Text_Statistics_Page {
         $stats = $this->statistics->get_stats();
         ?>
         <div class="wrap">
-            <h1>Alt Text Generation Statistics</h1>
+            <h1>Alternativ text-statistik</h1>
 
             <?php if ($orphaned_count > 0): ?>
                 <div class="notice notice-warning orphaned-alt-text-stats">
-                    <p><?php printf('Found %d orphaned records from deleted images.', $orphaned_count); ?></p>
+                    <p><?php printf('Hittade %d föräldralösa poster från raderade bilder.', $orphaned_count); ?></p>
                     <form method="post">
                         <?php wp_nonce_field('auto_alt_text_cleanup'); ?>
-                        <input type="submit" name="cleanup_stats" class="button" value="Remove orphaned records">
+                        <input type="submit" name="cleanup_stats" class="button" value="Ta bort föräldralösa poster">
                     </form>
                 </div>
             <?php endif; ?>
 
             <div class="stats-overview">
                 <div class="stat-box">
-                    <h3>Total Generations</h3>
+                    <h3>Totala generationer</h3>
                     <p class="stat-number"><?php echo esc_html($stats['total_generations']); ?></p>
                 </div>
                 <div class="stat-box">
-                    <h3>Total Tokens Used</h3>
+                    <h3>Totalt antal använda tokens</h3>
                     <p class="stat-number"><?php echo esc_html($stats['total_tokens']); ?></p>
                 </div>
                 <div class="stat-box">
-                    <h3>Generation Types</h3>
+                    <h3>Generationstyper</h3>
                     <ul class="generation-types">
-                        <li>Manual updates: <?php echo esc_html($stats['types']['manual'] ?? 0); ?></li>
-                        <li>Image uploads: <?php echo esc_html($stats['types']['upload'] ?? 0); ?></li>
-                        <li>Batch processing: <?php echo esc_html($stats['types']['batch'] ?? 0); ?></li>
+                        <li>Manuella uppdateringar: <?php echo esc_html($stats['types']['manual'] ?? 0); ?></li>
+                        <li>Bilduppladdningar: <?php echo esc_html($stats['types']['upload'] ?? 0); ?></li>
+                        <li>Batchbearbetning: <?php echo esc_html($stats['types']['batch'] ?? 0); ?></li>
                     </ul>
                 </div>
             </div>
 
-            <h2>Generation History</h2>
+            <h2>Genereringshistorik</h2>
                 <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th>Image</th>
-                        <th>Generated Text</th>
-                        <th>Type</th>
-                        <th>Update #</th>
+                        <th>Bild</th>
+                        <th>Genererad Text</th>
+                        <th>Typ</th>
+                        <th>Uppdatering #</th>
                         <th>Status</th>
-                        <th>User</th>
-                        <th>Date</th>
+                        <th>Användare</th>
+                        <th>Datum</th>
                         <th>Tokens</th>
                     </tr>
                 </thead>
@@ -128,7 +128,7 @@ class Auto_Alt_Text_Statistics_Page {
                                 <?php endif; ?>
                             </td>
                             <td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
-                            <td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' ago'); ?></td>
+                            <td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' sedan'); ?></td>
                             <td><?php echo esc_html($generation->tokens_used); ?></td>
                         </tr>
                     <?php endforeach; ?>
@@ -145,11 +145,11 @@ class Auto_Alt_Text_Statistics_Page {
         $feedback_count = intval(get_option('alt_text_feedback_regeneration_count', 0));
         ?>
         <div class="stat-box">
-            <h3><?php _e('Feedback & Improvement', 'wp-auto-alt-text'); ?></h3>
+            <h3><?php _e('Feedback', 'wp-auto-alt-text'); ?></h3>
             <div class="stat-content">
                 <div class="stat-item">
                     <span class="stat-number"><?php echo $feedback_count; ?></span>
-                    <span class="stat-label"><?php _e('Improvement Requests', 'wp-auto-alt-text'); ?></span>
+                    <span class="stat-label"><?php _e('Förbättringsförfrågningar', 'wp-auto-alt-text'); ?></span>
                 </div>
             </div>
         </div>
