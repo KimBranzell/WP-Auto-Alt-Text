@@ -11,7 +11,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     private $openai;
     private $statistics;
 
-    public function __construct(Auto_Alt_Text_OpenAI $openai = null, Auto_Alt_Text_Statistics $statistics = null) {
+    public function __construct(?Auto_Alt_Text_OpenAI $openai = null, ?Auto_Alt_Text_Statistics $statistics = null) {
         try {
             $this->openai = $openai ?? new Auto_Alt_Text_OpenAI();
             $this->statistics = $statistics ?? new Auto_Alt_Text_Statistics();
