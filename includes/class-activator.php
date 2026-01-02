@@ -123,13 +123,16 @@ class Auto_Alt_Text_Activator {
                 PRIMARY KEY  (id)
             ) $charset_collate;";
 
-            $stats_result = dbDelta($sql);
-            if (empty($stats_result)) {
+            // Use direct queries instead of dbDelta to avoid triggering
+            // query paths that some cache plugins (like W3TC) may
+            // intercept and cause fatal errors during activation.
+            $stats_result = $wpdb->query($sql);
+            if ($stats_result === false) {
                 throw new Exception('Failed to create or update stats table');
             }
 
-            $logs_result = dbDelta($sql_logs);
-            if (empty($logs_result)) {
+            $logs_result = $wpdb->query($sql_logs);
+            if ($logs_result === false) {
                 throw new Exception('Failed to create or update logs table');
             }
 
@@ -154,10 +157,10 @@ class Auto_Alt_Text_Activator {
             }
 
             // Add edited_text column
-            if (!self::column_exists($stats_table, self::COLUMN_IS_EDITED)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_EDITED . " TINYINT(1) NOT NULL DEFAULT 0");
+            if (!self::column_exists($stats_table, self::COLUMN_EDITED_TEXT)) {
+                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL");
                 if ($result === false) {
-                    throw new Exception('Failed to add is_edited column');
+                    throw new Exception('Failed to add edited_text column');
                 }
             }
 
