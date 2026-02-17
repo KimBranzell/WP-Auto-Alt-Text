@@ -52,7 +52,7 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 1. Navigate to the 'Auto Alt Text' option in your WordPress settings menu
 2. Enter your OpenAI API key
 3. Save the settings
-4. Test the connection using the provided test button
+4. Generate alt text from the Media Library to confirm your API key works
 
 ## Usage
 
@@ -81,7 +81,6 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 
 ### Advanced Options
 
-- Custom API endpoints
 - Error logging preferences
 - Backup settings
 

@@ -142,7 +142,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     /**
      * Shows statistics about generated alt texts.
      *
-     * This method retrieves various statistics related to the generated alt texts, such as the total number of generated alt texts, the number of successfully applied alt texts, the number of user-edited alt texts, the average number of tokens used per image, the total number of tokens used, and the estimated total cost based on GPT-4 Vision pricing.
+        * This method retrieves various statistics related to the generated alt texts, such as the total number of generated alt texts, the number of successfully applied alt texts, the number of user-edited alt texts, the average number of tokens used per image, the total number of tokens used, and the estimated total cost based on GPT-5.2 pricing assumptions.
      *
      * The statistics are formatted and displayed in a table format using the WP-CLI utility.
      *
@@ -159,7 +159,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
       $avg_tokens = $wpdb->get_var("SELECT AVG(tokens_used) FROM $table_name");
       $total_tokens = $wpdb->get_var("SELECT SUM(tokens_used) FROM $table_name");
 
-      // GPT-4 Vision pricing calculations
+            // GPT-5.2 pricing assumption calculations
       $input_cost_per_million = 2.50;
       $output_cost_per_million = 10.00;
 

@@ -201,6 +201,9 @@ function auto_alt_text_options() {
                                 class="regular-text"
                                 value="<?php echo esc_attr($decrypted_key); ?>"
                             />
+                            <p class="description">
+                                <?php _e('Pluginen använder OpenAI Responses API med modellen gpt-5.2 för textgenerering.', 'wp-auto-alt-text'); ?>
+                            </p>
                         </td>
                     </tr>
                 </table>

@@ -1,7 +1,7 @@
 <?php
 class Auto_Alt_Text_OpenAI  {
-    private const API_URL = 'https://api.openai.com/v1/chat/completions';
-    private const MODEL = 'gpt-4o';
+    private const API_URL = 'https://api.openai.com/v1/responses';
+    private const MODEL = 'gpt-5.2';
     private const MAX_TOKENS = 300;
     private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
 
@@ -161,14 +161,16 @@ class Auto_Alt_Text_OpenAI  {
      */
     public function test_api_key() {
         try {
-            $response = $this->callAPI([
-                'model' => self::MODEL,
-                'messages' => [
-                    ['role' => 'user', 'content' => 'Test connection']
-                ],
-                'max_tokens' => 5
-            ]);
-            return true;
+            $response = $this->callAPI($this->build_response_request([
+                [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => 'Test connection']
+                    ]
+                ]
+            ], 5));
+
+            return !empty($this->extract_response_text($response));
         } catch (Exception $e) {
             return false;
         }
@@ -222,27 +224,33 @@ class Auto_Alt_Text_OpenAI  {
      * @return string|null The translated image description, or null if an error occurred.
      */
     public function translate_alt_text($prompt) {
-        $response_data = $this->callAPI([
-            'model' => self::MODEL,
-            'messages' => [
+        try {
+            $response_data = $this->callAPI($this->build_response_request([
                 [
                     'role' => 'system',
-                    'content' => 'You are a professional translator. Translate the given image description accurately while maintaining its descriptive quality.'
+                    'content' => [
+                        ['type' => 'input_text', 'text' => 'You are a professional translator. Translate the given image description accurately while maintaining its descriptive quality.']
+                    ]
                 ],
                 [
                     'role' => 'user',
-                    'content' => $prompt
+                    'content' => [
+                        ['type' => 'input_text', 'text' => $prompt]
+                    ]
                 ]
-            ],
-            'max_tokens' => 150,
-            'temperature' => 0.7
-        ]);
+            ], 150));
 
-        if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
-            return trim($response_data['choices'][0]['message']['content']);
+            $translated_text = $this->extract_response_text($response_data);
+            if (!empty($translated_text)) {
+                return trim($translated_text);
+            }
+
+            $this->last_error = __('OpenAI returned no translatable content. Please try again.', 'wp-auto-alt-text');
+            return null;
+        } catch (Exception $e) {
+            $this->last_error = $e->getMessage();
+            return null;
         }
-
-        return null;
     }
 
     /**
@@ -266,6 +274,7 @@ class Auto_Alt_Text_OpenAI  {
         ]);
 
         if (!get_option('auto_alt_text_auto_generate', true)) {
+            $this->last_error = __('OpenAI returned an empty response. Please try again.', 'wp-auto-alt-text');
             return null;
         }
 
@@ -282,9 +291,6 @@ class Auto_Alt_Text_OpenAI  {
                 return $cached_response;
             }
         }
-
-        $current_language = $this->language_manager->get_current_language();
-
 
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
@@ -303,23 +309,20 @@ class Auto_Alt_Text_OpenAI  {
 
         try {
             $instruction = $this->get_instruction($attachment_id);
-            $response_data = $this->callAPI([
-                'model' => self::MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            ['type' => 'text', 'text' => $instruction],
-                            ['type' => 'image_url', 'image_url' => ['url' => $image_url]]
-                        ]
+            $response_data = $this->callAPI($this->build_response_request([
+                [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => $instruction],
+                        ['type' => 'input_image', 'image_url' => $image_url]
                     ]
-                ],
-                'max_tokens' => self::MAX_TOKENS
-            ]);
+                ]
+            ], self::MAX_TOKENS));
 
-            if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
-                $generated_text = $response_data['choices'][0]['message']['content'];
-                $tokens_used = $response_data['usage']['total_tokens'];
+            $generated_text = $this->extract_response_text($response_data);
+
+            if (!empty($generated_text)) {
+                $tokens_used = $this->extract_total_tokens($response_data);
 
                 // Track the generation
                 $this->statistics->track_generation(
@@ -391,28 +394,16 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Sends a chat completion request to the OpenAI API.
+     * Sends a Responses API request to OpenAI.
      *
-     * This is a wrapper around callAPI that specifically handles chat completion requests,
-     * setting the model and other parameters consistently.
-     *
-     * @param array $data The data to be sent in the API request.
+     * @param array $input The request input blocks.
+     * @param int $max_output_tokens The maximum number of output tokens.
      * @return array|null The response data from the API, or null if an error occurred.
      * @throws Exception If the API request fails or the rate limit is exceeded.
      */
-    private function send_chat_completion_request($data) {
-        // Add the model if not provided
-        if (!isset($data['model'])) {
-            $data['model'] = self::MODEL;
-        }
-
-        // Track this request with the rate limiter
-        if (!$this->rate_limiter->can_make_request()) {
-            throw new Exception('Rate limit exceeded. Please try again later.');
-        }
-
+    private function send_response_request($input, $max_output_tokens = self::MAX_TOKENS) {
         try {
-            $result = $this->callAPI($data);
+            $result = $this->callAPI($this->build_response_request($input, $max_output_tokens));
             return $result;
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
@@ -464,17 +455,24 @@ class Auto_Alt_Text_OpenAI  {
                 "The image filename is \"{$clean_filename}\". Try to naturally incorporate relevant terms from the filename for SEO purposes. " .
                 "Provide only the improved alt text without any additional explanations or quotes.";
 
-            $response_data = $this->send_chat_completion_request([
-                'messages' => [
-                    ['role' => 'system', 'content' => 'You are an expert in creating accessible and SEO-friendly image descriptions.'],
-                    ['role' => 'user', 'content' => $feedback_prompt]
+            $response_data = $this->send_response_request([
+                [
+                    'role' => 'system',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => 'You are an expert in creating accessible and SEO-friendly image descriptions.']
+                    ]
                 ],
-                'max_tokens' => 150,
-                'temperature' => 0.7
-            ]);
+                [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'input_text', 'text' => $feedback_prompt]
+                    ]
+                ]
+            ], 150);
 
-            if ($response_data && isset($response_data['choices'][0]['message']['content'])) {
-                $regenerated_text = trim($response_data['choices'][0]['message']['content']);
+            $regenerated_text = trim($this->extract_response_text($response_data));
+
+            if (!empty($regenerated_text)) {
 
                 // Track statistics for the regenerated alt text
                 if (!empty($regenerated_text)) {
@@ -485,7 +483,7 @@ class Auto_Alt_Text_OpenAI  {
                 return $regenerated_text;
             }
 
-            $this->last_error = 'Failed to generate improved alt text';
+            $this->last_error = __('OpenAI returned no improved alt text. Please try again.', 'wp-auto-alt-text');
             return null;
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
@@ -625,7 +623,7 @@ class Auto_Alt_Text_OpenAI  {
      */
     private function callAPI($data) {
         if (!$this->rate_limiter->can_make_request()) {
-            throw new Exception('Rate limit exceeded. Please try again later.');
+            throw new Exception(__('Rate limit exceeded. Please try again later.', 'wp-auto-alt-text'));
         }
 
         $ch = curl_init(self::API_URL);
@@ -645,18 +643,181 @@ class Auto_Alt_Text_OpenAI  {
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         if (!$response) {
-            throw new Exception('cURL Error: ' . curl_error($ch));
+            $curl_error = curl_error($ch);
+            $friendly_error = $this->map_api_error_message($curl_error, 0);
+            throw new Exception($friendly_error);
         }
 
         curl_close($ch);
         $response_data = json_decode($response, true);
 
         if ($http_code !== 200) {
-            throw new Exception(
-                $response_data['error']['message'] ?? 'Unknown API error'
-            );
+            $raw_error = $response_data['error']['message'] ?? __('Unknown API error', 'wp-auto-alt-text');
+            $friendly_error = $this->map_api_error_message($raw_error, $http_code);
+
+            Auto_Alt_Text_Logger::log('OpenAI API request failed', 'error', [
+                'http_code' => $http_code,
+                'raw_error' => $raw_error,
+                'friendly_error' => $friendly_error
+            ]);
+
+            throw new Exception($friendly_error);
         }
 
         return $response_data;
+    }
+
+    /**
+     * Maps low-level API errors to user-friendly messages.
+     *
+     * @param string $raw_error Raw API or transport error message.
+     * @param int $http_code HTTP status code.
+     * @return string User-facing error message.
+     */
+    private function map_api_error_message($raw_error, $http_code = 0) {
+        $error_message = is_string($raw_error) ? strtolower($raw_error) : '';
+
+        if ($http_code === 401 || strpos($error_message, 'invalid_api_key') !== false || strpos($error_message, 'incorrect api key') !== false) {
+            return __('Authentication failed. Please verify your OpenAI API key.', 'wp-auto-alt-text');
+        }
+
+        if ($http_code === 429 || strpos($error_message, 'rate limit') !== false || strpos($error_message, 'quota') !== false) {
+            return __('OpenAI rate or quota limit reached. Please wait and try again.', 'wp-auto-alt-text');
+        }
+
+        if ($http_code === 400 || strpos($error_message, 'max_output_tokens') !== false || strpos($error_message, 'unsupported parameter') !== false || strpos($error_message, 'input_image') !== false || strpos($error_message, 'responses') !== false) {
+            return __('Model request format error. Please verify plugin compatibility with the current OpenAI model.', 'wp-auto-alt-text');
+        }
+
+        if ($http_code >= 500 || strpos($error_message, 'server error') !== false) {
+            return __('OpenAI service is temporarily unavailable. Please try again shortly.', 'wp-auto-alt-text');
+        }
+
+        if (strpos($error_message, 'curl') !== false || strpos($error_message, 'timed out') !== false || strpos($error_message, 'could not resolve host') !== false || strpos($error_message, 'ssl') !== false) {
+            return __('Network error while contacting OpenAI. Please check server connectivity and try again.', 'wp-auto-alt-text');
+        }
+
+        return __('Unable to generate alt text right now. Please try again.', 'wp-auto-alt-text');
+    }
+
+    /**
+     * Builds a normalized request payload for the OpenAI Responses API.
+     *
+     * @param array $input The input blocks to send to the API.
+     * @param int $max_output_tokens The maximum output tokens.
+     * @return array The request payload.
+     */
+    private function build_response_request($input, $max_output_tokens = self::MAX_TOKENS) {
+        return [
+            'model' => self::MODEL,
+            'input' => $input,
+            'max_output_tokens' => $max_output_tokens
+        ];
+    }
+
+    /**
+     * Extracts plain text output from Responses API payloads.
+     *
+     * @param array $response_data The decoded API response.
+     * @return string The extracted text output.
+     */
+    private function extract_response_text($response_data) {
+        if (isset($response_data['output_text'])) {
+            if (is_string($response_data['output_text'])) {
+                return trim($response_data['output_text']);
+            }
+
+            if (is_array($response_data['output_text'])) {
+                return trim(implode("\n", array_filter($response_data['output_text'], 'is_string')));
+            }
+        }
+
+        if (isset($response_data['output']) && is_array($response_data['output'])) {
+            $parts = [];
+            foreach ($response_data['output'] as $item) {
+                if (!isset($item['content']) || !is_array($item['content'])) {
+                    continue;
+                }
+
+                foreach ($item['content'] as $content_item) {
+                    if (isset($content_item['text']) && is_string($content_item['text'])) {
+                        $parts[] = $content_item['text'];
+                    }
+                }
+            }
+
+            if (!empty($parts)) {
+                return trim(implode("\n", $parts));
+            }
+        }
+
+        // Backward compatibility with previous chat-completions shaped responses.
+        if (isset($response_data['choices'][0]['message']['content'])) {
+            return trim($response_data['choices'][0]['message']['content']);
+        }
+
+        $fallback_parts = [];
+        $this->collect_text_fragments($response_data, $fallback_parts);
+        if (!empty($fallback_parts)) {
+            return trim(implode("\n", $fallback_parts));
+        }
+
+        return '';
+    }
+
+    /**
+     * Recursively collects text fragments from mixed response shapes.
+     *
+     * @param mixed $node Current response node.
+     * @param array $parts Collected text parts.
+     * @return void
+     */
+    private function collect_text_fragments($node, &$parts) {
+        if (is_string($node)) {
+            $trimmed = trim($node);
+            if ($trimmed !== '') {
+                $parts[] = $trimmed;
+            }
+            return;
+        }
+
+        if (!is_array($node)) {
+            return;
+        }
+
+        foreach ($node as $key => $value) {
+            if (in_array($key, ['text', 'value', 'output_text'], true)) {
+                if (is_string($value)) {
+                    $trimmed = trim($value);
+                    if ($trimmed !== '') {
+                        $parts[] = $trimmed;
+                    }
+                } elseif (is_array($value)) {
+                    $this->collect_text_fragments($value, $parts);
+                }
+                continue;
+            }
+
+            if (is_array($value)) {
+                $this->collect_text_fragments($value, $parts);
+            }
+        }
+    }
+
+    /**
+     * Extracts total token usage from OpenAI response payloads.
+     *
+     * @param array $response_data The decoded API response.
+     * @return int Total tokens used.
+     */
+    private function extract_total_tokens($response_data) {
+        if (isset($response_data['usage']['total_tokens'])) {
+            return (int) $response_data['usage']['total_tokens'];
+        }
+
+        $input_tokens = isset($response_data['usage']['input_tokens']) ? (int) $response_data['usage']['input_tokens'] : 0;
+        $output_tokens = isset($response_data['usage']['output_tokens']) ? (int) $response_data['usage']['output_tokens'] : 0;
+
+        return $input_tokens + $output_tokens;
     }
 }
