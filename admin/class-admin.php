@@ -12,6 +12,54 @@ class Auto_Alt_Text_Admin {
         add_filter('handle_bulk_actions-upload', [$this, 'handle_bulk_actions'], 10, 3);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAutoAltTextScript']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueStyles']);
+        add_filter('manage_media_columns', [$this, 'add_alt_status_column']);
+        add_action('manage_media_custom_column', [$this, 'render_alt_status_column'], 10, 2);
+    }
+
+    /**
+     * Adds an "Alt text" column to the Media Library list view.
+     *
+     * @param array $columns Existing columns.
+     * @return array Modified columns.
+     */
+    public function add_alt_status_column($columns) {
+        $columns['aat_alt_status'] = __('Alt text', 'wp-auto-alt-text');
+        return $columns;
+    }
+
+    /**
+     * Renders the Alt text status for a media item: —, Missing, Auto, or Manual.
+     * Missing items get a "Generate" link to the edit screen.
+     *
+     * @param string $column_name Column name.
+     * @param int    $post_id     Attachment ID.
+     */
+    public function render_alt_status_column($column_name, $post_id) {
+        if ($column_name !== 'aat_alt_status') {
+            return;
+        }
+        if (!wp_attachment_is_image($post_id)) {
+            echo '—';
+            return;
+        }
+        $alt = get_post_meta($post_id, '_wp_attachment_image_alt', true);
+        if (trim((string) $alt) === '') {
+            $edit_url = admin_url('post.php?post=' . $post_id . '&action=edit');
+            echo '<span class="aat-status aat-status-missing">' . esc_html__('Missing', 'wp-auto-alt-text') . '</span>';
+            echo ' <a href="' . esc_url($edit_url) . '" class="aat-generate-link">' . esc_html__('Generate', 'wp-auto-alt-text') . '</a>';
+            return;
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'auto_alt_text_stats';
+        $has_auto = $wpdb->get_var($wpdb->prepare(
+            "SELECT 1 FROM {$table} WHERE image_id = %d AND generation_type IN ('upload','batch','api','api_batch','woocommerce','elementor','divi','beaver_builder','wpbakery') LIMIT 1",
+            $post_id
+        ));
+        if ($has_auto) {
+            echo '<span class="aat-status aat-status-auto">' . esc_html__('Auto', 'wp-auto-alt-text') . '</span>';
+        } else {
+            echo '<span class="aat-status aat-status-manual">' . esc_html__('Manual', 'wp-auto-alt-text') . '</span>';
+        }
     }
 
     /**
@@ -91,7 +139,34 @@ class Auto_Alt_Text_Admin {
         wp_localize_script(self::SCRIPT_HANDLE, 'autoAltTextData', [
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('auto_alt_text_batch_nonce'),
-			'brandTonalityEnabled' => (bool) get_option('wp_auto_alt_text_enable_brand_tonality', false),
+            'brandTonalityEnabled' => (bool) get_option('wp_auto_alt_text_enable_brand_tonality', false),
+            'strings' => [
+                'previewTitle' => __('Preview alt text', 'wp-auto-alt-text'),
+                'cachedBadge' => __('Cached', 'wp-auto-alt-text'),
+                'notSatisfied' => __('Not satisfied? Improve this alt text', 'wp-auto-alt-text'),
+                'feedbackNote' => __('This will count as a new request and may incur cost.', 'wp-auto-alt-text'),
+                'moreDescriptive' => __('More descriptive', 'wp-auto-alt-text'),
+                'moreConcise' => __('More concise', 'wp-auto-alt-text'),
+                'moreAccessible' => __('More accessible', 'wp-auto-alt-text'),
+                'betterSeo' => __('SEO-friendly', 'wp-auto-alt-text'),
+                'technicalAccuracy' => __('Technical accuracy', 'wp-auto-alt-text'),
+                'brandVoice' => __('Brand voice', 'wp-auto-alt-text'),
+                'customFeedbackPlaceholder' => __('Or enter your own feedback...', 'wp-auto-alt-text'),
+                'sendCustomFeedback' => __('Send custom feedback', 'wp-auto-alt-text'),
+                'apply' => __('Apply', 'wp-auto-alt-text'),
+                'regenerateAltText' => __('Generate new alt text', 'wp-auto-alt-text'),
+                'cancel' => __('Cancel', 'wp-auto-alt-text'),
+                'applying' => __('Applying...', 'wp-auto-alt-text'),
+                'confirmCleanup' => __('Are you sure you want to remove all generation records for deleted images?', 'wp-auto-alt-text'),
+                'generating' => __('Generating...', 'wp-auto-alt-text'),
+                'generateAltTextForSelected' => __('Generate Alt Text for Selected', 'wp-auto-alt-text'),
+                'selectImagesFirst' => __('Please select images first', 'wp-auto-alt-text'),
+                'regenerating' => __('Generating alt text from feedback...', 'wp-auto-alt-text'),
+                'newAltTextGenerated' => __('New alt text has been generated', 'wp-auto-alt-text'),
+                'improveFailed' => __('Failed to improve alt text:', 'wp-auto-alt-text'),
+                'errorProcessingFeedback' => __('Error processing your feedback. Please try again.', 'wp-auto-alt-text'),
+                'enterFeedback' => __('Please enter your feedback before submitting.', 'wp-auto-alt-text'),
+            ],
         ]);
     }
 

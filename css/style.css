@@ -489,3 +489,10 @@
   justify-content: space-between;
   gap: 0.4rem;
 }
+
+/* Media Library Alt status column */
+.aat-status { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+.aat-status-missing { background: #fcf0f1; color: #b32d2e; }
+.aat-status-auto { background: #edfaef; color: #00a32a; }
+.aat-status-manual { background: #f0f0f1; color: #50575e; }
+.aat-generate-link { margin-left: 4px; font-size: 12px; }

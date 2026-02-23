@@ -91,6 +91,43 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 - Active OpenAI API key
 - Valid SSL certificate
 
+## REST API
+
+The plugin exposes REST endpoints for integration and scripting. All routes require the requesting user to have the `upload_files` capability (e.g. logged-in editor or administrator).
+
+**Namespace:** `wp-auto-alt-text/v1`
+
+| Method | Route | Description |
+|--------|--------|-------------|
+| POST | `/generate` | Generate alt text for a single attachment. Body: `attachment_id` (required), `context` (optional, e.g. post title for relevance). |
+| POST | `/batch` | Generate alt text for multiple attachments. Body: `attachment_ids` (array of attachment IDs). |
+
+**Example (single image):**
+```bash
+curl -X POST "https://yoursite.com/wp-json/wp-auto-alt-text/v1/generate" \
+  -H "Content-Type: application/json" \
+  --data '{"attachment_id": 123}' \
+  --user "admin:password"
+```
+
+**Example (batch):**
+```bash
+curl -X POST "https://yoursite.com/wp-json/wp-auto-alt-text/v1/batch" \
+  -H "Content-Type: application/json" \
+  --data '{"attachment_ids": [123, 456, 789]}' \
+  --user "admin:password"
+```
+
+Use WordPress application passwords or cookie authentication in production.
+
+## WP-CLI
+
+For large libraries, use WP-CLI to generate alt text without browser timeouts:
+
+- `wp auto-alt-text generate` — Process all images (or those without alt text with `--skip-existing`).
+- `wp auto-alt-text generate --limit=500` — Process up to 500 images.
+- `wp auto-alt-text stats` — Show generation statistics.
+
 ## Contributing
 
 We welcome contributions to improve WP Auto Alt Text!

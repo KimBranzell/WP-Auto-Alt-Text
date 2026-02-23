@@ -53,8 +53,8 @@ function auto_alt_text_menu() {
 
     add_submenu_page(
         'auto-alt-text',         // Parent slug
-        'Inställningar',              // Page title
-        'Inställningar',              // Menu title
+        __('Settings', 'wp-auto-alt-text'),   // Page title
+        __('Settings', 'wp-auto-alt-text'),   // Menu title
         'manage_options',        // Capability
         'auto-alt-text',         // Menu slug
         'auto_alt_text_options'  // Function
@@ -62,8 +62,8 @@ function auto_alt_text_menu() {
 
     add_submenu_page(
         'auto-alt-text',         // Parent slug
-        'Status',                // Page title
-        'Status',                // Menu title
+        __('Status', 'wp-auto-alt-text'),    // Page title
+        __('Status', 'wp-auto-alt-text'),    // Menu title
         'manage_options',        // Capability
         'auto-alt-text-status',  // Menu slug
         'add_format_compatibility_section'  // Function
@@ -127,7 +127,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="auto_generate">
-                                <?php _e('Aktivera generering av alt-texter', 'auto-alt-text'); ?>
+                                <?php _e('Enable alt text generation', 'wp-auto-alt-text'); ?>
                             </label>
                         </th>
                         <td>
@@ -140,7 +140,7 @@ function auto_alt_text_options() {
                                 <span class="slider round"></span>
                             </label>
                             <p class="description">
-                                <?php _e('När detta alternativ är aktiverat kommer de alternativa texterna att automatiskt genereras.', 'auto-alt-text'); ?>
+                                <?php _e('When enabled, alt text will be generated automatically for new uploads.', 'wp-auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -149,10 +149,10 @@ function auto_alt_text_options() {
 
             <div class="card">
                 <div class="brand-settings-section">
-                    <h2>Brand Settings</h2>
+                    <h2><?php esc_html_e('Brand settings', 'wp-auto-alt-text'); ?></h2>
                     <table class="form-table">
                         <tr>
-                            <th scope="row"><?php _e('Aktivera brand-tonalitet', 'wp-auto-alt-text'); ?></th>
+                            <th scope="row"><?php _e('Enable brand tonality', 'wp-auto-alt-text'); ?></th>
                             <td>
                                 <label class="switch">
                                     <input type="checkbox"
@@ -163,23 +163,109 @@ function auto_alt_text_options() {
                                     <span class="slider round"></span>
                                 </label>
                                 <p class="description">
-                                    <?php _e('När detta alternativ är aktiverat kommer den alternativa texten att optimeras för sökmotorer med inspiration från varumärkesbeskrivningarna i fälten nedan.', 'wp-auto-alt-text'); ?>
+                                    <?php _e('When enabled, alt text will be optimized for SEO using the brand details below.', 'wp-auto-alt-text'); ?>
                                 </p>
                             </td>
                         </tr>
                         <tr>
-                            <th>Varumärkets namn</th>
+                            <th><?php esc_html_e('Brand name', 'wp-auto-alt-text'); ?></th>
                             <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
                         </tr>
                         <tr>
-                            <th><?php _e('Varumärkesbeskrivning', 'wp-auto-alt-text'); ?></th>
-                            <td><textarea name="aat_brand_description" rows="3" placeholder="<?php _e('Ange en beskrivning av ditt varumärke', 'wp-auto-alt-text'); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
+                            <th><?php _e('Brand description', 'wp-auto-alt-text'); ?></th>
+                            <td><textarea name="aat_brand_description" rows="3" placeholder="<?php esc_attr_e('Describe your brand', 'wp-auto-alt-text'); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
                         </tr>
                     </table>
                 </div>
             </div>
 
 
+
+            <div class="card">
+                <h2><?php _e('Context-aware alt text', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_context_enabled">
+                                <?php _e('Enable context-aware generation', 'wp-auto-alt-text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    id="aat_context_enabled"
+                                    name="aat_context_enabled"
+                                    value="1"
+                                    <?php checked(get_option('aat_context_enabled', true)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('When enabled, the plugin will send additional WordPress context (titles, captions, content, taxonomies) with each alt-text request.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_context_include_titles_captions">
+                                <?php _e('Use titles and captions', 'wp-auto-alt-text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    id="aat_context_include_titles_captions"
+                                    name="aat_context_include_titles_captions"
+                                    value="1"
+                                    <?php checked(get_option('aat_context_include_titles_captions', true)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('Include page/product titles plus any existing image caption or alt text in the context.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_context_include_surrounding">
+                                <?php _e('Use surrounding content', 'wp-auto-alt-text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    id="aat_context_include_surrounding"
+                                    name="aat_context_include_surrounding"
+                                    value="1"
+                                    <?php checked(get_option('aat_context_include_surrounding', true)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('Include a short summary of nearby text where the image is used, and product descriptions for WooCommerce.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_context_include_taxonomies">
+                                <?php _e('Use taxonomies and attributes', 'wp-auto-alt-text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    id="aat_context_include_taxonomies"
+                                    name="aat_context_include_taxonomies"
+                                    value="1"
+                                    <?php checked(get_option('aat_context_include_taxonomies', true)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('Include categories, tags and product attributes as high-level context.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
 
             <div class="card">
                 <h2><?php _e('API', 'wp-auto-alt-text'); ?></h2>
@@ -192,7 +278,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="api_key">
-                            <?php _e('OpenAI API-nyckel', 'wp-auto-alt-text'); ?>
+                            <?php _e('OpenAI API key', 'wp-auto-alt-text'); ?>
                             </label>
                         </th>
                         <td>
@@ -202,7 +288,39 @@ function auto_alt_text_options() {
                                 value="<?php echo esc_attr($decrypted_key); ?>"
                             />
                             <p class="description">
-                                <?php _e('Pluginen använder OpenAI Responses API med modellen gpt-5.2 för textgenerering.', 'wp-auto-alt-text'); ?>
+                                <?php _e('The plugin uses the OpenAI Responses API for text generation.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_openai_model"><?php _e('Model', 'wp-auto-alt-text'); ?></label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                id="aat_openai_model"
+                                name="aat_openai_model"
+                                class="regular-text"
+                                value="<?php echo esc_attr(get_option('aat_openai_model', 'gpt-5.2')); ?>"
+                            />
+                            <p class="description">
+                                <?php _e('OpenAI model name (e.g. gpt-5.2). Change only if you use a different or compatible endpoint.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_openai_api_url"><?php _e('API URL', 'wp-auto-alt-text'); ?></label>
+                        </th>
+                        <td>
+                            <input type="url"
+                                id="aat_openai_api_url"
+                                name="aat_openai_api_url"
+                                class="large-text"
+                                value="<?php echo esc_attr(get_option('aat_openai_api_url', 'https://api.openai.com/v1/responses')); ?>"
+                            />
+                            <p class="description">
+                                <?php _e('Leave default unless using an OpenAI-compatible proxy or different endpoint.', 'wp-auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -210,10 +328,66 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
-                <h2><?php _e('Språk', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php _e('Rate limit', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Alternativa textens språk', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row">
+                            <label for="aat_rate_limit_per_minute"><?php _e('Max requests per minute', 'wp-auto-alt-text'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number"
+                                id="aat_rate_limit_per_minute"
+                                name="aat_rate_limit_per_minute"
+                                value="<?php echo esc_attr(get_option('aat_rate_limit_per_minute', 50)); ?>"
+                                min="1"
+                                max="120"
+                            />
+                            <p class="description">
+                                <?php _e('Maximum API calls per minute to avoid hitting provider limits.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_rate_limit_per_day"><?php _e('Max requests per day', 'wp-auto-alt-text'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number"
+                                id="aat_rate_limit_per_day"
+                                name="aat_rate_limit_per_day"
+                                value="<?php echo esc_attr(get_option('aat_rate_limit_per_day', 0)); ?>"
+                                min="0"
+                            />
+                            <p class="description">
+                                <?php _e('Optional daily cap. Set to 0 for no limit.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="aat_price_per_1k_tokens"><?php _e('Price per 1k tokens (USD)', 'wp-auto-alt-text'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number"
+                                id="aat_price_per_1k_tokens"
+                                name="aat_price_per_1k_tokens"
+                                value="<?php echo esc_attr(get_option('aat_price_per_1k_tokens', '0')); ?>"
+                                min="0"
+                                step="0.0001"
+                            />
+                            <p class="description">
+                                <?php _e('Optional. Set to show estimated cost in dashboard and Statistics. Example: 0.002 for GPT-4. Leave 0 to hide cost.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2><?php _e('Language', 'wp-auto-alt-text'); ?></h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('Alt text language', 'wp-auto-alt-text'); ?></th>
                         <td>
                             <select name="<?php echo AUTO_ALT_TEXT_LANGUAGE_OPTION; ?>" class="regular-text">
                                 <?php
@@ -228,7 +402,7 @@ function auto_alt_text_options() {
                                 }
                                 ?>
                             </select>
-                            <p class="description"><?php _e('Välj språket för genererade alternativa texter', 'wp-auto-alt-text'); ?></p>
+                            <p class="description"><?php _e('Language for generated alt text', 'wp-auto-alt-text'); ?></p>
                         </td>
                     </tr>
                 </table>
@@ -240,7 +414,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="cache_duration">
-                                <?php _e('Hur länge ska cache bevaras (i dagar)?', 'wp-auto-alt-text'); ?>
+                                <?php _e('Cache duration (days)', 'wp-auto-alt-text'); ?>
                             </label>
                         </th>
                         <td>
@@ -252,7 +426,7 @@ function auto_alt_text_options() {
                                 max="365"
                             />
                             <p class="description">
-                                <?php _e('Antal dagar för att cacha genererade alternativa texter. Lägre värden använder fler API-anrop men håller innehållet fräschare.', 'wp-auto-alt-text'); ?>
+                                <?php _e('Number of days to cache generated alt text. Lower values use more API calls but keep content fresher.', 'wp-auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -263,7 +437,7 @@ function auto_alt_text_options() {
                 <h2><?php _e('Feedback', 'wp-auto-alt-text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Aktivera feedbacksystem', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row"><?php _e('Enable feedback system', 'wp-auto-alt-text'); ?></th>
                         <td>
                             <label class="switch">
                                 <input type="checkbox"
@@ -274,11 +448,37 @@ function auto_alt_text_options() {
                                 <span class="slider round"></span>
                             </label>
                             <p class="description">
-                                <?php _e('Tillåt användare att ge feedback och begära förbättringar av genererade alternativa texter.', 'wp-auto-alt-text'); ?>
+                                <?php _e('Allow users to give feedback and request improvements to generated alt text.', 'wp-auto-alt-text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('Also suggest title and caption', 'wp-auto-alt-text'); ?></th>
+                        <td>
+                            <label class="switch">
+                                <input type="checkbox"
+                                    name="aat_also_suggest_title_caption"
+                                    id="aat_also_suggest_title_caption"
+                                    value="1"
+                                    <?php checked(get_option('aat_also_suggest_title_caption', false)); ?>>
+                                <span class="slider round"></span>
+                            </label>
+                            <p class="description">
+                                <?php _e('When generating alt text, ask the AI to also suggest a title and caption for the attachment and save them.', 'wp-auto-alt-text'); ?>
                             </p>
                         </td>
                     </tr>
                 </table>
+            </div>
+
+            <div class="card">
+                <h2><?php _e('Bulk processing (WP-CLI)', 'wp-auto-alt-text'); ?></h2>
+                <p class="description">
+                    <?php _e('For large media libraries (e.g. 500+ images), use WP-CLI to generate alt text in the background and avoid browser timeouts.', 'wp-auto-alt-text'); ?>
+                </p>
+                <p><code>wp auto-alt-text generate</code> — <?php _e('Process all images without alt text.', 'wp-auto-alt-text'); ?></p>
+                <p><code>wp auto-alt-text generate --limit=500</code> — <?php _e('Process up to 500 images.', 'wp-auto-alt-text'); ?></p>
+                <p><code>wp auto-alt-text generate --skip-existing</code> — <?php _e('Skip images that already have alt text.', 'wp-auto-alt-text'); ?></p>
             </div>
 
             <!-- <div class="card">
@@ -484,6 +684,105 @@ function auto_alt_text_register_settings() {
             'sanitize_callback' => 'rest_sanitize_boolean'
         ]
     );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_openai_model',
+        [
+            'type' => 'string',
+            'default' => 'gpt-5.2',
+            'sanitize_callback' => function ($v) {
+                return sanitize_text_field($v) ?: 'gpt-5.2';
+            }
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_openai_api_url',
+        [
+            'type' => 'string',
+            'default' => 'https://api.openai.com/v1/responses',
+            'sanitize_callback' => 'esc_url_raw'
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_rate_limit_per_minute',
+        [
+            'type' => 'integer',
+            'default' => 50,
+            'sanitize_callback' => function ($v) {
+                $n = absint($v);
+                return max(1, min(120, $n));
+            }
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_rate_limit_per_day',
+        [
+            'type' => 'integer',
+            'default' => 0,
+            'sanitize_callback' => function ($v) {
+                return max(0, absint($v));
+            }
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_price_per_1k_tokens',
+        [
+            'type' => 'float',
+            'default' => 0,
+            'sanitize_callback' => function ($v) {
+                return max(0.0, (float) $v);
+            }
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_also_suggest_title_caption',
+        [
+            'type' => 'boolean',
+            'default' => false,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_context_enabled',
+        [
+            'type' => 'boolean',
+            'default' => true,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_context_include_titles_captions',
+        [
+            'type' => 'boolean',
+            'default' => true,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_context_include_surrounding',
+        [
+            'type' => 'boolean',
+            'default' => true,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
+    register_setting(
+        SETTINGS_GROUP,
+        'aat_context_include_taxonomies',
+        [
+            'type' => 'boolean',
+            'default' => true,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
 }
 
 /**
@@ -552,10 +851,11 @@ function auto_alt_text_sanitize($input) {
         //     return sanitize_textarea_field($input);
 
         case AUTO_ALT_TEXT_LANGUAGE_OPTION:
-            if (!in_array($input, ['en', 'sv'])) {
+            $allowed = defined('AUTO_ALT_TEXT_LANGUAGES') ? array_keys(AUTO_ALT_TEXT_LANGUAGES) : ['en'];
+            if (!in_array($input, $allowed)) {
                 return 'en'; // Default to English if invalid
             }
-            break;
+            return $input;
     }
     return sanitize_text_field($input);
 }

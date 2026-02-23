@@ -31,7 +31,8 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     if (cleanupForm) {
         cleanupForm.addEventListener('submit', function(e) {
-            if (!confirm('Are you sure you want to remove all generation records for deleted images?')) {
+            const msg = (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings.confirmCleanup) ? autoAltTextData.strings.confirmCleanup : 'Are you sure you want to remove all generation records for deleted images?';
+            if (!confirm(msg)) {
                 e.preventDefault();
             }
         });
@@ -157,6 +158,7 @@ function showError(message) {
  * @param {boolean} isCached - Indicates whether the alt text is from a cached version.
  */
 function showPreviewDialog(altText, attachmentId, isCached) {
+    const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
     const dialog = document.createElement('div');
     const button = document.querySelector(`[data-attachment-id="${attachmentId}"]`);
     const nonce = button.dataset.nonce;
@@ -167,37 +169,38 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     dialog.setAttribute('aria-labelledby', 'preview-title');
 
     const brandVoiceButton = (typeof autoAltTextData !== 'undefined' && autoAltTextData.brandTonalityEnabled)
-      ? `<button class="button feedback-option" data-type="brand_voice">Brand voice</button>`
+      ? `<button class="button feedback-option" data-type="brand_voice">${s('brandVoice', 'Brand voice')}</button>`
       : '';
 
+    const cachedBadge = isCached ? `<span class="cached-badge">${s('cachedBadge', 'Cached')}</span>` : '';
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
-            <h3>Förhandsgranska alternativ text ${isCached ? '<span class="cached-badge">Cachead</span>' : ''}</h3>
+            <h3>${s('previewTitle', 'Preview alt text')} ${cachedBadge}</h3>
             <textarea class="preview-text">${altText}</textarea>
 
             <div class="feedback-section">
                 <div class="feedback-header">
-                    <h4>Inte nöjd? Förbättra denna alt text</h4>
-                    <small>OBS: Detta kommer att räknas som en ny begäran, med tillkommande kostnad.</small>
+                    <h4>${s('notSatisfied', 'Not satisfied? Improve this alt text')}</h4>
+                    <small>${s('feedbackNote', 'This will count as a new request and may incur cost.')}</small>
                 </div>
                 <div class="feedback-options">
-                    <button class="button feedback-option" data-type="more_descriptive">Mer beskrivande</button>
-                    <button class="button feedback-option" data-type="more_concise">Mer kortfattad</button>
-                    <button class="button feedback-option" data-type="more_accessible">Mer tillgänglig</button>
-                    <button class="button feedback-option" data-type="better_seo">Sökmotorsanpassad</button>
-                    <button class="button feedback-option" data-type="technical_accuracy">Teknisk noggrannhet</button>
+                    <button class="button feedback-option" data-type="more_descriptive">${s('moreDescriptive', 'More descriptive')}</button>
+                    <button class="button feedback-option" data-type="more_concise">${s('moreConcise', 'More concise')}</button>
+                    <button class="button feedback-option" data-type="more_accessible">${s('moreAccessible', 'More accessible')}</button>
+                    <button class="button feedback-option" data-type="better_seo">${s('betterSeo', 'SEO-friendly')}</button>
+                    <button class="button feedback-option" data-type="technical_accuracy">${s('technicalAccuracy', 'Technical accuracy')}</button>
                     ${brandVoiceButton}
                 </div>
                 <div class="custom-feedback">
-                    <textarea placeholder="Eller skriv din egen feedback..." class="custom-feedback-text"></textarea>
-                    <button class="button custom-feedback-submit">Skicka egen feedback</button>
+                    <textarea placeholder="${s('customFeedbackPlaceholder', 'Or enter your own feedback...')}" class="custom-feedback-text"></textarea>
+                    <button class="button custom-feedback-submit">${s('sendCustomFeedback', 'Send custom feedback')}</button>
                 </div>
             </div>
 
             <div class="preview-actions">
-                <button class="button button-primary apply-alt-text">Applicera</button>
-                ${isCached ? '<button class="button regenerate-alt-text">Generera ny alternativ text</button>' : ''}
-                <button class="button button-secondary cancel-alt-text">Avbryt</button>
+                <button class="button button-primary apply-alt-text">${s('apply', 'Apply')}</button>
+                ${isCached ? `<button class="button regenerate-alt-text">${s('regenerateAltText', 'Generate new alt text')}</button>` : ''}
+                <button class="button button-secondary cancel-alt-text">${s('cancel', 'Cancel')}</button>
             </div>
         </div>
     `;
@@ -219,10 +222,11 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     // Add event listener for custom feedback
     dialog.querySelector('.custom-feedback-submit').addEventListener('click', () => {
         const customFeedback = dialog.querySelector('.custom-feedback-text').value;
+        const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
         if (customFeedback.trim()) {
             regenerateAltTextWithFeedback(attachmentId, nonce, 'custom', customFeedback, altText, dialog);
         } else {
-            alert('Please enter your feedback before submitting.');
+            alert(s('enterFeedback', 'Please enter your feedback before submitting.'));
         }
     });
 
@@ -235,8 +239,9 @@ function showPreviewDialog(altText, attachmentId, isCached) {
         const finalText = dialog.querySelector('.preview-text').value;
         const isEdited = finalText.trim() !== altText.trim();
         const applyButton = dialog.querySelector('.apply-alt-text');
+        const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
         applyButton.disabled = true;
-        applyButton.textContent = 'Applying...';
+        applyButton.textContent = s('applying', 'Applying...');
 
         fetch(ajaxurl, {
             method: 'POST',
@@ -311,11 +316,11 @@ function showPreviewDialog(altText, attachmentId, isCached) {
  * @param {Element} dialog - The dialog element containing the preview.
  */
 function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, customFeedback, originalAltText, dialog) {
-    // Show loading state
+    const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
     const textarea = dialog.querySelector('.preview-text');
     const originalText = textarea.value;
     textarea.disabled = true;
-    textarea.value = 'Genererar alternativ text efter feedback...';
+    textarea.value = s('regenerating', 'Generating alt text from feedback...');
 
     // Disable all feedback buttons
     const feedbackButtons = dialog.querySelectorAll('.feedback-option, .custom-feedback-submit');
@@ -344,11 +349,11 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
             // Store the new generated text in session storage
             sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
 
-            // Show success indicator
+            const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
             const feedbackSection = dialog.querySelector('.feedback-section');
             const successMessage = document.createElement('div');
             successMessage.className = 'feedback-success';
-            successMessage.textContent = 'Ny alternativ text har genererats';
+            successMessage.textContent = s('newAltTextGenerated', 'New alt text has been generated');
             feedbackSection.prepend(successMessage);
 
             // Remove the success message after 3 seconds
@@ -358,15 +363,16 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
                 }
             }, 3000);
         } else {
-            // Restore original text in case of error
+            const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
             textarea.value = originalText;
-            alert('Failed to improve alt text: ' + (data.data?.message || 'Unknown error'));
+            alert(s('improveFailed', 'Failed to improve alt text:') + ' ' + (data.data?.message || 'Unknown error'));
         }
     })
     .catch(error => {
+        const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
         console.error('Error:', error);
         textarea.value = originalText;
-        alert('Error processing your feedback. Please try again.');
+        alert(s('errorProcessingFeedback', 'Error processing your feedback. Please try again.'));
     })
     .finally(() => {
         // Re-enable elements
@@ -384,11 +390,12 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
  * @param {MutationObserver} obs - The MutationObserver instance that triggered this function.
  */
 function handleBatchProcessing(obs) {
+    const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
     const mediaToolbar = document.querySelector('.media-toolbar-mode-select');
     if (mediaToolbar && !mediaToolbar.querySelector('.process-alt-text-batch')) {
         const batchButton = document.createElement('button');
         batchButton.className = 'button process-alt-text-batch';
-        batchButton.textContent = 'Generate Alt Text for Selected';
+        batchButton.textContent = s('generateAltTextForSelected', 'Generate Alt Text for Selected');
         mediaToolbar.appendChild(batchButton);
 
         batchButton.addEventListener('click', function(e) {
@@ -413,13 +420,14 @@ function processBatchSelection(e, button) {
     const selected = Array.from(document.querySelectorAll('.attachment.selected'))
         .map(el => el.dataset.id);
 
+    const s = (key, fallback) => (typeof autoAltTextData !== 'undefined' && autoAltTextData.strings && autoAltTextData.strings[key]) ? autoAltTextData.strings[key] : (fallback || key);
     if (selected.length === 0) {
-        alert('Please select images first');
+        alert(s('selectImagesFirst', 'Please select images first'));
         return;
     }
 
     const originalText = button.textContent;
-    button.textContent = 'Generating...';
+    button.textContent = s('generating', 'Generating...');
     button.disabled = true;
 
     // Initialize progress bar at 0%

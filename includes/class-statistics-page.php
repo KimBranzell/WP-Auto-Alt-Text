@@ -23,8 +23,8 @@ class Auto_Alt_Text_Statistics_Page {
     public function add_statistics_page() {
         add_submenu_page(
             'auto-alt-text',           // Parent slug
-            'Alternativ text-statistik',     // Page title
-            'Statistik',              // Menu title
+            __('Alt text statistics', 'wp-auto-alt-text'),  // Page title
+            __('Statistics', 'wp-auto-alt-text'),          // Menu title
             'manage_options',          // Capability
             'auto-alt-text-stats',     // Menu slug
             [$this, 'render_statistics_page'],
@@ -64,49 +64,73 @@ class Auto_Alt_Text_Statistics_Page {
 		$total_pages = ceil($total_items / $per_page);
         ?>
         <div class="wrap">
-            <h1>Alternativ text-statistik</h1>
+            <h1><?php esc_html_e('Alt text statistics', 'wp-auto-alt-text'); ?></h1>
 
             <?php if ($orphaned_count > 0): ?>
                 <div class="notice notice-warning orphaned-alt-text-stats">
-                    <p><?php printf('Hittade %d föräldralösa poster från raderade bilder.', $orphaned_count); ?></p>
+                    <p><?php echo esc_html(sprintf(__('Found %d orphaned records from deleted images.', 'wp-auto-alt-text'), $orphaned_count)); ?></p>
                     <form method="post">
                         <?php wp_nonce_field('auto_alt_text_cleanup'); ?>
-                        <input type="submit" name="cleanup_stats" class="button" value="Ta bort föräldralösa poster">
+                        <input type="submit" name="cleanup_stats" class="button" value="<?php esc_attr_e('Remove orphaned records', 'wp-auto-alt-text'); ?>">
                     </form>
                 </div>
             <?php endif; ?>
 
+            <?php
+            $estimated_cost = $this->statistics->get_estimated_cost();
+            $by_day = $this->statistics->get_stats_by_day(7);
+            $max_gen = !empty($by_day['generations']) ? max($by_day['generations']) : 1;
+            ?>
             <div class="stats-overview">
                 <div class="stat-box">
-                    <h3>Totala generationer</h3>
+                    <h3><?php esc_html_e('Total generations', 'wp-auto-alt-text'); ?></h3>
                     <p class="stat-number"><?php echo esc_html($stats['total_generations']); ?></p>
                 </div>
                 <div class="stat-box">
-                    <h3>Totalt antal använda tokens</h3>
-                    <p class="stat-number"><?php echo esc_html($stats['total_tokens']); ?></p>
+                    <h3><?php esc_html_e('Total tokens used', 'wp-auto-alt-text'); ?></h3>
+                    <p class="stat-number"><?php echo esc_html(number_format_i18n($stats['total_tokens'])); ?></p>
                 </div>
+                <?php if ($estimated_cost !== null) : ?>
                 <div class="stat-box">
-                    <h3>Generationstyper</h3>
+                    <h3><?php esc_html_e('Estimated cost', 'wp-auto-alt-text'); ?></h3>
+                    <p class="stat-number">$<?php echo esc_html(number_format($estimated_cost, 2)); ?></p>
+                    <p class="description"><?php esc_html_e('Approximate; check your OpenAI usage.', 'wp-auto-alt-text'); ?></p>
+                </div>
+                <?php endif; ?>
+                <div class="stat-box">
+                    <h3><?php esc_html_e('Generation types', 'wp-auto-alt-text'); ?></h3>
                     <ul class="generation-types">
-                        <li>Manuella uppdateringar: <?php echo esc_html($stats['types']['manual'] ?? 0); ?></li>
-                        <li>Bilduppladdningar: <?php echo esc_html($stats['types']['upload'] ?? 0); ?></li>
-                        <li>Batchbearbetning: <?php echo esc_html($stats['types']['batch'] ?? 0); ?></li>
+                        <li><?php echo esc_html(sprintf(__('Manual updates: %s', 'wp-auto-alt-text'), $stats['types']['manual'] ?? 0)); ?></li>
+                        <li><?php echo esc_html(sprintf(__('Image uploads: %s', 'wp-auto-alt-text'), $stats['types']['upload'] ?? 0)); ?></li>
+                        <li><?php echo esc_html(sprintf(__('Batch processing: %s', 'wp-auto-alt-text'), $stats['types']['batch'] ?? 0)); ?></li>
                     </ul>
                 </div>
             </div>
 
-            <h2>Genereringshistorik</h2>
+            <?php if ($max_gen > 0) : ?>
+            <h2><?php esc_html_e('Generations per day (last 7 days)', 'wp-auto-alt-text'); ?></h2>
+            <div class="aat-stats-bars" style="display:flex;align-items:flex-end;gap:6px;height:50px;margin-bottom:1em;">
+                <?php foreach ($by_day['generations'] as $i => $gen) :
+                    $pct = $max_gen > 0 ? min(100, (int) round(( $gen / $max_gen ) * 100)) : 0;
+                    $label = isset($by_day['labels'][$i]) ? $by_day['labels'][$i] : '';
+                ?>
+                    <div title="<?php echo esc_attr($label . ': ' . $gen); ?>" style="flex:1;background:#2271b1;height:<?php echo (int) $pct; ?>%;min-height:4px;border-radius:3px;"></div>
+                <?php endforeach; ?>
+            </div>
+            <p style="font-size:12px;color:#646970;"><?php echo esc_html(implode(', ', $by_day['labels'])); ?></p>
+            <?php endif; ?>
+
+            <h2><?php esc_html_e('Generation history', 'wp-auto-alt-text'); ?></h2>
 			<table class="wp-list-table widefat fixed striped">
 				<thead>
 					<tr>
-						<th>Bild</th>
-						<th>Genererad Text</th>
-						<th>Typ</th>
-						<th>Uppdatering #</th>
-						<th>Status</th>
-						<th>Användare</th>
-						<th>Datum</th>
-						<th>Tokens</th>
+						<th><?php esc_html_e('Image', 'wp-auto-alt-text'); ?></th>
+						<th><?php esc_html_e('Generated text', 'wp-auto-alt-text'); ?></th>
+						<th><?php esc_html_e('Type', 'wp-auto-alt-text'); ?></th>
+						<th><?php esc_html_e('Status', 'wp-auto-alt-text'); ?></th>
+						<th><?php esc_html_e('User', 'wp-auto-alt-text'); ?></th>
+						<th><?php esc_html_e('Date', 'wp-auto-alt-text'); ?></th>
+						<th><?php esc_html_e('Tokens', 'wp-auto-alt-text'); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -119,14 +143,13 @@ class Auto_Alt_Text_Statistics_Page {
 								if ($generation->is_edited) {
 									$diff = $this->text_diff($generation->generated_text, $generation->edited_text);
 									echo '<div class="edited-text">';
-									echo '<span class="diff-label">Changes:</span>';
+									echo '<span class="diff-label">' . esc_html__('Changes:', 'wp-auto-alt-text') . '</span>';
 									echo '<div class="diff-view">' . $diff . '</div>';
 									echo '</div>';
 								}
 								?>
 							</td>
 							<td><span class="generation-type <?php echo esc_attr($generation->generation_type); ?>"><?php echo esc_html($generation->generation_type); ?></span></td>
-							<td><?php echo esc_html($generation->update_number); ?></td>
 							<td>
 								<?php if ($generation->is_applied): ?>
 									<span class="status-badge applied">Applied</span>
@@ -136,7 +159,7 @@ class Auto_Alt_Text_Statistics_Page {
 								<?php endif; ?>
 							</td>
 							<td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
-							<td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' sedan'); ?></td>
+							<td><?php echo esc_html(sprintf(__('%s ago', 'wp-auto-alt-text'), human_time_diff(strtotime($generation->generation_time), (int) current_time('timestamp')))); ?></td>
 							<td><?php echo esc_html($generation->tokens_used); ?></td>
 						</tr>
 					<?php endforeach; ?>
@@ -153,8 +176,8 @@ class Auto_Alt_Text_Statistics_Page {
 						'current'   => $current_page,
 						'total'     => $total_pages,
 						'prev_next' => true,
-						'prev_text' => __('&laquo; Föregående'),
-						'next_text' => __('Nästa &raquo;'),
+						'prev_text' => __('&laquo; Previous', 'wp-auto-alt-text'),
+						'next_text' => __('Next &raquo;', 'wp-auto-alt-text'),
 						'type'      => 'array',
 					]);
 					if ($links) {
@@ -184,7 +207,7 @@ class Auto_Alt_Text_Statistics_Page {
             <div class="stat-content">
                 <div class="stat-item">
                     <span class="stat-number"><?php echo $feedback_count; ?></span>
-                    <span class="stat-label"><?php _e('Förbättringsförfrågningar', 'wp-auto-alt-text'); ?></span>
+                    <span class="stat-label"><?php _e('Improvement requests', 'wp-auto-alt-text'); ?></span>
                 </div>
             </div>
         </div>

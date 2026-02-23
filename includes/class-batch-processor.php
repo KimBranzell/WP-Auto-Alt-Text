@@ -1,6 +1,6 @@
 <?php
 class Auto_Alt_Text_Batch_Processor {
-    private const NONCE_ACTION = 'wp_auto_alt_text_nonce';
+    private const NONCE_ACTION = 'auto_alt_text_batch_nonce';
     private $batch_size;
     private $openai;
 

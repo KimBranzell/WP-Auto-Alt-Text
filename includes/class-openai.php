@@ -1,5 +1,7 @@
 <?php
-class Auto_Alt_Text_OpenAI  {
+require_once dirname(__FILE__) . '/interfaces/interface-alt-text-provider.php';
+
+class Auto_Alt_Text_OpenAI implements Auto_Alt_Text_Provider {
     private const API_URL = 'https://api.openai.com/v1/responses';
     private const MODEL = 'gpt-5.2';
     private const MAX_TOKENS = 300;
@@ -264,9 +266,10 @@ class Auto_Alt_Text_OpenAI  {
      * @param int $attachment_id The ID of the attachment for which the alt text is being generated.
      * @param string $generation_type The type of alt text generation, either 'manual' or 'auto'.
      * @param bool $preview_mode Whether the alt text is being generated in preview mode.
+     * @param string $context Optional context (e.g. post title or excerpt) to improve relevance.
      * @return string|null The generated alt text, or null if an error occurred.
      */
-    public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
+    public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false, $context = '') {
         Auto_Alt_Text_Logger::log("Starting alt text generation", "info", [
             'attachment_id' => $attachment_id,
             'type' => $generation_type,
@@ -307,8 +310,10 @@ class Auto_Alt_Text_OpenAI  {
         $image_data = base64_encode(file_get_contents($processed_image['path']));
         $image_url = 'data:image/jpeg;base64,' . $image_data;
 
+        $context = is_string($context) ? trim($context) : '';
+        $context = apply_filters('auto_alt_text_generation_context', $context, $attachment_id, $generation_type);
         try {
-            $instruction = $this->get_instruction($attachment_id);
+            $instruction = $this->get_instruction($attachment_id, $context);
             $response_data = $this->callAPI($this->build_response_request([
                 [
                     'role' => 'user',
@@ -319,9 +324,12 @@ class Auto_Alt_Text_OpenAI  {
                 ]
             ], self::MAX_TOKENS));
 
-            $generated_text = $this->extract_response_text($response_data);
+            $raw_text = $this->extract_response_text($response_data);
 
-            if (!empty($generated_text)) {
+            if (!empty($raw_text)) {
+                $parsed = $this->parse_alt_title_caption_response($raw_text);
+                $generated_text = $parsed['alt'];
+
                 $tokens_used = $this->extract_total_tokens($response_data);
 
                 // Track the generation
@@ -336,10 +344,17 @@ class Auto_Alt_Text_OpenAI  {
                 // Only save alt text if not in preview mode
                 if (!$preview_mode) {
                     update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
+                    if (get_option('aat_also_suggest_title_caption', false) && ($parsed['title'] !== null || $parsed['caption'] !== null)) {
+                        wp_update_post([
+                            'ID' => $attachment_id,
+                            'post_title' => $parsed['title'] !== null && $parsed['title'] !== '' ? $parsed['title'] : get_the_title($attachment_id),
+                            'post_excerpt' => $parsed['caption'] !== null ? $parsed['caption'] : get_post($attachment_id)->post_excerpt,
+                        ]);
+                    }
                 }
 
                 if (!$preview_mode && $generated_text) {
-                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text);
+                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text, $attachment_id);
                     Auto_Alt_Text_Logger::log("Cached generated alt text", "info", [
                         'attachment_id' => $attachment_id,
                         'generated_text' => $generated_text
@@ -523,16 +538,15 @@ class Auto_Alt_Text_OpenAI  {
     /**
      * Generates the instruction for the OpenAI API call to generate alt text for an image.
      *
-     * The instruction is based on the user's language preference and a customizable template.
-     * It provides detailed requirements for the generated alt text, such as keeping it concise,
-     * avoiding phrases like "image of", using the user's language, and maintaining proper
-     * grammar and syntax.
-     *
+     * @param int    $attachment_id Attachment ID for filename context.
+     * @param string $context       Optional context (e.g. post title) to improve relevance.
      * @return string The generated instruction for the OpenAI API call.
      */
-    private function get_instruction($attachment_id = 0) {
+    private function get_instruction($attachment_id = 0, $context = '') {
         $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
-        $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
+        $language_name = (defined('AUTO_ALT_TEXT_LANGUAGES') && isset(AUTO_ALT_TEXT_LANGUAGES[$language]))
+            ? AUTO_ALT_TEXT_LANGUAGES[$language]
+            : 'English';
 
         // Check if brand tonality is enabled
         $enable_brand_tonality = get_option('wp_auto_alt_text_enable_brand_tonality', false);
@@ -563,6 +577,10 @@ class Auto_Alt_Text_OpenAI  {
             $prompt .= "Your job is to analyze the provided image and generate a concise, SEO-friendly, and accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
         } else {
             $prompt .= "Your job is to analyze the provided image and generate a concise, accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
+        }
+
+        if ($context !== '') {
+            $prompt .= "- Context: This image is used in the following context. Consider it when describing: " . $context . "\n";
         }
 
         $prompt .= "<h1>Key Requirements</h1>\n";
@@ -609,7 +627,47 @@ class Auto_Alt_Text_OpenAI  {
             $prompt .= "- Prioritize information that would be helpful for someone using a screen reader.\n";
         }
 
+        if (get_option('aat_also_suggest_title_caption', false)) {
+            $prompt .= "- After the alt text, add two optional lines: TITLE: <short title for the image> and CAPTION: <short caption>.\n";
+        }
+
         return $prompt;
+    }
+
+    /**
+     * Parses API response that may contain alt text only or alt + TITLE: + CAPTION: lines.
+     *
+     * @param string $raw_response Full response text.
+     * @return array [ 'alt' => string, 'title' => string|null, 'caption' => string|null ]
+     */
+    private function parse_alt_title_caption_response($raw_response) {
+        $raw_response = trim($raw_response);
+        $alt = $raw_response;
+        $title = null;
+        $caption = null;
+        if (stripos($raw_response, 'TITLE:') !== false || stripos($raw_response, 'CAPTION:') !== false) {
+            $lines = preg_split('/\r\n|\r|\n/', $raw_response);
+            $alt_parts = [];
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (stripos($line, 'TITLE:') === 0) {
+                    $title = trim(substr($line, 6));
+                    continue;
+                }
+                if (stripos($line, 'CAPTION:') === 0) {
+                    $caption = trim(substr($line, 8));
+                    continue;
+                }
+                if ($title === null && $caption === null) {
+                    $alt_parts[] = $line;
+                }
+            }
+            $alt = implode(' ', $alt_parts);
+            if ($alt === '') {
+                $alt = $raw_response;
+            }
+        }
+        return ['alt' => $alt, 'title' => $title, 'caption' => $caption];
     }
 
     /**
@@ -626,7 +684,8 @@ class Auto_Alt_Text_OpenAI  {
             throw new Exception(__('Rate limit exceeded. Please try again later.', 'wp-auto-alt-text'));
         }
 
-        $ch = curl_init(self::API_URL);
+        $api_url = get_option('aat_openai_api_url', self::API_URL);
+        $ch = curl_init($api_url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
@@ -708,8 +767,9 @@ class Auto_Alt_Text_OpenAI  {
      * @return array The request payload.
      */
     private function build_response_request($input, $max_output_tokens = self::MAX_TOKENS) {
+        $model = get_option('aat_openai_model', self::MODEL);
         return [
-            'model' => self::MODEL,
+            'model' => $model,
             'input' => $input,
             'max_output_tokens' => $max_output_tokens
         ];

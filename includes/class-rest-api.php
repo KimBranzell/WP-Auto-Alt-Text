@@ -30,6 +30,11 @@ class Auto_Alt_Text_REST_API {
                     'validate_callback' => function($param) {
                         return is_numeric($param) && wp_attachment_is_image($param);
                     }
+                ],
+                'context' => [
+                    'required' => false,
+                    'type' => 'string',
+                    'description' => __('Optional context (e.g. post title or excerpt) to improve alt text relevance.', 'wp-auto-alt-text'),
                 ]
             ]
         ]);
@@ -64,9 +69,11 @@ class Auto_Alt_Text_REST_API {
      */
     public function generate_alt_text($request) {
         $attachment_id = $request->get_param('attachment_id');
+        $context = $request->get_param('context');
+        $context = is_string($context) ? trim($context) : '';
         $image_url = wp_get_attachment_url($attachment_id);
 
-        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'api');
+        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'api', false, $context);
 
         if ($alt_text) {
             return new WP_REST_Response([
@@ -83,7 +90,8 @@ class Auto_Alt_Text_REST_API {
     }
 
     /**
-     * Processes a batch of image attachment IDs, generates alt text for each image using the OpenAI API, and returns the results.
+     * Processes a batch of image attachment IDs, generates alt text for each image using the OpenAI API,
+     * and runs multilingual sync (WPML/Polylang) for consistency with admin and CLI.
      *
      * @param WP_REST_Request $request The REST API request object, containing the 'attachment_ids' parameter.
      * @return WP_REST_Response A response object with the generated alt text for each image or an error message.
@@ -91,11 +99,12 @@ class Auto_Alt_Text_REST_API {
     public function process_batch($request) {
         $attachment_ids = $request->get_param('attachment_ids');
         $results = [];
+        $language_manager = new Auto_Alt_Text_Language_Manager();
 
         foreach ($attachment_ids as $id) {
+            $id = (int) $id;
             $image_path = get_attached_file($id);
 
-            // Check cache first
             $cached_text = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path);
             if ($cached_text !== false) {
                 $results[$id] = [
@@ -103,13 +112,27 @@ class Auto_Alt_Text_REST_API {
                     'alt_text' => $cached_text,
                     'cached' => true
                 ];
+                $language_manager->generate_multilingual_alt_text($id, $cached_text);
                 continue;
             }
 
             if (wp_attachment_is_image($id)) {
                 $image_url = wp_get_attachment_url($id);
                 $alt_text = $this->openai->generate_alt_text($image_url, $id, 'api_batch');
-                $results[$id] = $alt_text;
+                if ($alt_text) {
+                    $results[$id] = [
+                        'success' => true,
+                        'alt_text' => $alt_text
+                    ];
+                    $language_manager->generate_multilingual_alt_text($id, $alt_text);
+                } else {
+                    $results[$id] = [
+                        'success' => false,
+                        'message' => $this->openai->get_last_error()
+                    ];
+                }
+            } else {
+                $results[$id] = ['success' => false, 'message' => __('Not an image.', 'wp-auto-alt-text')];
             }
         }
 

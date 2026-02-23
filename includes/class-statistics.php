@@ -173,4 +173,53 @@ class Auto_Alt_Text_Statistics {
         $table = $wpdb->prefix . 'auto_alt_text_stats';
         return (int) $wpdb->get_var("SELECT COUNT(*) FROM $table");
     }
+
+    /**
+     * Returns generations and token totals grouped by day for the last N days.
+     *
+     * @param int $days Number of days (default 7).
+     * @return array [ 'labels' => date strings, 'generations' => int[], 'tokens' => int[] ]
+     */
+    public function get_stats_by_day($days = 7) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'auto_alt_text_stats';
+        $dates = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $dates[] = gmdate('Y-m-d', strtotime("-$i days"));
+        }
+        $labels = $dates;
+        $generations = array_fill(0, $days, 0);
+        $tokens = array_fill(0, $days, 0);
+        $start = $dates[0] . ' 00:00:00';
+        $end = $dates[$days - 1] . ' 23:59:59';
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT DATE(generation_time) as d, COUNT(*) as cnt, COALESCE(SUM(tokens_used), 0) as tok
+             FROM $table WHERE generation_time >= %s AND generation_time <= %s
+             GROUP BY DATE(generation_time)",
+            $start,
+            $end
+        ));
+        foreach ($rows as $row) {
+            $idx = array_search($row->d, $dates, true);
+            if ($idx !== false) {
+                $generations[$idx] = (int) $row->cnt;
+                $tokens[$idx] = (int) $row->tok;
+            }
+        }
+        return ['labels' => $labels, 'generations' => $generations, 'tokens' => $tokens];
+    }
+
+    /**
+     * Estimated cost from total tokens and optional price per 1k tokens.
+     *
+     * @return float|null Cost in USD or null if price not configured.
+     */
+    public function get_estimated_cost() {
+        $total_tokens = (int) $this->get_stats(1, 0)['total_tokens'];
+        $price = (float) get_option('aat_price_per_1k_tokens', 0);
+        if ($price <= 0) {
+            return null;
+        }
+        return round(($total_tokens / 1000) * $price, 2);
+    }
 }

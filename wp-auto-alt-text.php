@@ -88,6 +88,7 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/config.php';
 		require_once __DIR__ . '/includes/interfaces/interface-cli-command.php';
 		require_once __DIR__ . '/includes/class-language-manager.php';
+		require_once __DIR__ . '/includes/class-context-collector.php';
 		require_once __DIR__ . '/includes/class-openai.php';
 		require_once __DIR__ . '/includes/class-rate-limiter.php';
 		require_once __DIR__ . '/includes/options-page.php';
@@ -96,6 +97,7 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-batch-processor.php';
 		require_once __DIR__ . '/includes/class-statistics.php';
 		require_once __DIR__ . '/includes/class-statistics-page.php';
+		require_once __DIR__ . '/includes/class-accessibility-report.php';
 		require_once __DIR__ . '/includes/class-ajax-handler.php';
 		require_once __DIR__ . '/includes/class-image-process.php';
 		require_once __DIR__ . '/includes/class-dashboard-widget.php';
@@ -117,6 +119,7 @@ class WP_Auto_Alt_Text_Plugin {
   */
 	private function initialize_core_components() {
 		$this->components['language_manager'] = new Auto_Alt_Text_Language_Manager();
+		$this->components['context_collector'] = new Auto_Alt_Text_Context_Collector();
     $this->components['openai'] 					= new Auto_Alt_Text_OpenAI();
     $this->components['admin']						= new Auto_Alt_Text_Admin();
     $this->components['statistics'] 			= new Auto_Alt_Text_Statistics();
@@ -147,6 +150,16 @@ class WP_Auto_Alt_Text_Plugin {
 
 		add_action('add_attachment', [$this->components['image_processor'], 'handle_new_attachment']);
     add_action('edit_attachment', [$this->components['image_processor'], 'handle_attachment_update']);
+
+		// Enrich provider context with WordPress-aware data (titles, captions, content, taxonomies).
+		if (isset($this->components['context_collector'])) {
+			add_filter(
+				'auto_alt_text_generation_context',
+				[$this->components['context_collector'], 'filter_generation_context'],
+				10,
+				3
+			);
+		}
 
 
 		add_action('admin_init', function() {
@@ -191,6 +204,8 @@ class WP_Auto_Alt_Text_Plugin {
   * - Auto_Alt_Text_REST_API: Implements the plugin's REST API endpoints
   */
 	public function initialize_features() {
+		Auto_Alt_Text_Cache_Manager::init();
+		new Auto_Alt_Text_Accessibility_Report();
 		new Auto_Alt_Text_Page_Builders();
 		new Auto_Alt_Text_Logger();
 		new Auto_Alt_Text_REST_API();
