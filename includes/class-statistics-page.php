@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 
 require_once ABSPATH . WPINC . '/Text/Diff.php';
 require_once ABSPATH . WPINC . '/Text/Diff/Renderer.php';
@@ -68,7 +69,10 @@ class Auto_Alt_Text_Statistics_Page {
 
             <?php if ($orphaned_count > 0): ?>
                 <div class="notice notice-warning orphaned-alt-text-stats">
-                    <p><?php printf('Hittade %d föräldralösa poster från raderade bilder.', $orphaned_count); ?></p>
+                    <p><?php
+                        /* translators: %s: number of orphaned records found. */
+                        printf( esc_html__( 'Hittade %s föräldralösa poster från raderade bilder.', 'WP-Auto-Alt-Text' ), esc_html( $orphaned_count ) );
+                    ?></p>
                     <form method="post">
                         <?php wp_nonce_field('auto_alt_text_cleanup'); ?>
                         <input type="submit" name="cleanup_stats" class="button" value="Ta bort föräldralösa poster">
@@ -120,7 +124,7 @@ class Auto_Alt_Text_Statistics_Page {
 									$diff = $this->text_diff($generation->generated_text, $generation->edited_text);
 									echo '<div class="edited-text">';
 									echo '<span class="diff-label">Changes:</span>';
-									echo '<div class="diff-view">' . $diff . '</div>';
+                                    echo '<div class="diff-view">' . wp_kses_post( $diff ) . '</div>';
 									echo '</div>';
 								}
 								?>
@@ -153,17 +157,17 @@ class Auto_Alt_Text_Statistics_Page {
 						'current'   => $current_page,
 						'total'     => $total_pages,
 						'prev_next' => true,
-						'prev_text' => __('&laquo; Föregående'),
-						'next_text' => __('Nästa &raquo;'),
+						'prev_text' => __('&laquo; Föregående', 'WP-Auto-Alt-Text'),
+						'next_text' => __('Nästa &raquo;', 'WP-Auto-Alt-Text'),
 						'type'      => 'array',
 					]);
 					if ($links) {
-						foreach ($links as &$link) {
-							// Add button class to <a> and <span> elements
-							$link = str_replace('<a ', '<a class="button button-secondary" ', $link);
-							$link = str_replace('<span aria-current="page" class="page-numbers current"', '<span aria-current="page" class="button button-disabled current"', $link);
-							echo $link;
-						}
+                        foreach ($links as &$link) {
+                            // Add button class to <a> and <span> elements
+                            $link = str_replace('<a ', '<a class="button button-secondary" ', $link);
+                            $link = str_replace('<span aria-current="page" class="page-numbers current"', '<span aria-current="page" class="button button-disabled current"', $link);
+                            echo wp_kses_post( $link );
+                        }
 					}
 				?>
                 </div>
@@ -180,11 +184,11 @@ class Auto_Alt_Text_Statistics_Page {
         $feedback_count = intval(get_option('alt_text_feedback_regeneration_count', 0));
         ?>
         <div class="stat-box">
-            <h3><?php _e('Feedback', 'wp-auto-alt-text'); ?></h3>
+            <h3><?php esc_html_e('Feedback', 'WP-Auto-Alt-Text'); ?></h3>
             <div class="stat-content">
                 <div class="stat-item">
-                    <span class="stat-number"><?php echo $feedback_count; ?></span>
-                    <span class="stat-label"><?php _e('Förbättringsförfrågningar', 'wp-auto-alt-text'); ?></span>
+                    <span class="stat-number"><?php echo esc_html( $feedback_count ); ?></span>
+                    <span class="stat-label"><?php esc_html_e('Förbättringsförfrågningar', 'WP-Auto-Alt-Text'); ?></span>
                 </div>
             </div>
         </div>

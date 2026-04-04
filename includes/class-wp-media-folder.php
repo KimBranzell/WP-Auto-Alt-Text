@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 
 class Auto_Alt_Text_WP_Media_Folder {
     private $openai;
@@ -38,7 +39,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                     if ($('.wpmf-toolbar-container').length && !$('.aat-wpmf-batch-btn').length) {
                         const batchButton = $('<button>', {
                             'class': 'aat-wpmf-batch-btn button button-primary',
-                            'text': '<?php _e('Generate Alt Text for Folder', 'wp-auto-alt-text'); ?>',
+                            'text': '<?php echo esc_js( __( 'Generate Alt Text for Folder', 'WP-Auto-Alt-Text' ) ); ?>',
                             'style': 'margin-left: 10px;'
                         });
 
@@ -51,7 +52,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                             // Get current folder ID
                             const currentFolderId = $('.wpmf-breadcrumb-category.active').data('id') || 0;
 
-                            if (confirm('<?php _e('Generate alt text for all images in this folder?', 'wp-auto-alt-text'); ?>')) {
+                            if (confirm('<?php echo esc_js( __( 'Generate alt text for all images in this folder?', 'WP-Auto-Alt-Text' ) ); ?>')) {
                                 processFolderImages(currentFolderId);
                             }
                         });
@@ -70,7 +71,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                 function processFolderImages(folderId) {
                     const button = $('.aat-wpmf-batch-btn');
                     const originalText = button.text();
-                    button.text('<?php _e('Processing...', 'wp-auto-alt-text'); ?>');
+                    button.text('<?php echo esc_js( __( 'Processing...', 'WP-Auto-Alt-Text' ) ); ?>');
                     button.prop('disabled', true);
 
                     // Create progress bar if not exists
@@ -84,7 +85,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                         type: 'POST',
                         data: {
                             action: 'wpmf_process_alt_text_batch',
-                            nonce: '<?php echo wp_create_nonce('auto_alt_text_wpmf_nonce'); ?>',
+                            nonce: '<?php echo esc_js( wp_create_nonce( 'auto_alt_text_wpmf_nonce' ) ); ?>',
                             folder_id: folderId,
                             step: 'get_ids'
                         },
@@ -92,14 +93,14 @@ class Auto_Alt_Text_WP_Media_Folder {
                             if (response.success && response.data.ids.length > 0) {
                                 processAttachmentBatch(response.data.ids, 0, response.data.ids.length);
                             } else {
-                                alert('<?php _e('No images found in this folder or failed to retrieve images.', 'wp-auto-alt-text'); ?>');
+                                alert('<?php echo esc_js( __( 'No images found in this folder or failed to retrieve images.', 'WP-Auto-Alt-Text' ) ); ?>');
                                 button.text(originalText);
                                 button.prop('disabled', false);
                                 $('.aat-wpmf-progress-container').remove();
                             }
                         },
                         error: function() {
-                            alert('<?php _e('Failed to retrieve images from folder.', 'wp-auto-alt-text'); ?>');
+                            alert('<?php echo esc_js( __( 'Failed to retrieve images from folder.', 'WP-Auto-Alt-Text' ) ); ?>');
                             button.text(originalText);
                             button.prop('disabled', false);
                             $('.aat-wpmf-progress-container').remove();
@@ -116,11 +117,11 @@ class Auto_Alt_Text_WP_Media_Folder {
                             $('.aat-wpmf-progress-bar').css('width', '100%');
                             $('.aat-wpmf-progress-text').text('Completed: ' + total + ' images processed');
 
-                            setTimeout(function() {
+                                setTimeout(function() {
                                 button.text(originalText);
                                 button.prop('disabled', false);
                                 $('.aat-wpmf-progress-container').remove();
-                                alert('<?php _e('Alt text generation complete!', 'wp-auto-alt-text'); ?>');
+                                alert('<?php echo esc_js( __( 'Alt text generation complete!', 'WP-Auto-Alt-Text' ) ); ?>');
                             }, 1000);
 
                             return;
@@ -129,9 +130,9 @@ class Auto_Alt_Text_WP_Media_Folder {
                         $.ajax({
                             url: ajaxurl,
                             type: 'POST',
-                            data: {
+                                data: {
                                 action: 'wpmf_process_alt_text_batch',
-                                nonce: '<?php echo wp_create_nonce('auto_alt_text_wpmf_nonce'); ?>',
+                                nonce: '<?php echo esc_js( wp_create_nonce( 'auto_alt_text_wpmf_nonce' ) ); ?>',
                                 ids: JSON.stringify(currentBatch),
                                 step: 'process'
                             },
@@ -149,7 +150,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                                 }, 500);
                             },
                             error: function() {
-                                alert('<?php _e('Error processing batch. Please try again.', 'wp-auto-alt-text'); ?>');
+                                alert('<?php echo esc_js( __( 'Error processing batch. Please try again.', 'WP-Auto-Alt-Text' ) ); ?>');
                                 button.text(originalText);
                                 button.prop('disabled', false);
                                 $('.aat-wpmf-progress-container').remove();

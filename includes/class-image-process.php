@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Image_Process {
   private $openai;
   private $language_manager;
@@ -139,21 +140,21 @@ class Auto_Alt_Text_Image_Process {
     // If no API key is set, show a notice instead of the button
     if (empty($api_key)) {
         $form_fields['generate_alt_text'] = array(
-            'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
+            'label' => __('Generate Alt Text', 'WP-Auto-Alt-Text'),
             'input' => 'html',
             'html' => '<div class="notice notice-warning inline"><p>' .
-                    __('Please configure your OpenAI API key in the Auto Alt Text settings to enable AI generation.', 'wp-auto-alt-text') .
+                    __('Please configure your OpenAI API key in the Auto Alt Text settings to enable AI generation.', 'WP-Auto-Alt-Text') .
                     ' <a href="' . admin_url('options-general.php?page=auto-alt-text') . '">' .
-                    __('Configure Now', 'wp-auto-alt-text') . '</a></p></div>'
+                    __('Configure Now', 'WP-Auto-Alt-Text') . '</a></p></div>'
         );
         return $form_fields;
     }
 
     $nonce = wp_create_nonce('auto_alt_text_nonce');
     $form_fields['generate_alt_text'] = array(
-        'label' => __('Generate Alt Text', 'wp-auto-alt-text'),
+        'label' => __('Generate Alt Text', 'WP-Auto-Alt-Text'),
         'input' => 'html',
-        'html' => '<button class="generate-alt-text-button" id="generate-alt-text" data-attachment-id="' . $post->ID . '" data-nonce="' . $nonce . '">' . __('Generate Alternative Text with AI', 'wp-auto-alt-text') .
+        'html' => '<button class="generate-alt-text-button" id="generate-alt-text" data-attachment-id="' . $post->ID . '" data-nonce="' . $nonce . '">' . __('Generate Alternative Text with AI', 'WP-Auto-Alt-Text') .
         '<div class="generate-alt-text-loader loader loader--style2" title="1" style="display: none;">
           <svg version="1.1" id="loader-1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
             width="40px" height="40px" viewBox="0 0 50 50" style="enable-background:new 0 0 50 50;" xml:space="preserve">

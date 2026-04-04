@@ -1,5 +1,5 @@
 <?php
-
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_REST_API {
     private $openai;
     private $namespace = 'wp-auto-alt-text/v1';

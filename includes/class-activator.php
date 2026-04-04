@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Activator {
     /**
      * Activates the plugin by creating or updating the necessary database tables.
@@ -61,23 +62,8 @@ class Auto_Alt_Text_Activator {
     }
 
     /**
-     * Adds a version tracking column to the specified database table.
-     *
-     * This method checks if the `COLUMN_VERSION` column exists in the table, and if not, adds it with the current database version as the default value.
-     *
-     * @param string $table The name of the database table to add the version tracking column to.
-     * @throws Exception If the version tracking column could not be added to the table.
+     * (Removed) Version tracking is handled via dbDelta during table creation.
      */
-    private static function add_version_tracking($table) {
-        $wpdb = self::get_db();
-
-        if (!self::column_exists($table, self::COLUMN_VERSION)) {
-            $result = $wpdb->query("ALTER TABLE {$table} ADD COLUMN " . self::COLUMN_VERSION . " varchar(10) NOT NULL DEFAULT '" . self::CURRENT_DB_VERSION . "'");
-            if ($result === false) {
-                throw new Exception('Failed to add version tracking column');
-            }
-        }
-    }
 
     /**
      * Activates the plugin by creating or updating the necessary database tables.
@@ -96,81 +82,37 @@ class Auto_Alt_Text_Activator {
         $logs_table = self::get_logs_table_name();
 
         try {
-			// Create or update tables
-			require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            // Create or update tables using dbDelta which handles schema changes safely
+            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-			$sql = "CREATE TABLE IF NOT EXISTS $stats_table (
+            $create_stats_sql = "CREATE TABLE {$stats_table} (
                 id bigint(20) NOT NULL AUTO_INCREMENT,
                 " . self::COLUMN_IMAGE_ID . " bigint(20) NOT NULL,
                 " . self::COLUMN_USER_ID . " bigint(20) NOT NULL,
                 " . self::COLUMN_GENERATED_TEXT . " text NOT NULL,
                 " . self::COLUMN_TOKENS_USED . " int(11) NOT NULL DEFAULT 0,
-                " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL,
+                " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL DEFAULT 'manual',
                 " . self::COLUMN_GENERATION_TIME . " datetime NOT NULL,
                 " . self::COLUMN_IS_APPLIED . " tinyint(1) DEFAULT 0,
                 " . self::COLUMN_IS_EDITED . " tinyint(1) DEFAULT 0,
                 " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL,
+                " . self::COLUMN_VERSION . " varchar(10) NOT NULL DEFAULT '" . self::CURRENT_DB_VERSION . "',
                 PRIMARY KEY  (id)
             ) $charset_collate;";
 
             $logs_table = $wpdb->prefix . 'auto_alt_text_logs';
-            $sql_logs = "CREATE TABLE IF NOT EXISTS $logs_table (
+            $create_logs_sql = "CREATE TABLE {$logs_table} (
                 id bigint(20) NOT NULL AUTO_INCREMENT,
                 timestamp datetime DEFAULT CURRENT_TIMESTAMP,
                 level varchar(10) NOT NULL,
                 message text NOT NULL,
                 context text,
+                " . self::COLUMN_VERSION . " varchar(10) NOT NULL DEFAULT '" . self::CURRENT_DB_VERSION . "',
                 PRIMARY KEY  (id)
             ) $charset_collate;";
 
-            // Use direct queries instead of dbDelta to avoid triggering
-            // query paths that some cache plugins (like W3TC) may
-            // intercept and cause fatal errors during activation.
-            $stats_result = $wpdb->query($sql);
-            if ($stats_result === false) {
-                throw new Exception('Failed to create or update stats table');
-            }
-
-            $logs_result = $wpdb->query($sql_logs);
-            if ($logs_result === false) {
-                throw new Exception('Failed to create or update logs table');
-            }
-
-            // Add version tracking to both tables
-            self::add_version_tracking($stats_table);
-            self::add_version_tracking($logs_table);
-
-            // Add generation_type column
-            if (!self::column_exists($stats_table, self::COLUMN_GENERATION_TYPE)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_GENERATION_TYPE . " varchar(50) NOT NULL DEFAULT 'manual'");
-                if ($result === false) {
-                    throw new Exception('Failed to add generation_type column');
-                }
-            }
-
-            // Add is_edited column
-            if (!self::column_exists($stats_table, self::COLUMN_IS_EDITED)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_EDITED . " TINYINT(1) NOT NULL DEFAULT 0");
-                if ($result === false) {
-                    throw new Exception('Failed to add is_edited column');
-                }
-            }
-
-            // Add edited_text column
-            if (!self::column_exists($stats_table, self::COLUMN_EDITED_TEXT)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL");
-                if ($result === false) {
-                    throw new Exception('Failed to add edited_text column');
-                }
-            }
-
-            // Add is_applied column
-            if (!self::column_exists($stats_table, self::COLUMN_IS_APPLIED)) {
-                $result = $wpdb->query("ALTER TABLE {$stats_table} ADD COLUMN " . self::COLUMN_IS_APPLIED . " TINYINT(1) NOT NULL DEFAULT 0");
-                if ($result === false) {
-                    throw new Exception('Failed to add is_applied column');
-                }
-            }
+            dbDelta($create_stats_sql);
+            dbDelta($create_logs_sql);
 
 
         } catch (Exception $e) {

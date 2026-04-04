@@ -1,5 +1,5 @@
 <?php
-
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Page_Builders {
     private $openai;
     private $statistics;

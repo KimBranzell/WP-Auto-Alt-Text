@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 /**
  * Defines the settings group for the Auto Alt Text plugin.
  * This constant is used to group the plugin's settings in the WordPress admin.

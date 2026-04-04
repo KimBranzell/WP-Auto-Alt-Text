@@ -1,4 +1,6 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
 require_once plugin_dir_path(__FILE__) . 'config.php';
 require_once plugin_dir_path(__FILE__) . 'class-format-checker.php';
 
@@ -106,7 +108,7 @@ function get_supported_languages() {
  */
 function auto_alt_text_options() {
     if (!current_user_can('manage_options')) {
-        wp_die(__('You do not have sufficient permissions to access this page.'));
+        wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'WP-Auto-Alt-Text' ) );
     }
 
     global $wp_settings_errors;
@@ -127,7 +129,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="auto_generate">
-                                <?php _e('Aktivera generering av alt-texter', 'auto-alt-text'); ?>
+                                <?php esc_html_e('Aktivera generering av alt-texter', 'WP-Auto-Alt-Text'); ?>
                             </label>
                         </th>
                         <td>
@@ -139,8 +141,8 @@ function auto_alt_text_options() {
                                     <?php checked(get_option('auto_alt_text_auto_generate', true)); ?>>
                                 <span class="slider round"></span>
                             </label>
-                            <p class="description">
-                                <?php _e('När detta alternativ är aktiverat kommer de alternativa texterna att automatiskt genereras.', 'auto-alt-text'); ?>
+                                <p class="description">
+                                <?php esc_html_e('När detta alternativ är aktiverat kommer de alternativa texterna att automatiskt genereras.', 'WP-Auto-Alt-Text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -152,7 +154,7 @@ function auto_alt_text_options() {
                     <h2>Brand Settings</h2>
                     <table class="form-table">
                         <tr>
-                            <th scope="row"><?php _e('Aktivera brand-tonalitet', 'wp-auto-alt-text'); ?></th>
+                            <th scope="row"><?php esc_html_e('Aktivera brand-tonalitet', 'WP-Auto-Alt-Text'); ?></th>
                             <td>
                                 <label class="switch">
                                     <input type="checkbox"
@@ -162,8 +164,8 @@ function auto_alt_text_options() {
                                         <?php checked(get_option('wp_auto_alt_text_enable_brand_tonality', false)); ?>>
                                     <span class="slider round"></span>
                                 </label>
-                                <p class="description">
-                                    <?php _e('När detta alternativ är aktiverat kommer den alternativa texten att optimeras för sökmotorer med inspiration från varumärkesbeskrivningarna i fälten nedan.', 'wp-auto-alt-text'); ?>
+                                    <p class="description">
+                                    <?php esc_html_e('När detta alternativ är aktiverat kommer den alternativa texten att optimeras för sökmotorer med inspiration från varumärkesbeskrivningarna i fälten nedan.', 'WP-Auto-Alt-Text'); ?>
                                 </p>
                             </td>
                         </tr>
@@ -172,8 +174,8 @@ function auto_alt_text_options() {
                             <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
                         </tr>
                         <tr>
-                            <th><?php _e('Varumärkesbeskrivning', 'wp-auto-alt-text'); ?></th>
-                            <td><textarea name="aat_brand_description" rows="3" placeholder="<?php _e('Ange en beskrivning av ditt varumärke', 'wp-auto-alt-text'); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
+                            <th><?php esc_html_e('Varumärkesbeskrivning', 'WP-Auto-Alt-Text'); ?></th>
+                            <td><textarea name="aat_brand_description" rows="3" placeholder="<?php echo esc_attr__( 'Ange en beskrivning av ditt varumärke', 'WP-Auto-Alt-Text' ); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
                         </tr>
                     </table>
                 </div>
@@ -182,7 +184,7 @@ function auto_alt_text_options() {
 
 
             <div class="card">
-                <h2><?php _e('API', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php esc_html_e('API', 'WP-Auto-Alt-Text'); ?></h2>
                 <?php
                 $encrypted_key = get_option('auto_alt_text_api_key');
                 $openai = new Auto_Alt_Text_OpenAI();
@@ -192,7 +194,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="api_key">
-                            <?php _e('OpenAI API-nyckel', 'wp-auto-alt-text'); ?>
+                            <?php esc_html_e('OpenAI API-nyckel', 'WP-Auto-Alt-Text'); ?>
                             </label>
                         </th>
                         <td>
@@ -202,7 +204,7 @@ function auto_alt_text_options() {
                                 value="<?php echo esc_attr($decrypted_key); ?>"
                             />
                             <p class="description">
-                                <?php _e('Pluginen använder OpenAI Responses API med modellen gpt-5.2 för textgenerering.', 'wp-auto-alt-text'); ?>
+                                <?php esc_html_e('Pluginen använder OpenAI Responses API med modellen gpt-5.2 för textgenerering.', 'WP-Auto-Alt-Text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -210,12 +212,12 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
-                <h2><?php _e('Språk', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php esc_html_e('Språk', 'WP-Auto-Alt-Text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Alternativa textens språk', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row"><?php esc_html_e('Alternativa textens språk', 'WP-Auto-Alt-Text'); ?></th>
                         <td>
-                            <select name="<?php echo AUTO_ALT_TEXT_LANGUAGE_OPTION; ?>" class="regular-text">
+                            <select name="<?php echo esc_attr( AUTO_ALT_TEXT_LANGUAGE_OPTION ); ?>" class="regular-text">
                                 <?php
                                 $current_language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
                                 foreach (get_supported_languages() as $code => $name) {
@@ -228,19 +230,19 @@ function auto_alt_text_options() {
                                 }
                                 ?>
                             </select>
-                            <p class="description"><?php _e('Välj språket för genererade alternativa texter', 'wp-auto-alt-text'); ?></p>
+                            <p class="description"><?php esc_html_e('Välj språket för genererade alternativa texter', 'WP-Auto-Alt-Text'); ?></p>
                         </td>
                     </tr>
                 </table>
             </div>
 
             <div class="card">
-                <h2><?php _e('Cache', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php esc_html_e('Cache', 'WP-Auto-Alt-Text'); ?></h2>
                 <table class="form-table">
                     <tr>
                         <th scope="row">
-                            <label for="cache_duration">
-                                <?php _e('Hur länge ska cache bevaras (i dagar)?', 'wp-auto-alt-text'); ?>
+                                <label for="cache_duration">
+                                <?php esc_html_e('Hur länge ska cache bevaras (i dagar)?', 'WP-Auto-Alt-Text'); ?>
                             </label>
                         </th>
                         <td>
@@ -252,7 +254,7 @@ function auto_alt_text_options() {
                                 max="365"
                             />
                             <p class="description">
-                                <?php _e('Antal dagar för att cacha genererade alternativa texter. Lägre värden använder fler API-anrop men håller innehållet fräschare.', 'wp-auto-alt-text'); ?>
+                                <?php esc_html_e('Antal dagar för att cacha genererade alternativa texter. Lägre värden använder fler API-anrop men håller innehållet fräschare.', 'WP-Auto-Alt-Text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -260,10 +262,10 @@ function auto_alt_text_options() {
             </div>
 
             <div class="card">
-                <h2><?php _e('Feedback', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php esc_html_e('Feedback', 'WP-Auto-Alt-Text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Aktivera feedbacksystem', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row"><?php esc_html_e('Aktivera feedbacksystem', 'WP-Auto-Alt-Text'); ?></th>
                         <td>
                             <label class="switch">
                                 <input type="checkbox"
@@ -274,7 +276,7 @@ function auto_alt_text_options() {
                                 <span class="slider round"></span>
                             </label>
                             <p class="description">
-                                <?php _e('Tillåt användare att ge feedback och begära förbättringar av genererade alternativa texter.', 'wp-auto-alt-text'); ?>
+                                <?php esc_html_e('Tillåt användare att ge feedback och begära förbättringar av genererade alternativa texter.', 'WP-Auto-Alt-Text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -282,10 +284,10 @@ function auto_alt_text_options() {
             </div>
 
             <!-- <div class="card">
-                <h2><?php _e('AI Prompt Template', 'wp-auto-alt-text'); ?></h2>
+                <h2><?php esc_html_e('AI Prompt Template', 'WP-Auto-Alt-Text'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Custom Template', 'wp-auto-alt-text'); ?></th>
+                        <th scope="row"><?php esc_html_e('Custom Template', 'WP-Auto-Alt-Text'); ?></th>
                         <td>
                             <textarea name="alt_text_prompt_template" id="alt-text-prompt-template" class="large-text code" rows="4">
                                 <?php echo esc_textarea(get_option('alt_text_prompt_template',
@@ -312,10 +314,10 @@ function auto_alt_text_options() {
                                 <div>Characters: <span id="char-count">0</span>/10000</div>
                             </div>
                             <p class="description">
-                                <?php _e('Use {LANGUAGE} in your template to automatically insert the selected language.', 'wp-auto-alt-text'); ?>
+                                <?php esc_html_e('Use {LANGUAGE} in your template to automatically insert the selected language.', 'WP-Auto-Alt-Text'); ?>
                                 <br>
-                                <strong><?php _e('Example:', 'wp-auto-alt-text'); ?></strong>
-                                <?php _e('Generate a descriptive alt text in {LANGUAGE} that captures the main elements of the image.', 'wp-auto-alt-text'); ?>
+                                <strong><?php esc_html_e('Example:', 'WP-Auto-Alt-Text'); ?></strong>
+                                <?php esc_html_e('Generate a descriptive alt text in {LANGUAGE} that captures the main elements of the image.', 'WP-Auto-Alt-Text'); ?>
                             </p>
                         </td>
                     </tr>
@@ -349,10 +351,10 @@ function auto_alt_text_options() {
 function add_format_compatibility_section() {
     ?>
     <div class="card">
-        <h2><?php _e('Image Format Support', 'wp-auto-alt-text'); ?></h2>
+        <h2><?php esc_html_e('Image Format Support', 'WP-Auto-Alt-Text'); ?></h2>
         <table class="form-table">
             <tr>
-                <th scope="row"><?php _e('Supported Formats', 'wp-auto-alt-text'); ?></th>
+                <th scope="row"><?php esc_html_e('Supported Formats', 'WP-Auto-Alt-Text'); ?></th>
                 <td>
                     <ul class="format-status">
                         <li>
@@ -379,7 +381,7 @@ function add_format_compatibility_section() {
         </table>
     </div>
     <div class="card">
-        <h2><?php _e('AVIF Support Status', 'wp-auto-alt-text'); ?></h2>
+        <h2><?php esc_html_e('AVIF Support Status', 'WP-Auto-Alt-Text'); ?></h2>
         <?php
         $avif_status = Auto_Alt_Text_Format_Checker::get_avif_status();
         ?>
@@ -389,20 +391,20 @@ function add_format_compatibility_section() {
                     <ul class="format-status">
                         <li>
                             <span class="format-name">Server Support</span>
-                            <span class="status-badge <?php echo $avif_status['server_support'] ? 'supported' : 'not-supported'; ?>">
-                                <?php echo $avif_status['server_support'] ? '✓ Available' : '⚠ Not Available'; ?>
+                            <span class="status-badge <?php echo esc_attr( $avif_status['server_support'] ? 'supported' : 'not-supported' ); ?>">
+                                <?php echo esc_html( $avif_status['server_support'] ? '✓ Available' : '⚠ Not Available' ); ?>
                             </span>
                         </li>
                         <li>
                             <span class="format-name">GD Library</span>
-                            <span class="status-badge <?php echo $avif_status['gd_support'] ? 'supported' : 'not-supported'; ?>">
-                                <?php echo $avif_status['gd_support'] ? '✓ Supported' : '⚠ Not Supported'; ?>
+                            <span class="status-badge <?php echo esc_attr( $avif_status['gd_support'] ? 'supported' : 'not-supported' ); ?>">
+                                <?php echo esc_html( $avif_status['gd_support'] ? '✓ Supported' : '⚠ Not Supported' ); ?>
                             </span>
                         </li>
                         <li>
                             <span class="format-name">WordPress</span>
-                            <span class="status-badge <?php echo $avif_status['wordpress_support'] ? 'supported' : 'not-supported'; ?>">
-                                <?php echo $avif_status['wordpress_support'] ? '✓ Compatible' : '⚠ Not Compatible'; ?>
+                            <span class="status-badge <?php echo esc_attr( $avif_status['wordpress_support'] ? 'supported' : 'not-supported' ); ?>">
+                                <?php echo esc_html( $avif_status['wordpress_support'] ? '✓ Compatible' : '⚠ Not Compatible' ); ?>
                             </span>
                         </li>
                     </ul>
@@ -503,7 +505,7 @@ function auto_alt_text_sanitize($input) {
         add_settings_error(
             'auto_alt_text_settings',
             'settings_updated',
-            __('Settings saved successfully.', 'wp-auto-alt-text'),
+            esc_html__('Settings saved successfully.', 'WP-Auto-Alt-Text'),
             'updated'
         );
     }
@@ -517,7 +519,7 @@ function auto_alt_text_sanitize($input) {
                 add_settings_error(
                     'auto_alt_text_api_key',
                     'invalid_api_key',
-                    __('Invalid OpenAI API key format. The key must start with "sk-" or "sk-proj-" followed by at least 80 characters.', 'wp-auto-alt-text')
+                    esc_html__('Invalid OpenAI API key format. The key must start with "sk-" or "sk-proj-" followed by at least 80 characters.', 'WP-Auto-Alt-Text')
                 );
                 return get_option('auto_alt_text_api_key');
             }
@@ -534,7 +536,7 @@ function auto_alt_text_sanitize($input) {
         //         add_settings_error(
         //             'alt_text_prompt_template',
         //             'invalid_prompt_length',
-        //             sprintf(__('Prompt template must be between %d and %d characters.', 'wp-auto-alt-text'), $min_length, $max_length)
+        //             sprintf(__('Prompt template must be between %d and %d characters.', 'WP-Auto-Alt-Text'), $min_length, $max_length)
         //         );
         //         return get_option('alt_text_prompt_template');
         //     }
@@ -544,7 +546,7 @@ function auto_alt_text_sanitize($input) {
         //             add_settings_error(
         //                 'alt_text_prompt_template',
         //                 'missing_keyword',
-        //                 sprintf(__('Prompt template must include the keyword "%s".', 'wp-auto-alt-text'), $keyword)
+        //                 sprintf(__('Prompt template must include the keyword "%s".', 'WP-Auto-Alt-Text'), $keyword)
         //             );
         //             return get_option('alt_text_prompt_template');
         //         }

@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Ajax_Handler {
     private const NONCE_ACTION = 'auto_alt_text_nonce';
     private const LOG_TYPE = 'debug';
