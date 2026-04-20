@@ -254,7 +254,7 @@ class Auto_Alt_Text_OpenAI  {
                 return trim($translated_text);
             }
 
-            $this->last_error = __('OpenAI returned no translatable content. Please try again.', 'wp-auto-alt-text');
+            $this->last_error = __('OpenAI returned no translatable content. Please try again.', 'WP-Auto-Alt-Text');
             return null;
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
@@ -283,7 +283,7 @@ class Auto_Alt_Text_OpenAI  {
         ]);
 
         if (!get_option('auto_alt_text_auto_generate', true)) {
-            $this->last_error = __('OpenAI returned an empty response. Please try again.', 'wp-auto-alt-text');
+            $this->last_error = __('OpenAI returned an empty response. Please try again.', 'WP-Auto-Alt-Text');
             return null;
         }
 
@@ -354,7 +354,6 @@ class Auto_Alt_Text_OpenAI  {
                         'attachment_id' => $attachment_id,
                         'generated_text' => $generated_text
                     ]);
-                    $this->language_manager->sync_alt_text($attachment_id, $generated_text);
                 }
 
                 Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
@@ -503,7 +502,7 @@ class Auto_Alt_Text_OpenAI  {
                 return $regenerated_text;
             }
 
-            $this->last_error = __('OpenAI returned no improved alt text. Please try again.', 'wp-auto-alt-text');
+            $this->last_error = __('OpenAI returned no improved alt text. Please try again.', 'WP-Auto-Alt-Text');
             return null;
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
@@ -673,7 +672,7 @@ class Auto_Alt_Text_OpenAI  {
      */
     private function callAPI($data) {
         if (!$this->rate_limiter->can_make_request()) {
-            throw new Exception(__('Rate limit exceeded. Please try again later.', 'wp-auto-alt-text'));
+            throw new Exception(__('Rate limit exceeded. Please try again later.', 'WP-Auto-Alt-Text'));
         }
 
         $ch = curl_init(self::API_URL);
@@ -702,7 +701,7 @@ class Auto_Alt_Text_OpenAI  {
         $response_data = json_decode($response, true);
 
         if ($http_code !== 200) {
-            $raw_error = $response_data['error']['message'] ?? __('Unknown API error', 'wp-auto-alt-text');
+            $raw_error = $response_data['error']['message'] ?? __('Unknown API error', 'WP-Auto-Alt-Text');
             $friendly_error = $this->map_api_error_message($raw_error, $http_code);
 
             Auto_Alt_Text_Logger::log('OpenAI API request failed', 'error', [
@@ -728,26 +727,26 @@ class Auto_Alt_Text_OpenAI  {
         $error_message = is_string($raw_error) ? strtolower($raw_error) : '';
 
         if ($http_code === 401 || strpos($error_message, 'invalid_api_key') !== false || strpos($error_message, 'incorrect api key') !== false) {
-            return __('Authentication failed. Please verify your OpenAI API key.', 'wp-auto-alt-text');
+            return __('Authentication failed. Please verify your OpenAI API key.', 'WP-Auto-Alt-Text');
         }
 
         if ($http_code === 429 || strpos($error_message, 'rate limit') !== false || strpos($error_message, 'quota') !== false) {
-            return __('OpenAI rate or quota limit reached. Please wait and try again.', 'wp-auto-alt-text');
+            return __('OpenAI rate or quota limit reached. Please wait and try again.', 'WP-Auto-Alt-Text');
         }
 
         if ($http_code === 400 || strpos($error_message, 'max_output_tokens') !== false || strpos($error_message, 'unsupported parameter') !== false || strpos($error_message, 'input_image') !== false || strpos($error_message, 'responses') !== false) {
-            return __('Model request format error. Please verify plugin compatibility with the current OpenAI model.', 'wp-auto-alt-text');
+            return __('Model request format error. Please verify plugin compatibility with the current OpenAI model.', 'WP-Auto-Alt-Text');
         }
 
         if ($http_code >= 500 || strpos($error_message, 'server error') !== false) {
-            return __('OpenAI service is temporarily unavailable. Please try again shortly.', 'wp-auto-alt-text');
+            return __('OpenAI service is temporarily unavailable. Please try again shortly.', 'WP-Auto-Alt-Text');
         }
 
         if (strpos($error_message, 'curl') !== false || strpos($error_message, 'timed out') !== false || strpos($error_message, 'could not resolve host') !== false || strpos($error_message, 'ssl') !== false) {
-            return __('Network error while contacting OpenAI. Please check server connectivity and try again.', 'wp-auto-alt-text');
+            return __('Network error while contacting OpenAI. Please check server connectivity and try again.', 'WP-Auto-Alt-Text');
         }
 
-        return __('Unable to generate alt text right now. Please try again.', 'wp-auto-alt-text');
+        return __('Unable to generate alt text right now. Please try again.', 'WP-Auto-Alt-Text');
     }
 
     /**

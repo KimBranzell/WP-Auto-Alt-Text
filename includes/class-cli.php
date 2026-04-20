@@ -117,12 +117,27 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
         if (isset($assoc_args['all'])) {
             $attachment_ids = $this->get_all_attachment_ids();
         } else {
-            $attachment_ids = explode(',', $assoc_args['ids']);
+            $attachment_ids = isset($assoc_args['ids'])
+                ? array_map('intval', explode(',', $assoc_args['ids']))
+                : [];
+        }
+
+        if (empty($attachment_ids)) {
+            WP_CLI::error('Provide attachment IDs with --ids or use --all.');
         }
 
         $results = $language_manager->bulk_generate_translations($attachment_ids);
+        $summary = $this->summarize_translation_results($results);
 
-        WP_CLI::success(sprintf('Processed %d images with translations', count($results)));
+        WP_CLI::success(
+            sprintf(
+                'Processed %d source images. %d translations created, %d skipped, %d failed.',
+                count($results),
+                $summary['translated'],
+                $summary['skipped'],
+                $summary['failed']
+            )
+        );
     }
 
     /**
@@ -137,6 +152,63 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             WP_CLI::error('Limit must be -1 or a positive integer');
         }
         return $limit;
+    }
+
+    /**
+     * Returns all image attachment IDs in the media library.
+     *
+     * @return int[]
+     */
+    private function get_all_attachment_ids() {
+        return get_posts([
+            'post_type' => self::POST_TYPE,
+            'post_mime_type' => self::POST_MIME_TYPE,
+            'post_status' => self::POST_STATUS,
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+        ]);
+    }
+
+    /**
+     * Summarizes structured translation results for CLI reporting.
+     *
+     * @param array $results Translation results keyed by source attachment ID.
+     * @return array<string,int>
+     */
+    private function summarize_translation_results($results) {
+        $summary = [
+            'translated' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+        ];
+
+        foreach ($results as $result) {
+            if (!empty($result['status']) && $result['status'] === 'skipped') {
+                $summary['skipped']++;
+                continue;
+            }
+
+            if (empty($result['translations']) || !is_array($result['translations'])) {
+                continue;
+            }
+
+            foreach ($result['translations'] as $translation) {
+                if (!isset($translation['status'])) {
+                    continue;
+                }
+
+                switch ($translation['status']) {
+                    case 'translated':
+                        $summary['translated']++;
+                        break;
+                    case 'failed':
+                        $summary['failed']++;
+                        break;
+                }
+            }
+        }
+
+        return $summary;
     }
 
     /**
