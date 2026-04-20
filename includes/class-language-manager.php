@@ -5,7 +5,18 @@ class Auto_Alt_Text_Language_Manager {
 
     public function __construct() {
         $this->active_plugin = $this->detect_language_plugin();
-        $this->default_language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+        $this->default_language = $this->normalize_language_code(
+            get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en')
+        );
+    }
+
+    /**
+     * Returns the active multilingual plugin name.
+     *
+     * @return string|null The plugin name or null when no plugin is active.
+     */
+    public function get_active_plugin_name() {
+        return $this->active_plugin['name'] ?? null;
     }
 
     /**
@@ -29,7 +40,7 @@ class Auto_Alt_Text_Language_Manager {
         if (defined('POLYLANG_VERSION')) {
             return [
                 'name' => 'polylang',
-                'version' => POLYLANG_VERSION,
+                'version' => constant('POLYLANG_VERSION'),
                 'handler' => [$this, 'handle_polylang']
             ];
         }
@@ -52,7 +63,7 @@ class Auto_Alt_Text_Language_Manager {
         }
 
         $handler = $this->active_plugin['handler'];
-        return call_user_func($handler);
+        return $this->normalize_language_code(call_user_func($handler));
     }
 
     /**
@@ -66,11 +77,15 @@ class Auto_Alt_Text_Language_Manager {
      * @return string The post language.
      */
     public function get_post_language($post_id) {
+        if (!$this->active_plugin) {
+            return $this->default_language;
+        }
+
         switch ($this->active_plugin['name']) {
             case 'wpml':
-                return $this->get_wpml_language($post_id);
+                return $this->normalize_language_code($this->get_wpml_language($post_id));
             case 'polylang':
-                return $this->get_polylang_language($post_id);
+                return $this->normalize_language_code($this->get_polylang_language($post_id));
             default:
                 return $this->default_language;
         }
@@ -86,11 +101,15 @@ class Auto_Alt_Text_Language_Manager {
      * @return string The default language.
      */
     public function get_default_language() {
+        if (!$this->active_plugin) {
+            return $this->default_language;
+        }
+
         switch ($this->active_plugin['name']) {
             case 'wpml':
-                return apply_filters('wpml_default_language', null);
+                return $this->normalize_language_code(apply_filters('wpml_default_language', null));
             case 'polylang':
-                return pll_default_language();
+                return $this->normalize_language_code($this->call_polylang_function('pll_default_language'));
             default:
                 return $this->default_language;
         }
@@ -107,6 +126,10 @@ class Auto_Alt_Text_Language_Manager {
      * @return array An array of post IDs keyed by language codes.
      */
     public function get_post_translations($post_id) {
+        if (!$this->active_plugin) {
+            return [$this->default_language => $post_id];
+        }
+
         switch ($this->active_plugin['name']) {
             case 'wpml':
                 return $this->get_wpml_translations($post_id);
@@ -141,7 +164,10 @@ class Auto_Alt_Text_Language_Manager {
             return [$this->default_language => $post_id];
         }
 
-        $translations = pll_get_post_translations($post_id);
+        $translations = $this->normalize_translation_map(
+            $this->call_polylang_function('pll_get_post_translations', [$post_id]),
+            $post_id
+        );
 
         // Log translation details for debugging
         Auto_Alt_Text_Logger::log("Polylang translations retrieved", "debug", [
@@ -168,7 +194,7 @@ class Auto_Alt_Text_Language_Manager {
             return $this->default_language;
         }
 
-        $language = pll_get_post_language($post_id);
+        $language = $this->call_polylang_function('pll_get_post_language', [$post_id]);
 
         // Log language detection for debugging
         Auto_Alt_Text_Logger::log("Polylang language detected", "debug", [
@@ -203,10 +229,18 @@ class Auto_Alt_Text_Language_Manager {
         if ($trid) {
             $translation_details = apply_filters('wpml_get_element_translations', null, $trid, 'post_attachment');
 
-            foreach ($translation_details as $lang => $translation) {
-                $translations[$lang] = $translation->element_id;
+            if (is_array($translation_details)) {
+                foreach ($translation_details as $lang => $translation) {
+                    if (!isset($translation->element_id)) {
+                        continue;
+                    }
+
+                    $translations[$lang] = (int) $translation->element_id;
+                }
             }
         }
+
+        $translations = $this->normalize_translation_map($translations, $post_id);
 
         Auto_Alt_Text_Logger::log("WPML translations retrieved", "debug", [
             'post_id' => $post_id,
@@ -247,23 +281,13 @@ class Auto_Alt_Text_Language_Manager {
      * @return string The current language.
      */
     private function handle_wpml() {
-        // Try admin language context first
-        $admin_lang = apply_filters('wpml_current_language', null, array('admin' => true));
-        if (!empty($admin_lang)) {
-            Auto_Alt_Text_Logger::log("WPML admin language detected", "debug", [
-                'language' => $admin_lang
-            ]);
-            return $admin_lang;
-        }
-
-        // Fallback to standard language context
         $current_lang = apply_filters('wpml_current_language', null);
 
         Auto_Alt_Text_Logger::log("WPML language detected", "debug", [
             'language' => $current_lang ?: $this->default_language
         ]);
 
-        return $current_lang ?: $this->default_language;
+        return $this->normalize_language_code($current_lang ?: $this->default_language);
     }
 
     /**
@@ -280,22 +304,22 @@ class Auto_Alt_Text_Language_Manager {
         }
 
         // Try admin language first during uploads
-        $admin_lang = pll_current_language('admin');
+        $admin_lang = $this->call_polylang_function('pll_current_language', ['admin']);
         if (!empty($admin_lang)) {
             Auto_Alt_Text_Logger::log("Polylang admin language detected", "debug", [
                 'language' => $admin_lang
             ]);
-            return $admin_lang;
+            return $this->normalize_language_code($admin_lang);
         }
 
         // Fallback to standard language detection
-        $current_lang = pll_current_language();
+        $current_lang = $this->call_polylang_function('pll_current_language');
 
         Auto_Alt_Text_Logger::log("Polylang language detected", "debug", [
             'language' => $current_lang ?: $this->default_language
         ]);
 
-        return $current_lang ?: $this->default_language;
+        return $this->normalize_language_code($current_lang ?: $this->default_language);
     }
 
     /**
@@ -307,11 +331,33 @@ class Auto_Alt_Text_Language_Manager {
      * @return array An array of available language codes.
      */
     public function get_available_languages() {
+        if (!$this->active_plugin) {
+            return [$this->default_language];
+        }
+
         switch ($this->active_plugin['name']) {
             case 'wpml':
-                return apply_filters('wpml_active_languages', null);
+                $languages = apply_filters('wpml_active_languages', null, ['skip_missing' => 0]);
+                if (!is_array($languages)) {
+                    return [$this->get_default_language()];
+                }
+
+                return array_values(
+                    array_filter(
+                        array_map([$this, 'normalize_language_code'], array_keys($languages))
+                    )
+                );
             case 'polylang':
-                return function_exists('pll_languages_list') ? pll_languages_list(['fields' => 'locale']) : [];
+                return function_exists('pll_languages_list')
+                    ? array_values(
+                        array_filter(
+                            array_map(
+                                [$this, 'normalize_language_code'],
+                                (array) $this->call_polylang_function('pll_languages_list', [['fields' => 'slug']])
+                            )
+                        )
+                    )
+                    : [];
             default:
                 return [$this->default_language];
         }
@@ -327,14 +373,12 @@ class Auto_Alt_Text_Language_Manager {
      * @param string $alt_text      The alternative text to be synchronized.
      */
     public function sync_alt_text($attachment_id, $alt_text) {
-        if (!$this->active_plugin) {
+        if (empty($alt_text)) {
             return;
         }
 
-        $languages = $this->get_available_languages();
-        foreach ($languages as $lang) {
-            $this->store_language_specific_alt_text($attachment_id, $lang, $alt_text);
-        }
+        $current_language = $this->get_post_language($attachment_id);
+        $this->store_language_specific_alt_text($attachment_id, $current_language, $alt_text);
     }
 
     /**
@@ -348,32 +392,44 @@ class Auto_Alt_Text_Language_Manager {
      * @param string $base_alt_text The original alternative text to be translated.
      * @return string|null The translated alternative text, or null if the translation failed.
      */
-    public function generate_multilingual_alt_text($attachment_id, $base_alt_text) {
-        $current_language = $this->get_post_language($attachment_id);
-
-        // Store the original alt text in current language
-        $translations[$current_language] = $base_alt_text;
-
-        // Get OpenAI instance
-        $openai = new Auto_Alt_Text_OpenAI();
-
-        if (empty($current_language)) {
-            return;
+    public function generate_multilingual_alt_text($attachment_id, $base_alt_text, $force_overwrite = false) {
+        if (!$this->active_plugin || empty($base_alt_text)) {
+            return [];
         }
 
-        $prompt = sprintf(
-            "Translate this image description to %s, maintaining the same descriptive quality: %s",
-            $current_language,
-            $base_alt_text
-        );
+        $source_language = $this->get_post_language($attachment_id);
+        $translations = $this->get_post_translations($attachment_id);
 
-        $translated_alt = $openai->translate_alt_text($prompt);
-
-        if ($translated_alt) {
-            $this->store_language_specific_alt_text($attachment_id, $current_language, $translated_alt);
+        if (empty($source_language) || count($translations) < 2) {
+            return [];
         }
 
-        return $translated_alt;
+        $openai = new Auto_Alt_Text_OpenAI($this);
+        $translated_alts = [];
+
+        foreach ($translations as $language => $translated_attachment_id) {
+            if (empty($translated_attachment_id) || $language === $source_language) {
+                continue;
+            }
+
+            $existing_alt_text = get_post_meta($translated_attachment_id, '_wp_attachment_image_alt', true);
+
+            if (!$force_overwrite && !empty($existing_alt_text)) {
+                $translated_alts[$language] = $existing_alt_text;
+                continue;
+            }
+
+            $translated_alt = $openai->translate_alt_text($base_alt_text, $source_language, $language);
+
+            if (empty($translated_alt)) {
+                continue;
+            }
+
+            $this->store_language_specific_alt_text($attachment_id, $language, $translated_alt);
+            $translated_alts[$language] = $translated_alt;
+        }
+
+        return $translated_alts;
     }
 
     /**
@@ -388,26 +444,31 @@ class Auto_Alt_Text_Language_Manager {
      * @return string The alternative text for the attachment in the specified language.
      */
     public function get_alt_text($attachment_id, $language = null) {
+        $alt_text = '';
+
         if (!$language) {
             $language = $this->get_current_language();
         }
 
-        $alt_text = get_post_meta(
-            $attachment_id,
-            '_wp_attachment_image_alt_' . $language,
-            true
-        );
+        $language = $this->normalize_language_code($language);
+        $translated_id = $this->get_translated_attachment_id($attachment_id, $language);
+
+        if ($translated_id) {
+            $alt_text = get_post_meta($translated_id, '_wp_attachment_image_alt', true);
+            if (!empty($alt_text)) {
+                return $alt_text;
+            }
+        }
 
         // Fallback to default language if translation doesn't exist
         if (empty($alt_text) && $language !== $this->default_language) {
-            $alt_text = get_post_meta(
-                $attachment_id,
-                '_wp_attachment_image_alt_' . $this->default_language,
-                true
-            );
+            $default_id = $this->get_translated_attachment_id($attachment_id, $this->get_default_language());
+            if ($default_id) {
+                $alt_text = get_post_meta($default_id, '_wp_attachment_image_alt', true);
+            }
         }
 
-        return $alt_text;
+        return $alt_text ?: get_post_meta($attachment_id, '_wp_attachment_image_alt', true);
     }
 
     /**
@@ -424,7 +485,7 @@ class Auto_Alt_Text_Language_Manager {
         $results = [];
 
         foreach ($attachment_ids as $attachment_id) {
-            $base_alt_text = $this->get_alt_text($attachment_id, $this->default_language);
+            $base_alt_text = $this->get_alt_text($attachment_id, $this->get_post_language($attachment_id));
             if (!empty($base_alt_text)) {
                 $results[$attachment_id] = $this->generate_multilingual_alt_text(
                     $attachment_id,
@@ -447,22 +508,147 @@ class Auto_Alt_Text_Language_Manager {
      * @param string $alt_text      The alternative text to be stored.
      */
     private function store_language_specific_alt_text($attachment_id, $language, $alt_text) {
-        switch ($this->active_plugin['name']) {
-            case 'wpml':
-                // Get translated attachment ID
-                $translated_id = apply_filters('wpml_object_id', $attachment_id, 'attachment', false, $language);
-                if ($translated_id) {
-                    update_post_meta($translated_id, '_wp_attachment_image_alt', $alt_text);
-                }
-                break;
-
-            case 'polylang':
-                // Get translated attachment ID
-                $translated_id = pll_get_post($attachment_id, $language);
-                if ($translated_id) {
-                    update_post_meta($translated_id, '_wp_attachment_image_alt', $alt_text);
-                }
-                break;
+        if (empty($alt_text)) {
+            return;
         }
+
+        $translated_id = $this->get_translated_attachment_id($attachment_id, $language);
+
+        if (!$translated_id) {
+            $translated_id = (int) $attachment_id;
+        }
+
+        update_post_meta($translated_id, '_wp_attachment_image_alt', $alt_text);
+    }
+
+    /**
+     * Retrieves the translated attachment ID for the requested language.
+     *
+     * @param int    $attachment_id The source attachment ID.
+     * @param string $language      The requested language code.
+     * @return int The translated attachment ID or the original ID when appropriate.
+     */
+    private function get_translated_attachment_id($attachment_id, $language) {
+        $language = $this->normalize_language_code($language);
+
+        if (empty($language)) {
+            return (int) $attachment_id;
+        }
+
+        if (!$this->active_plugin) {
+            return (int) $attachment_id;
+        }
+
+        $translations = $this->get_post_translations($attachment_id);
+
+        if (isset($translations[$language])) {
+            return (int) $translations[$language];
+        }
+
+        $current_language = $this->get_post_language($attachment_id);
+        if ($language === $current_language) {
+            return (int) $attachment_id;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Normalizes translation maps to language => attachment ID pairs.
+     *
+     * @param array $translations Raw translation data.
+     * @param int   $post_id       The original attachment ID.
+     * @return array<string,int> Normalized translation map.
+     */
+    private function normalize_translation_map($translations, $post_id) {
+        $normalized = [];
+
+        if (!is_array($translations)) {
+            $translations = [];
+        }
+
+        foreach ($translations as $language => $translation) {
+            $normalized_language = $this->normalize_language_code($language);
+
+            if (empty($normalized_language)) {
+                continue;
+            }
+
+            if (is_object($translation) && isset($translation->element_id)) {
+                $normalized[$normalized_language] = (int) $translation->element_id;
+                continue;
+            }
+
+            if (is_array($translation) && isset($translation['element_id'])) {
+                $normalized[$normalized_language] = (int) $translation['element_id'];
+                continue;
+            }
+
+            if (is_numeric($translation)) {
+                $normalized[$normalized_language] = (int) $translation;
+            }
+        }
+
+        $current_language = $this->normalize_language_code($this->get_post_language($post_id));
+
+        if (empty($normalized)) {
+            $normalized[$current_language ?: $this->get_default_language()] = (int) $post_id;
+        }
+
+        if (!empty($current_language) && !isset($normalized[$current_language])) {
+            $normalized[$current_language] = (int) $post_id;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Normalizes language codes from multilingual plugins and locale values.
+     *
+     * @param string|null $language The raw language value.
+     * @return string The normalized language code.
+     */
+    private function normalize_language_code($language) {
+        if (empty($language) || !is_string($language)) {
+            return 'en';
+        }
+
+        $normalized_language = strtolower(trim($language));
+        $normalized_language = str_replace('_', '-', $normalized_language);
+
+        if ('dk' === $normalized_language) {
+            return 'da';
+        }
+
+        if (isset(AUTO_ALT_TEXT_LANGUAGES[$normalized_language])) {
+            return $normalized_language;
+        }
+
+        $primary_language = strtok($normalized_language, '-');
+
+        if ('dk' === $primary_language) {
+            return 'da';
+        }
+
+        if (!empty($primary_language)) {
+            return $primary_language;
+        }
+
+        return 'en';
+    }
+
+    /**
+     * Calls a Polylang function only when it is available.
+     *
+     * @param string $function_name The Polylang function name.
+     * @param array  $arguments     Optional arguments to pass.
+     * @return mixed|null The function result or null when unavailable.
+     */
+    private function call_polylang_function($function_name, $arguments = []) {
+        if (!function_exists($function_name)) {
+            return null;
+        }
+
+        return call_user_func_array($function_name, $arguments);
     }
 }

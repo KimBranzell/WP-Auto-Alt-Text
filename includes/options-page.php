@@ -78,23 +78,7 @@ function auto_alt_text_menu() {
  * @return array An associative array of supported languages.
  */
 function get_supported_languages() {
-    return [
-		'sv' => 'Svenska',
-		'no' => 'Norska',
-		'dk' => 'Danska',
-		'fi' => 'Finska',
-		'en' => 'Engelska',
-		'es' => 'Spanska',
-		'fr' => 'Franska',
-		'de' => 'Tyska',
-		'it' => 'Italienska',
-		'pt' => 'Portugisiska',
-		'nl' => 'Holländska',
-		'ja' => 'Japanska',
-		'zh' => 'Kinesiska',
-		'ko' => 'Koreanska',
-		'ar' => 'Arabiska',
-    ];
+    return AUTO_ALT_TEXT_LANGUAGES;
 }
 
 /**
@@ -228,7 +212,7 @@ function auto_alt_text_options() {
                                 }
                                 ?>
                             </select>
-                            <p class="description"><?php _e('Välj språket för genererade alternativa texter', 'wp-auto-alt-text'); ?></p>
+                            <p class="description"><?php _e('Välj standardspråk för genererade alternativa texter. När WPML eller Polylang används följer genereringen i stället den aktuella språkversionen för bilagan.', 'wp-auto-alt-text'); ?></p>
                         </td>
                     </tr>
                 </table>
@@ -552,7 +536,7 @@ function auto_alt_text_sanitize($input) {
         //     return sanitize_textarea_field($input);
 
         case AUTO_ALT_TEXT_LANGUAGE_OPTION:
-            if (!in_array($input, ['en', 'sv'])) {
+            if (!array_key_exists($input, get_supported_languages())) {
                 return 'en'; // Default to English if invalid
             }
             break;
