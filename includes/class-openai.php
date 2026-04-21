@@ -271,11 +271,12 @@ class Auto_Alt_Text_OpenAI  {
      *
      * @param string $image_source The source of the image, such as the image URL or file path.
      * @param int $attachment_id The ID of the attachment for which the alt text is being generated.
-     * @param string $generation_type The type of alt text generation, either 'manual' or 'auto'.
-     * @param bool $preview_mode Whether the alt text is being generated in preview mode.
+     * @param string      $generation_type The type of alt text generation, either 'manual' or 'auto'.
+     * @param bool        $preview_mode Whether the alt text is being generated in preview mode.
+     * @param string|null $language_override Optional language code override for this generation run.
      * @return string|null The generated alt text, or null if an error occurred.
      */
-    public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false) {
+    public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false, $language_override = null) {
         Auto_Alt_Text_Logger::log("Starting alt text generation", "info", [
             'attachment_id' => $attachment_id,
             'type' => $generation_type,
@@ -289,10 +290,16 @@ class Auto_Alt_Text_OpenAI  {
 
         // Get file path from attachment ID
         $image_path = get_attached_file($attachment_id);
+        $target_language = $this->resolve_generation_language($attachment_id, $language_override);
+        $instruction = $this->get_instruction($attachment_id, $target_language);
+        $cache_context = [
+            'language' => $target_language,
+            'instruction' => $instruction,
+        ];
 
         // Check cache first using our enhanced Cache Manager
         if (!$preview_mode) {
-            $cached_response = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path);
+            $cached_response = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path, $cache_context);
             if ($cached_response !== false) {
                 Auto_Alt_Text_Logger::log("Retrieved alt text from cache", "info", [
                     'attachment_id' => $attachment_id
@@ -317,8 +324,6 @@ class Auto_Alt_Text_OpenAI  {
         $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
-            $target_language = $this->language_manager->get_post_language($attachment_id);
-            $instruction = $this->get_instruction($attachment_id, $target_language);
             $response_data = $this->callAPI($this->build_response_request([
                 [
                     'role' => 'user',
@@ -349,7 +354,7 @@ class Auto_Alt_Text_OpenAI  {
                 }
 
                 if (!$preview_mode && $generated_text) {
-                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text);
+                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text, $cache_context);
                     Auto_Alt_Text_Logger::log("Cached generated alt text", "info", [
                         'attachment_id' => $attachment_id,
                         'generated_text' => $generated_text
@@ -385,6 +390,27 @@ class Auto_Alt_Text_OpenAI  {
 
             return null;
         }
+    }
+
+    /**
+     * Resolves the effective language for an alt text generation request.
+     *
+     * @param int         $attachment_id The attachment being generated.
+     * @param string|null $language_override Optional override language.
+     * @return string
+     */
+    private function resolve_generation_language($attachment_id, $language_override = null) {
+        if (!empty($language_override)) {
+            return $this->normalize_language_code($language_override);
+        }
+
+        $language = $this->language_manager->get_post_language($attachment_id);
+
+        if (empty($language)) {
+            $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+        }
+
+        return $this->normalize_language_code($language);
     }
 
     /**

@@ -67,12 +67,13 @@ class WP_Auto_Alt_Text_Plugin {
 		$this->initialize_core_components();
 		$this->register_hooks();
 
-		if (defined('WP_CLI') && WP_CLI) {
+		if (defined('WP_CLI') && constant('WP_CLI') && class_exists('WP_CLI')) {
 			$cli = new Auto_Alt_Text_CLI(
 				$this->components['openai'],
-				$this->components['statistics']
+				$this->components['statistics'],
+				$this->components['language_manager']
 			);
-			WP_CLI::add_command('auto-alt-text', $cli);
+			call_user_func(['WP_CLI', 'add_command'], 'auto-alt-text', $cli);
 		}
 	}
 
