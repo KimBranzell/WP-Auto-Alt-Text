@@ -79,10 +79,21 @@ class Auto_Alt_Text_Admin {
      */
     public function enqueueAutoAltTextScript(): void {
         $scriptUrl = plugin_dir_url(__FILE__) . self::SCRIPT_PATH;
+        $dependencies = [];
+
+        if ($this->is_block_editor_screen()) {
+            $dependencies = [
+                'wp-block-editor',
+                'wp-components',
+                'wp-element',
+                'wp-hooks',
+            ];
+        }
+
         wp_enqueue_script(
             self::SCRIPT_HANDLE,
             $scriptUrl,
-            [],
+            $dependencies,
             '1.0.0',
             true
         );
@@ -92,8 +103,24 @@ class Auto_Alt_Text_Admin {
         wp_localize_script(self::SCRIPT_HANDLE, 'autoAltTextData', [
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('auto_alt_text_batch_nonce'),
+			'actionNonce' => wp_create_nonce('auto_alt_text_nonce'),
 			'brandTonalityEnabled' => (bool) get_option('wp_auto_alt_text_enable_brand_tonality', false),
         ]);
+    }
+
+    /**
+     * Checks whether the current admin screen is using the block editor.
+     *
+     * @return bool True when the current screen is the block editor.
+     */
+    private function is_block_editor_screen(): bool {
+        if (!function_exists('get_current_screen')) {
+            return false;
+        }
+
+        $screen = get_current_screen();
+
+        return $screen && method_exists($screen, 'is_block_editor') && $screen->is_block_editor();
     }
 
     /**
