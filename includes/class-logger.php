@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Logger {
     private $table_name;
     const LOG_LEVELS = ['debug', 'info', 'warning', 'error'];
@@ -223,38 +224,50 @@ class Auto_Alt_Text_Logger {
         global $wpdb;
 
         // Get only the data we need
-        $logs = $wpdb->get_results("
-            SELECT timestamp, level, message, context
-            FROM {$this->table_name}
-            ORDER BY timestamp DESC
-        ");
+        $logs = $wpdb->get_results(
+            "SELECT timestamp, level, message, context FROM {$this->table_name} ORDER BY timestamp DESC"
+        );
 
-        // Direct output of CSV data
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename=auto-alt-text-logs-' . date('Y-m-d') . '.csv');
+        // Build CSV content without fopen/fclose by using WP_Filesystem
+        $lines = [];
+        $lines[] = '"Tid","Nivå","Meddelande","Kontext"';
 
-        // Bypass any output buffering
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-
-        $output = fopen('php://output', 'w');
-
-        // Write headers
-        fputcsv($output, ['Tid', 'Nivå', 'Meddelande', 'Kontext']);
-
-        // Write data rows
         foreach ($logs as $log) {
-            fputcsv($output, [
-                $log->timestamp,
-                $log->level,
-                $log->message,
-                $log->context
-            ]);
+            $fields = [
+                (string) $log->timestamp,
+                (string) $log->level,
+                (string) $log->message,
+                (string) $log->context,
+            ];
+            $escaped = array_map(function($field) {
+                return '"' . str_replace('"', '""', $field) . '"';
+            }, $fields);
+            $lines[] = implode(',', $escaped);
         }
 
-        fclose($output);
-        die();
+        $csv = implode("\n", $lines) . "\n";
+
+        if (!function_exists('WP_Filesystem')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        WP_Filesystem();
+        global $wp_filesystem;
+
+        $upload_dir = wp_upload_dir();
+        $filename = 'auto-alt-text-logs-' . gmdate('Y-m-d') . '.csv';
+        $temp_path = trailingslashit($upload_dir['path']) . $filename;
+
+        $wp_filesystem->put_contents($temp_path, $csv, FS_CHMOD_FILE);
+
+        // Send headers and output file contents
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename=' . basename($temp_path));
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSV export: intentionally output raw file contents for download; escaping would corrupt CSV format.
+        echo $wp_filesystem->get_contents($temp_path);
+
+        // Clean up
+        $wp_filesystem->delete($temp_path);
+        exit;
     }
 
     /**

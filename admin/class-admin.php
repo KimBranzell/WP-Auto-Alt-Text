@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Admin {
     private const SCRIPT_HANDLE = 'auto-alt-text-admin-js';
     private const SCRIPT_PATH = 'js/app.js';
@@ -21,7 +22,7 @@ class Auto_Alt_Text_Admin {
      * @return array The updated bulk actions array.
      */
     public function add_bulk_actions($bulk_actions) {
-        $bulk_actions['generate_alt_text'] = __('Generate Alt Text', 'wp-auto-alt-text');
+        $bulk_actions['generate_alt_text'] = __('Generate Alt Text', 'WP-Auto-Alt-Text');
         return $bulk_actions;
     }
 

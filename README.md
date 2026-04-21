@@ -1,3 +1,14 @@
+=== WP Auto Alt Text ===
+
+Contributors: kimbranzell
+Tags: accessibility, alt-text, openai, images, seo
+Requires at least: 6.0
+Tested up to: 6.9
+Stable tag: 1.2.0
+License: Apache-2.0
+License URI: https://www.apache.org/licenses/LICENSE-2.0
+
+
 # WP Auto Alt Text
 
 Generate high-quality, AI-powered alternative text for your WordPress images automatically using OpenAI's advanced image recognition capabilities.

@@ -1,5 +1,5 @@
 <?php
-
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_WooCommerce {
     private $openai;
     private $batch_processor;
@@ -184,7 +184,7 @@ class Auto_Alt_Text_WooCommerce {
      * @return array The updated bulk actions array with the new "Generate Alt Texts" action.
      */
     public function add_bulk_actions($bulk_actions) {
-        $bulk_actions['generate_alt_texts'] = __('Generate Alt Texts', 'auto-alt-text');
+        $bulk_actions['generate_alt_texts'] = __('Generate Alt Texts', 'WP-Auto-Alt-Text');
         return $bulk_actions;
     }
 

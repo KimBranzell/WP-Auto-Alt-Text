@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Cache_Manager {
     private const CACHE_PREFIX = 'aat_img_';
     private const DEFAULT_EXPIRATION = DAY_IN_SECONDS * 30; // 30 days default

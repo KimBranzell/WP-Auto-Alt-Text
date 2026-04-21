@@ -8,7 +8,7 @@ Description:          Automatically generates alt text for images in the Media L
 Version:              1.2.0
 Requires at least:    6.0
 Requires PHP:         8.0
-License:              Apache License 2.0 (Apache-2.0)
+License:              Apache-2.0
 License URI:          https://www.apache.org/licenses/LICENSE-2.0
 Text Domain:          auto-alt-text-plugin
 Domain Path:          /languages
@@ -159,8 +159,8 @@ class WP_Auto_Alt_Text_Plugin {
 		});
 
 		add_filter('wp_privacy_personal_data_exporters', function($exporters) {
-			$exporters['wp-auto-alt-text'] = array(
-					'exporter_friendly_name' => __('WP Auto Alt Text Generated Content'),
+			$exporters['WP-Auto-Alt-Text'] = array(
+					'exporter_friendly_name' => __('WP Auto Alt Text Generated Content', 'WP-Auto-Alt-Text'),
 					'callback' => array(new Auto_Alt_Text_OpenAI(), 'export_user_data'),
 			);
 			return $exporters;
@@ -175,7 +175,7 @@ class WP_Auto_Alt_Text_Plugin {
   * - Checks if the WooCommerce plugin is active and creates an instance of Auto_Alt_Text_WooCommerce if so
   */
 	public function handle_plugins_loaded() {
-		load_plugin_textdomain('wp-auto-alt-text', false, basename(dirname(__FILE__)) . '/languages');
+		load_plugin_textdomain('WP-Auto-Alt-Text', false, basename(dirname(__FILE__)) . '/languages');
 		Auto_Alt_Text_Activator::activate();
 
 		if (class_exists('WooCommerce')) {

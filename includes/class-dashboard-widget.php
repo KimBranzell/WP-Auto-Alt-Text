@@ -1,4 +1,5 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Dashboard_Widget {
   private $statistics;
   public function __construct() {
@@ -27,11 +28,14 @@ class Auto_Alt_Text_Dashboard_Widget {
    */
   public function display_stats_widget() {
       $stats = $this->statistics->get_stats();
-      echo sprintf(
-          'Images Processed: %d<br>Tokens Used: %d',
-          $stats['total_generations'],
-          $stats['total_tokens'],
-      );
+      $total_generations = isset( $stats['total_generations'] ) ? (int) $stats['total_generations'] : 0;
+      $total_tokens = isset( $stats['total_tokens'] ) ? (int) $stats['total_tokens'] : 0;
+      ?>
+      <p>
+      <?php echo esc_html__( 'Images Processed:', 'WP-Auto-Alt-Text' ); ?> <?php echo esc_html( number_format_i18n( $total_generations ) ); ?><br>
+      <?php echo esc_html__( 'Tokens Used:', 'WP-Auto-Alt-Text' ); ?> <?php echo esc_html( number_format_i18n( $total_tokens ) ); ?>
+      </p>
+      <?php
   }
 }
 ?>

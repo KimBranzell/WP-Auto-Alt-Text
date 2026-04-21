@@ -86,8 +86,8 @@ class Auto_Alt_Text_OpenAI  {
      */
     public static function get_privacy_policy_content() {
         return array(
-            'title' => __('WP Auto Alt Text Privacy Notice'),
-            'content' => __('This plugin processes images through OpenAI\'s API to generate alt text. Image URLs are temporarily shared with OpenAI for processing. No personal data is permanently stored by the service. Generated alt texts are stored in your WordPress database. You can delete this data at any time through the Media Library.')
+            'title' => __('WP Auto Alt Text Privacy Notice', 'WP-Auto-Alt-Text'),
+            'content' => __('This plugin processes images through OpenAI\'s API to generate alt text. Image URLs are temporarily shared with OpenAI for processing. No personal data is permanently stored by the service. Generated alt texts are stored in your WordPress database. You can delete this data at any time through the Media Library.', 'WP-Auto-Alt-Text')
         );
     }
 
@@ -115,7 +115,7 @@ class Auto_Alt_Text_OpenAI  {
             $alt_text = get_post_meta($attachment->ID, '_wp_attachment_image_alt', true);
             if ($alt_text) {
                 $data[] = array(
-                    'name' => __('Generated Alt Text'),
+                    'name' => __('Generated Alt Text', 'WP-Auto-Alt-Text') . " (Attachment ID: {$attachment->ID})",
                     'value' => $alt_text
                 );
             }
@@ -363,7 +363,7 @@ class Auto_Alt_Text_OpenAI  {
 
                 // Clean up temporary file if one was created
                 if ($processed_image['is_temp'] && file_exists($processed_image['path'])) {
-                    unlink($processed_image['path']);
+                    wp_delete_file($processed_image['path']);
                 }
 
                 return $generated_text;
@@ -380,7 +380,7 @@ class Auto_Alt_Text_OpenAI  {
 
             // Clean up temporary file if one was created
             if ($processed_image['is_temp'] && file_exists($processed_image['path'])) {
-                unlink($processed_image['path']);
+                wp_delete_file($processed_image['path']);
             }
 
             return null;
@@ -672,33 +672,37 @@ class Auto_Alt_Text_OpenAI  {
      */
     private function callAPI($data) {
         if (!$this->rate_limiter->can_make_request()) {
-            throw new Exception(__('Rate limit exceeded. Please try again later.', 'WP-Auto-Alt-Text'));
+            throw new Exception( esc_html__( 'Rate limit exceeded. Please try again later.', 'WP-Auto-Alt-Text' ) );
         }
 
-        $ch = curl_init(self::API_URL);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($data),
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $this->api_key
-            ]
-        ]);
+        // Use WordPress HTTP API instead of cURL for better compatibility
+        $args = [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $this->api_key,
+            ],
+            'body' => wp_json_encode($data),
+            'timeout' => 30,
+            'sslverify' => true,
+        ];
 
-        $response = curl_exec($ch);
+        $response = wp_remote_post(self::API_URL, $args);
         $this->rate_limiter->record_request();
 
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if (!$response) {
-            $curl_error = curl_error($ch);
-            $friendly_error = $this->map_api_error_message($curl_error, 0);
-            throw new Exception($friendly_error);
+        if (is_wp_error($response)) {
+            $friendly_error = $this->map_api_error_message($response->get_error_message(), 0);
+            throw new Exception( esc_html( $friendly_error ) );
         }
 
-        curl_close($ch);
-        $response_data = json_decode($response, true);
+        $http_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+
+        if (empty($body)) {
+            $friendly_error = $this->map_api_error_message(__('Unknown API error', 'WP-Auto-Alt-Text'), $http_code);
+            throw new Exception( esc_html( $friendly_error ) );
+        }
+
+        $response_data = json_decode($body, true);
 
         if ($http_code !== 200) {
             $raw_error = $response_data['error']['message'] ?? __('Unknown API error', 'WP-Auto-Alt-Text');
@@ -710,7 +714,7 @@ class Auto_Alt_Text_OpenAI  {
                 'friendly_error' => $friendly_error
             ]);
 
-            throw new Exception($friendly_error);
+            throw new Exception( esc_html( $friendly_error ) );
         }
 
         return $response_data;
