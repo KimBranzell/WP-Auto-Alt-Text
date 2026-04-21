@@ -115,6 +115,7 @@ class Auto_Alt_Text_Statistics_Page {
 				</thead>
 				<tbody>
 					<?php foreach ($stats['recent_generations'] as $generation): ?>
+                        <?php $update_number = isset($generation->update_number) ? (int) $generation->update_number : 1; ?>
 						<tr>
 							<td><?php echo wp_get_attachment_image($generation->image_id, [50, 50]); ?></td>
 							<td>
@@ -130,7 +131,7 @@ class Auto_Alt_Text_Statistics_Page {
 								?>
 							</td>
 							<td><span class="generation-type <?php echo esc_attr($generation->generation_type); ?>"><?php echo esc_html($generation->generation_type); ?></span></td>
-							<td><?php echo esc_html($generation->update_number); ?></td>
+                            <td><?php echo esc_html($update_number); ?></td>
 							<td>
 								<?php if ($generation->is_applied): ?>
 									<span class="status-badge applied">Applied</span>

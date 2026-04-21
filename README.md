@@ -30,6 +30,7 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - Statistics dashboard showing usage metrics and generation history
 - Visual diff view for edited alt text changes
 - Support for WooCommerce product images
+- WPML-aware translation flow that translates one source alt text into translated media attachments
 - Automatic alt text generation on image upload (configurable)
 - Secure API key encryption
 - Generation type tracking (Manual, Upload, Batch)
@@ -101,6 +102,45 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 - PHP 7.4 or higher
 - Active OpenAI API key
 - Valid SSL certificate
+
+## REST API
+
+The plugin exposes REST endpoints for integration and scripting. All routes require the requesting user to have the `upload_files` capability (e.g. logged-in editor or administrator).
+
+**Namespace:** `wp-auto-alt-text/v1`
+
+| Method | Route | Description |
+|--------|--------|-------------|
+| POST | `/generate` | Generate alt text for a single attachment. Body: `attachment_id` (required), `context` (optional, e.g. post title for relevance). |
+| POST | `/batch` | Generate alt text for multiple attachments. Body: `attachment_ids` (array of attachment IDs). |
+
+**Example (single image):**
+```bash
+curl -X POST "https://yoursite.com/wp-json/wp-auto-alt-text/v1/generate" \
+  -H "Content-Type: application/json" \
+  --data '{"attachment_id": 123}' \
+  --user "admin:password"
+```
+
+**Example (batch):**
+```bash
+curl -X POST "https://yoursite.com/wp-json/wp-auto-alt-text/v1/batch" \
+  -H "Content-Type: application/json" \
+  --data '{"attachment_ids": [123, 456, 789]}' \
+  --user "admin:password"
+```
+
+Use WordPress application passwords or cookie authentication in production.
+
+## WP-CLI
+
+For large libraries, use WP-CLI to generate alt text without browser timeouts:
+
+- `wp auto-alt-text generate` — Process all images (or those without alt text with `--skip-existing`).
+- `wp auto-alt-text generate --limit=500` — Process up to 500 images.
+- `wp auto-alt-text translate --all` — Translate existing source alt texts across WPML media translations.
+- `wp auto-alt-text translate --ids=123,456` — Translate specific attachment groups without re-analyzing the image.
+- `wp auto-alt-text stats` — Show generation statistics.
 
 ## Contributing
 

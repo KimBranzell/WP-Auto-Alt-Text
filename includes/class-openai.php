@@ -11,12 +11,12 @@ class Auto_Alt_Text_OpenAI  {
     private $statistics;
     private $language_manager;
 
-    public function __construct() {
+    public function __construct(?Auto_Alt_Text_Language_Manager $language_manager = null) {
         $encrypted_key = get_option('auto_alt_text_api_key');
         $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
         $this->statistics = new Auto_Alt_Text_Statistics();
-        $this->language_manager = new Auto_Alt_Text_Language_Manager();
+        $this->language_manager = $language_manager ?? new Auto_Alt_Text_Language_Manager();
     }
 
     /**
@@ -223,8 +223,17 @@ class Auto_Alt_Text_OpenAI  {
      * @param string $prompt The image description prompt to be translated.
      * @return string|null The translated image description, or null if an error occurred.
      */
-    public function translate_alt_text($prompt) {
+    public function translate_alt_text($prompt, $source_language = '', $target_language = '') {
         try {
+            if (!empty($target_language)) {
+                $prompt = sprintf(
+                    'Translate the following image description from %s to %s while keeping the same descriptive quality, accessibility value, and natural tone. Return only the translated alt text: %s',
+                    $this->get_language_name($source_language ?: 'en'),
+                    $this->get_language_name($target_language),
+                    $prompt
+                );
+            }
+
             $response_data = $this->callAPI($this->build_response_request([
                 [
                     'role' => 'system',
@@ -308,7 +317,8 @@ class Auto_Alt_Text_OpenAI  {
         $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
-            $instruction = $this->get_instruction($attachment_id);
+            $target_language = $this->language_manager->get_post_language($attachment_id);
+            $instruction = $this->get_instruction($attachment_id, $target_language);
             $response_data = $this->callAPI($this->build_response_request([
                 [
                     'role' => 'user',
@@ -344,7 +354,6 @@ class Auto_Alt_Text_OpenAI  {
                         'attachment_id' => $attachment_id,
                         'generated_text' => $generated_text
                     ]);
-                    $this->language_manager->sync_alt_text($attachment_id, $generated_text);
                 }
 
                 Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
@@ -385,8 +394,14 @@ class Auto_Alt_Text_OpenAI  {
      * @return string The human-readable language name.
      */
     private function get_language_name($language_code) {
+        $language_code = $this->normalize_language_code($language_code);
+
         if (defined('AUTO_ALT_TEXT_LANGUAGES') && isset(AUTO_ALT_TEXT_LANGUAGES[$language_code])) {
             return AUTO_ALT_TEXT_LANGUAGES[$language_code];
+        }
+
+        if ('da' === $language_code) {
+            return 'Danska';
         }
 
         // Default to English if the language code is not found
@@ -433,7 +448,11 @@ class Auto_Alt_Text_OpenAI  {
         }
 
         try {
-            $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+            $language = $this->language_manager->get_post_language($attachment_id);
+            if (empty($language)) {
+                $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+            }
+
             $lang_name = $this->get_language_name($language);
 
             // Get the filename for SEO optimization
@@ -530,9 +549,16 @@ class Auto_Alt_Text_OpenAI  {
      *
      * @return string The generated instruction for the OpenAI API call.
      */
-    private function get_instruction($attachment_id = 0) {
-        $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
-        $language_name = AUTO_ALT_TEXT_LANGUAGES[$language];
+    private function get_instruction($attachment_id = 0, $language = null) {
+        if (empty($language)) {
+            $language = $this->language_manager->get_post_language($attachment_id);
+        }
+
+        if (empty($language)) {
+            $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
+        }
+
+        $language_name = $this->get_language_name($language);
 
         // Check if brand tonality is enabled
         $enable_brand_tonality = get_option('wp_auto_alt_text_enable_brand_tonality', false);
@@ -610,6 +636,29 @@ class Auto_Alt_Text_OpenAI  {
         }
 
         return $prompt;
+    }
+
+    /**
+     * Normalizes locale-based language codes before lookup.
+     *
+     * @param string $language_code The language code to normalize.
+     * @return string The normalized language code.
+     */
+    private function normalize_language_code($language_code) {
+        if (empty($language_code) || !is_string($language_code)) {
+            return 'en';
+        }
+
+        $normalized_language = strtolower(trim($language_code));
+        $normalized_language = str_replace('_', '-', $normalized_language);
+
+        if ('dk' === $normalized_language) {
+            return 'da';
+        }
+
+        $primary_language = strtok($normalized_language, '-');
+
+        return !empty($primary_language) ? $primary_language : 'en';
     }
 
     /**

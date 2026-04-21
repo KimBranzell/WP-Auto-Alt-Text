@@ -154,7 +154,21 @@ class Auto_Alt_Text_Statistics {
         // Fetch paginated recent generations
         $recent_generations = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT * FROM $table ORDER BY generation_time DESC LIMIT %d OFFSET %d",
+                "SELECT current_stats.*, (
+                    SELECT COUNT(*)
+                    FROM $table AS previous_stats
+                    WHERE previous_stats.image_id = current_stats.image_id
+                    AND (
+                        previous_stats.generation_time < current_stats.generation_time
+                        OR (
+                            previous_stats.generation_time = current_stats.generation_time
+                            AND previous_stats.id <= current_stats.id
+                        )
+                    )
+                ) AS update_number
+                FROM $table AS current_stats
+                ORDER BY current_stats.generation_time DESC, current_stats.id DESC
+                LIMIT %d OFFSET %d",
                 $per_page,
                 $offset
             )
