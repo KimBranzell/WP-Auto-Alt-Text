@@ -93,24 +93,29 @@ class Auto_Alt_Text_REST_API {
         $results = [];
 
         foreach ($attachment_ids as $id) {
-            $image_path = get_attached_file($id);
-
-            // Check cache first
-            $cached_text = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path);
-            if ($cached_text !== false) {
+            if (!wp_attachment_is_image($id)) {
                 $results[$id] = [
-                    'success' => true,
-                    'alt_text' => $cached_text,
-                    'cached' => true
+                    'success' => false,
+                    'message' => __('Invalid attachment ID.', 'WP-Auto-Alt-Text')
                 ];
                 continue;
             }
 
-            if (wp_attachment_is_image($id)) {
-                $image_url = wp_get_attachment_url($id);
-                $alt_text = $this->openai->generate_alt_text($image_url, $id, 'api_batch');
-                $results[$id] = $alt_text;
+            $image_url = wp_get_attachment_url($id);
+            $alt_text = $this->openai->generate_alt_text($image_url, $id, 'api_batch');
+
+            if ($alt_text) {
+                $results[$id] = [
+                    'success' => true,
+                    'alt_text' => $alt_text,
+                ];
+                continue;
             }
+
+            $results[$id] = [
+                'success' => false,
+                'message' => $this->openai->get_last_error(),
+            ];
         }
 
         return new WP_REST_Response([

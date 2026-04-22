@@ -96,7 +96,6 @@ class Auto_Alt_Text_Batch_Processor {
                     continue;
                 }
             }
-            sleep(2);
         }
         return $results;
     }
