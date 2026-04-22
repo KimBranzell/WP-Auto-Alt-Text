@@ -7,6 +7,8 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     private const POST_TYPE = 'attachment';
     private const POST_MIME_TYPE = 'image';
     private const POST_STATUS = 'any';
+    private const ALT_TEXT_META_KEY = '_wp_attachment_image_alt';
+    private const RESUME_OPTION_PREFIX = 'wp_auto_alt_text_cli_resume_';
 
     private $openai;
     private $statistics;
@@ -30,6 +32,12 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      * [--limit=<number>]
      * : Maximum number of images to process. Default: all images
      *
+    * [--offset=<number>]
+    * : Skip the first N matching images before processing. Uses newest-first attachment ID ordering.
+    *
+    * [--resume]
+    * : Continue from the previous batch position for the same CLI filter set.
+    *
      * [--skip-existing]
      * : Skip images that already have alt text
      *
@@ -42,6 +50,10 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      *
      *     `wp auto-alt-text generate --limit=50`
      *
+    *     `wp auto-alt-text generate --limit=100 --offset=100`
+    *
+    *     `wp auto-alt-text generate --limit=100 --resume`
+    *
      *     `wp auto-alt-text generate --skip-existing`
      *
      *     `wp auto-alt-text generate --language=sv`
@@ -52,8 +64,12 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      */
     public function generate($args, $assoc_args) {
         $limit = $this->validateLimit($assoc_args['limit'] ?? self::QUERY_POSTS_PER_PAGE);
+        $offset = $this->validate_offset($assoc_args['offset'] ?? 0);
+        $resume = isset($assoc_args['resume']);
         $skip_existing = isset($assoc_args['skip-existing']);
         $brand_tonality = isset($assoc_args['brand-tonality']);
+
+        $this->validate_generate_batch_arguments($assoc_args);
 
         try {
             $requested_languages = $this->parse_requested_languages($assoc_args);
@@ -69,85 +85,114 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
         $original_setting = get_option('wp_auto_alt_text_enable_brand_tonality', false);
         update_option('wp_auto_alt_text_enable_brand_tonality', $brand_tonality);
 
-        register_shutdown_function(function() use ($original_setting) {
-            update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
-        });
-
-        $query = [
-            'post_type' => self::POST_TYPE,
-            'post_mime_type' => self::POST_MIME_TYPE,
-            'posts_per_page' => (!empty($requested_languages) && !empty($active_plugin)) ? self::QUERY_POSTS_PER_PAGE : $limit,
-            'post_status' => self::POST_STATUS
-        ];
-
-        if ($brand_tonality) {
-            WP_CLI::log('Brand tonality mode: Generating SEO-optimized alt text with brand elements');
-        } else {
-            WP_CLI::log('Accessibility mode: Generating accessible alt text');
-        }
-
-        if (!empty($requested_languages)) {
-            $formatted_languages = implode(', ', $this->format_languages_for_log($requested_languages));
-
-            if (!empty($active_plugin)) {
-                WP_CLI::log(sprintf('Restricting generation to %s attachments: %s', $active_plugin, $formatted_languages));
+        try {
+            if ($brand_tonality) {
+                WP_CLI::log('Brand tonality mode: Generating SEO-optimized alt text with brand elements');
             } else {
-                WP_CLI::log(sprintf('Using one-run language override: %s', $formatted_languages));
-            }
-        }
-
-        $images = get_posts($query);
-
-        if (!empty($requested_languages) && !empty($active_plugin)) {
-            $images = $this->filter_images_by_languages($images, $requested_languages);
-
-            if ($limit !== self::QUERY_POSTS_PER_PAGE) {
-                $images = array_slice($images, 0, $limit);
-            }
-        }
-
-        $count = count($images);
-
-        if ($count === 0) {
-            update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
-
-            if (!empty($requested_languages) && !empty($active_plugin)) {
-                WP_CLI::success(sprintf('No images matched the requested languages: %s.', implode(', ', $this->format_languages_for_log($requested_languages))));
-                return;
+                WP_CLI::log('Accessibility mode: Generating accessible alt text');
             }
 
-            WP_CLI::success('No images found to process.');
-            return;
-        }
+            if (!empty($requested_languages)) {
+                $formatted_languages = implode(', ', $this->format_languages_for_log($requested_languages));
 
-        WP_CLI::log(sprintf('Processing %d images...', $count));
-
-        $progress = \WP_CLI\Utils\make_progress_bar('Generating alt text', $count);
-
-        foreach ($images as $image) {
-            if ($skip_existing) {
-                $existing_alt = get_post_meta($image->ID, '_wp_attachment_image_alt', true);
-                if (!empty($existing_alt)) {
-                    $progress->tick();
-                    continue;
+                if (!empty($active_plugin)) {
+                    WP_CLI::log(sprintf('Restricting generation to %s attachments: %s', $active_plugin, $formatted_languages));
+                } else {
+                    WP_CLI::log(sprintf('Using one-run language override: %s', $formatted_languages));
                 }
             }
 
-            $image_url = wp_get_attachment_url($image->ID);
-            $alt_text = $this->openai->generate_alt_text($image_url, $image->ID, 'cli', false, $language_override);
-
-            if ($alt_text) {
-                WP_CLI::success(sprintf('Generated alt text for image %d: %s', $image->ID, $alt_text));
+            if ($offset > 0) {
+                WP_CLI::log(sprintf('Applying offset: skipping the first %d matching images.', $offset));
             }
 
-            $progress->tick();
+            $resume_context = $this->build_resume_context($requested_languages, $skip_existing, $brand_tonality, $active_plugin);
+            $resume_after_id = 0;
+
+            if ($resume) {
+                $resume_state = $this->get_resume_state($resume_context);
+
+                if (!empty($resume_state['last_processed_id'])) {
+                    $resume_after_id = (int) $resume_state['last_processed_id'];
+                    WP_CLI::log(sprintf('Resuming after attachment ID %d.', $resume_after_id));
+                } else {
+                    WP_CLI::log('No saved batch position found. Starting from the newest matching image.');
+                }
+            }
+
+            $matching_attachment_ids = $this->get_matching_attachment_ids(
+                $requested_languages,
+                $skip_existing,
+                $active_plugin,
+                $resume_after_id
+            );
+            $attachment_ids = $this->slice_attachment_ids($matching_attachment_ids, $offset, $limit);
+
+            $matching_count = count($matching_attachment_ids);
+            $count = count($attachment_ids);
+
+            if ($count === 0) {
+                if ($resume) {
+                    $this->clear_resume_state($resume_context);
+                }
+
+                if (!empty($requested_languages) && !empty($active_plugin)) {
+                    WP_CLI::success(
+                        sprintf(
+                            'No images matched the current filters for %s attachments: %s.',
+                            $active_plugin,
+                            implode(', ', $this->format_languages_for_log($requested_languages))
+                        )
+                    );
+                    return;
+                }
+
+                WP_CLI::success('No images found to process.');
+                return;
+            }
+
+            if ($matching_count === $count) {
+                WP_CLI::log(sprintf('Processing %d images...', $count));
+            } else {
+                WP_CLI::log(sprintf('Processing %d of %d matching images...', $count, $matching_count));
+            }
+
+            $progress = \WP_CLI\Utils\make_progress_bar('Generating alt text', $count);
+
+            foreach ($attachment_ids as $attachment_id) {
+                $image_url = wp_get_attachment_url($attachment_id);
+                $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'cli', false, $language_override);
+
+                if ($alt_text) {
+                    WP_CLI::success(sprintf('Generated alt text for image %d: %s', $attachment_id, $alt_text));
+                } else {
+                    $this->warn_generation_failure($attachment_id);
+                }
+
+                if ($resume) {
+                    $this->persist_resume_state($resume_context, $attachment_id);
+                }
+
+                $progress->tick();
+            }
+
+            $progress->finish();
+
+            if ($resume) {
+                if ($matching_count > $count) {
+                    WP_CLI::success('Alt text generation completed! Re-run the same command with --resume to continue.');
+                    return;
+                }
+
+                $this->clear_resume_state($resume_context);
+                WP_CLI::success('Alt text generation completed! No matching images remain for this resume context.');
+                return;
+            }
+
+            WP_CLI::success('Alt text generation completed!');
+        } finally {
+            update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
         }
-
-        $progress->finish();
-
-        update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
-
-        WP_CLI::success('Alt text generation completed!');
     }
 
     /**
@@ -202,6 +247,214 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             WP_CLI::error('Limit must be -1 or a positive integer');
         }
         return $limit;
+    }
+
+    /**
+     * Validates and sanitizes the offset parameter.
+     *
+     * @param mixed $offset The offset to validate.
+     * @return int Validated offset value.
+     */
+    private function validate_offset($offset) {
+        if (filter_var($offset, FILTER_VALIDATE_INT) === false) {
+            WP_CLI::error('Offset must be a non-negative integer');
+        }
+
+        $offset = (int) $offset;
+
+        if ($offset < 0) {
+            WP_CLI::error('Offset must be a non-negative integer');
+        }
+
+        return $offset;
+    }
+
+    /**
+     * Validates generate command batching arguments.
+     *
+     * @param array $assoc_args CLI associative arguments.
+     * @return void
+     */
+    private function validate_generate_batch_arguments($assoc_args) {
+        if (isset($assoc_args['resume']) && array_key_exists('offset', $assoc_args)) {
+            WP_CLI::error('--resume cannot be used together with --offset.');
+        }
+    }
+
+    /**
+     * Builds the resume context used for persisted CLI batch state.
+     *
+     * @param string[]    $requested_languages Requested languages.
+     * @param bool        $skip_existing Whether skip-existing is enabled.
+     * @param bool        $brand_tonality Whether brand tonality is enabled.
+     * @param string|null $active_plugin Active multilingual plugin name.
+     * @return array<string,mixed>
+     */
+    private function build_resume_context($requested_languages, $skip_existing, $brand_tonality, $active_plugin) {
+        $languages = $requested_languages;
+        sort($languages);
+
+        return [
+            'active_plugin' => !empty($active_plugin) ? $active_plugin : 'none',
+            'brand_tonality' => (bool) $brand_tonality,
+            'languages' => array_values($languages),
+            'skip_existing' => (bool) $skip_existing,
+        ];
+    }
+
+    /**
+     * Returns the stored resume state for the provided context.
+     *
+     * @param array<string,mixed> $resume_context Resume context.
+     * @return array<string,mixed>
+     */
+    private function get_resume_state($resume_context) {
+        $resume_state = get_option($this->get_resume_state_option_name($resume_context), []);
+
+        return is_array($resume_state) ? $resume_state : [];
+    }
+
+    /**
+     * Persists CLI resume state after an attachment has been handled.
+     *
+     * @param array<string,mixed> $resume_context Resume context.
+     * @param int                 $attachment_id Handled attachment ID.
+     * @return void
+     */
+    private function persist_resume_state($resume_context, $attachment_id) {
+        update_option(
+            $this->get_resume_state_option_name($resume_context),
+            [
+                'last_processed_id' => (int) $attachment_id,
+                'updated_at' => current_time('mysql'),
+            ],
+            false
+        );
+    }
+
+    /**
+     * Clears CLI resume state for the provided context.
+     *
+     * @param array<string,mixed> $resume_context Resume context.
+     * @return void
+     */
+    private function clear_resume_state($resume_context) {
+        delete_option($this->get_resume_state_option_name($resume_context));
+    }
+
+    /**
+     * Returns the option name used to persist CLI resume state.
+     *
+     * @param array<string,mixed> $resume_context Resume context.
+     * @return string
+     */
+    private function get_resume_state_option_name($resume_context) {
+        return self::RESUME_OPTION_PREFIX . md5(wp_json_encode($resume_context));
+    }
+
+    /**
+     * Returns ordered attachment IDs after applying CLI filters.
+     *
+     * @param string[]    $requested_languages Requested languages.
+     * @param bool        $skip_existing Whether skip-existing is enabled.
+     * @param string|null $active_plugin Active multilingual plugin name.
+     * @param int         $resume_after_id Resume boundary attachment ID.
+     * @return int[]
+     */
+    private function get_matching_attachment_ids($requested_languages, $skip_existing, $active_plugin, $resume_after_id = 0) {
+        $attachment_ids = $this->get_ordered_attachment_ids();
+
+        if ($resume_after_id > 0) {
+            $attachment_ids = array_values(array_filter($attachment_ids, function($attachment_id) use ($resume_after_id) {
+                return (int) $attachment_id < $resume_after_id;
+            }));
+        }
+
+        if ($skip_existing) {
+            $attachment_ids = array_values(array_filter($attachment_ids, function($attachment_id) {
+                return !$this->has_existing_alt_text($attachment_id);
+            }));
+        }
+
+        if (!empty($requested_languages) && !empty($active_plugin)) {
+            $attachment_ids = $this->filter_attachment_ids_by_languages($attachment_ids, $requested_languages);
+        }
+
+        return $attachment_ids;
+    }
+
+    /**
+     * Returns all image attachment IDs ordered from newest to oldest.
+     *
+     * @return int[]
+     */
+    private function get_ordered_attachment_ids() {
+        $attachment_ids = get_posts([
+            'fields' => 'ids',
+            'no_found_rows' => true,
+            'order' => 'DESC',
+            'orderby' => 'ID',
+            'post_mime_type' => self::POST_MIME_TYPE,
+            'post_status' => self::POST_STATUS,
+            'post_type' => self::POST_TYPE,
+            'posts_per_page' => self::QUERY_POSTS_PER_PAGE,
+            'update_post_meta_cache' => false,
+            'update_post_term_cache' => false,
+        ]);
+
+        return array_values(array_unique(array_map('intval', $attachment_ids)));
+    }
+
+    /**
+     * Applies offset and limit to the ordered attachment IDs.
+     *
+     * @param int[] $attachment_ids Ordered attachment IDs.
+     * @param int   $offset Number of matching attachments to skip.
+     * @param int   $limit Maximum attachments to return.
+     * @return int[]
+     */
+    private function slice_attachment_ids($attachment_ids, $offset, $limit) {
+        if ($limit === self::QUERY_POSTS_PER_PAGE) {
+            return array_values(array_slice($attachment_ids, $offset));
+        }
+
+        return array_values(array_slice($attachment_ids, $offset, $limit));
+    }
+
+    /**
+     * Determines whether the attachment already has usable alt text.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return bool
+     */
+    private function has_existing_alt_text($attachment_id) {
+        $existing_alt = get_post_meta($attachment_id, self::ALT_TEXT_META_KEY, true);
+
+        if (is_string($existing_alt)) {
+            return trim($existing_alt) !== '';
+        }
+
+        return !empty($existing_alt);
+    }
+
+    /**
+     * Emits a warning when alt text generation fails for an attachment.
+     *
+     * @param int $attachment_id Attachment ID.
+     * @return void
+     */
+    private function warn_generation_failure($attachment_id) {
+        $last_error = method_exists($this->openai, 'get_last_error') ? $this->openai->get_last_error() : '';
+        $message = !empty($last_error)
+            ? $last_error
+            : 'Unable to generate alt text right now. Please try again.';
+
+        if (method_exists('WP_CLI', 'warning')) {
+            call_user_func(['WP_CLI', 'warning'], sprintf('Failed to generate alt text for image %d: %s', $attachment_id, $message));
+            return;
+        }
+
+        WP_CLI::log(sprintf('Warning: Failed to generate alt text for image %d: %s', $attachment_id, $message));
     }
 
     /**
@@ -288,13 +541,9 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      * @param string[]  $requested_languages Normalized language codes.
      * @return WP_Post[]
      */
-    private function filter_images_by_languages($images, $requested_languages) {
-        return array_values(array_filter($images, function($image) use ($requested_languages) {
-            if (!isset($image->ID)) {
-                return false;
-            }
-
-            $attachment_language = $this->normalize_language_code($this->language_manager->get_post_language($image->ID));
+    private function filter_attachment_ids_by_languages($attachment_ids, $requested_languages) {
+        return array_values(array_filter($attachment_ids, function($attachment_id) use ($requested_languages) {
+            $attachment_language = $this->normalize_language_code($this->language_manager->get_post_language($attachment_id));
 
             return in_array($attachment_language, $requested_languages, true);
         }));

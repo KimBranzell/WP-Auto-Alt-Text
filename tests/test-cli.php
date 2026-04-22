@@ -6,6 +6,7 @@ namespace {
         class WP_CLI {
             public static $logs = [];
             public static $successes = [];
+            public static $warnings = [];
 
             public static function log($message) {
                 self::$logs[] = $message;
@@ -13,6 +14,10 @@ namespace {
 
             public static function success($message) {
                 self::$successes[] = $message;
+            }
+
+            public static function warning($message) {
+                self::$warnings[] = $message;
             }
 
             public static function error($message) {
@@ -40,7 +45,10 @@ namespace {
                 'language_override' => $language_override,
             ];
 
-            return sprintf('Generated alt text for %d', $attachment_id);
+            $alt_text = sprintf('Generated alt text for %d', $attachment_id);
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+
+            return $alt_text;
         }
     }
 
@@ -95,8 +103,15 @@ namespace {
             $this->openai = new Auto_Alt_Text_CLI_Test_OpenAI();
             $this->statistics = new Auto_Alt_Text_CLI_Test_Statistics();
 
+            $this->delete_resume_state_options();
             WP_CLI::$logs = [];
             WP_CLI::$successes = [];
+            WP_CLI::$warnings = [];
+        }
+
+        public function tearDown(): void {
+            $this->delete_resume_state_options();
+            parent::tearDown();
         }
 
         public function test_parse_requested_languages_normalizes_and_deduplicates_values() {
@@ -123,6 +138,123 @@ namespace {
             Assert::assertSame('sv', $this->openai->calls[1]['language_override']);
         }
 
+        public function test_generate_processes_newest_attachments_first() {
+            $attachment_ids = $this->create_attachments(4);
+            $cli = $this->create_cli();
+
+            $cli->generate([], [
+                'limit' => 2,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[3],
+                $attachment_ids[2],
+            ], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_skip_existing_advances_to_next_batch_on_second_run() {
+            $attachment_ids = $this->create_attachments(5);
+            $cli = $this->create_cli();
+
+            $cli->generate([], [
+                'limit' => 2,
+                'skip-existing' => true,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[4],
+                $attachment_ids[3],
+            ], array_column($this->openai->calls, 'attachment_id'));
+
+            $this->openai->calls = [];
+
+            $cli->generate([], [
+                'limit' => 2,
+                'skip-existing' => true,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[2],
+                $attachment_ids[1],
+            ], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_applies_skip_existing_before_limit() {
+            $attachment_ids = $this->create_attachments(5);
+            $cli = $this->create_cli();
+
+            update_post_meta($attachment_ids[4], '_wp_attachment_image_alt', 'Existing latest alt text');
+            update_post_meta($attachment_ids[3], '_wp_attachment_image_alt', 'Existing second latest alt text');
+
+            $cli->generate([], [
+                'limit' => 2,
+                'skip-existing' => true,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[2],
+                $attachment_ids[1],
+            ], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_supports_offset_paging() {
+            $attachment_ids = $this->create_attachments(5);
+            $cli = $this->create_cli();
+
+            $cli->generate([], [
+                'limit' => 2,
+                'offset' => 2,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[2],
+                $attachment_ids[1],
+            ], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_resume_continues_batches_and_clears_saved_state() {
+            $attachment_ids = $this->create_attachments(5);
+            $cli = $this->create_cli();
+
+            $cli->generate([], [
+                'limit' => 2,
+                'resume' => true,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[4],
+                $attachment_ids[3],
+            ], array_column($this->openai->calls, 'attachment_id'));
+
+            $this->openai->calls = [];
+
+            $cli->generate([], [
+                'limit' => 2,
+                'resume' => true,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[2],
+                $attachment_ids[1],
+            ], array_column($this->openai->calls, 'attachment_id'));
+
+            $this->openai->calls = [];
+
+            $cli->generate([], [
+                'limit' => 2,
+                'resume' => true,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[0],
+            ], array_column($this->openai->calls, 'attachment_id'));
+
+            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], false, false, null]);
+            $resume_option_name = $this->invoke_private_method($cli, 'get_resume_state_option_name', [$resume_context]);
+
+            Assert::assertFalse(get_option($resume_option_name, false));
+        }
+
         public function test_generate_filters_requested_languages_when_multilingual_plugin_is_active() {
             $attachment_ids = $this->create_attachments(3);
             $language_manager = new Auto_Alt_Text_CLI_Test_Language_Manager('wpml', [
@@ -145,6 +277,31 @@ namespace {
             Assert::assertNull($this->openai->calls[0]['language_override']);
         }
 
+        public function test_generate_applies_offset_after_multilingual_language_filtering() {
+            $attachment_ids = $this->create_attachments(6);
+            $language_manager = new Auto_Alt_Text_CLI_Test_Language_Manager('wpml', [
+                $attachment_ids[0] => 'en',
+                $attachment_ids[1] => 'sv',
+                $attachment_ids[2] => 'en',
+                $attachment_ids[3] => 'fr',
+                $attachment_ids[4] => 'sv',
+                $attachment_ids[5] => 'en',
+            ]);
+            $cli = $this->create_cli($language_manager);
+
+            $cli->generate([], [
+                'language' => 'sv,fr',
+                'limit' => 2,
+                'offset' => 1,
+            ]);
+
+            Assert::assertSame([
+                $attachment_ids[3],
+                $attachment_ids[1],
+            ], array_column($this->openai->calls, 'attachment_id'));
+            Assert::assertNull($this->openai->calls[0]['language_override']);
+        }
+
         public function test_generate_rejects_multiple_languages_without_multilingual_plugin() {
             $cli = $this->create_cli();
 
@@ -158,6 +315,20 @@ namespace {
                     'Multiple language codes require WPML or Polylang. Use a single language code when no multilingual plugin is active.',
                     $exception->getMessage()
                 );
+            }
+        }
+
+        public function test_generate_rejects_resume_with_offset() {
+            $cli = $this->create_cli();
+
+            try {
+                $cli->generate([], [
+                    'resume' => true,
+                    'offset' => 0,
+                ]);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertSame('--resume cannot be used together with --offset.', $exception->getMessage());
             }
         }
 
@@ -214,6 +385,17 @@ namespace {
             $reflection->setAccessible(true);
 
             return $reflection->invokeArgs($object, $arguments);
+        }
+
+        private function delete_resume_state_options() {
+            global $wpdb;
+
+            $wpdb->query(
+                $wpdb->prepare(
+                    "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                    'wp_auto_alt_text_cli_resume_%'
+                )
+            );
         }
     }
 }
