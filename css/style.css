@@ -37,6 +37,30 @@
   background: #fff;
   border: 1px solid #ddd;
   border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.alt-text-progress-container[hidden] {
+  display: none;
+}
+
+.alt-text-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: #1d2327;
+  font-size: 13px;
+}
+
+.progress-label {
+  font-weight: 600;
+}
+
+.progress-count {
+  color: #50575e;
 }
 
 .alt-text-progress {
@@ -45,6 +69,7 @@
   background: #f0f0f0;
   border-radius: 12px;
   overflow: hidden;
+  border: 1px solid #787c82;
 }
 
 .progress-bar {
@@ -57,13 +82,26 @@
 
 .progress-text {
   position: absolute;
-  width: 100%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
-  line-height: 24px;
-  color: #fff;
+  line-height: 20px;
+  color: #1d2327;
   font-weight: bold;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
   z-index: 1;
+}
+
+.alt-text-progress-container[data-state="complete"] .progress-bar {
+  background: #0f6b27;
+}
+
+.alt-text-progress-container[data-state="error"] .progress-bar {
+  background: #b32d2e;
 }
 
 .process-alt-text-batch {

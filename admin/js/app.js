@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (event.target && event.target.classList.contains('generate-alt-text-button')) {
             handleSingleImageGeneration(event);
         }
+
+        scheduleBatchProcessingRefresh();
+    });
+
+    document.addEventListener('keyup', function() {
+        scheduleBatchProcessingRefresh();
     });
 
     /**
@@ -43,13 +49,23 @@ document.addEventListener('DOMContentLoaded', function() {
      */
     observer.observe(document.body, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'aria-selected']
     });
+
+    handleBatchProcessing(observer);
 
     if (bulkIds) {
         const ids = bulkIds.split(',');
         const totalImages = ids.length;
         let processed = 0;
+
+        updateProgressBar(0, {
+            processed: 0,
+            total: totalImages,
+            label: 'Generating alt text for selected media',
+        });
 
         /**
          * Processes a batch of image IDs for generating alternative text.
@@ -70,8 +86,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 body: new URLSearchParams({
-                    action: 'process_alt_text_batch',
-                    ids: batch,
+                    action: 'process_image_batch',
+                    ids: JSON.stringify(batch),
                     nonce: autoAltTextData.nonce
                 })
             })
@@ -79,8 +95,20 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 processed += batch.length;
                 const progress = (processed / totalImages) * 100;
-                updateProgressBar(progress);
+                updateProgressBar(progress, {
+                    processed,
+                    total: totalImages,
+                    label: 'Generating alt text for selected media',
+                });
                 processBatch();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                markProgressAsError('Batch generation stopped before all selected images were processed.', {
+                    processed,
+                    total: totalImages,
+                });
+                showError('Batch generation stopped before all selected images were processed.');
             });
         }
 
@@ -577,17 +605,26 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
  * @param {MutationObserver} obs - The MutationObserver instance that triggered this function.
  */
 function handleBatchProcessing(obs) {
-    const mediaToolbar = document.querySelector('.media-toolbar-mode-select');
-    if (mediaToolbar && !mediaToolbar.querySelector('.process-alt-text-batch')) {
-        const batchButton = document.createElement('button');
-        batchButton.className = 'button process-alt-text-batch';
-        batchButton.textContent = 'Generate Alt Text for Selected';
-        mediaToolbar.appendChild(batchButton);
+    const selectedIds = getSelectedAttachmentIds();
+    const hasMultiSelection = selectedIds.length > 1;
+    const existingButton = document.querySelector('.process-alt-text-batch');
 
-        batchButton.addEventListener('click', function(e) {
-            processBatchSelection(e, this);
-        });
+    if (!hasMultiSelection) {
+        if (existingButton) {
+            existingButton.hidden = true;
+            existingButton.disabled = false;
+        }
+
+        return;
     }
+
+    const mediaToolbar = getBatchToolbarHost();
+    if (!mediaToolbar) {
+        return;
+    }
+
+    const batchButton = ensureBatchButton(mediaToolbar);
+    batchButton.hidden = false;
 }
 
 /**
@@ -603,11 +640,10 @@ function handleBatchProcessing(obs) {
 function processBatchSelection(e, button) {
     e.preventDefault();
 
-    const selected = Array.from(document.querySelectorAll('.attachment.selected'))
-        .map(el => el.dataset.id);
+    const selected = getSelectedAttachmentIds();
 
-    if (selected.length === 0) {
-        alert('Please select images first');
+    if (selected.length <= 1) {
+        alert('Please select at least two images first');
         return;
     }
 
@@ -616,19 +652,27 @@ function processBatchSelection(e, button) {
     button.disabled = true;
 
     // Initialize progress bar at 0%
-    updateProgressBar(0);
+    updateProgressBar(0, {
+        processed: 0,
+        total: selected.length,
+        label: 'Generating alt text for selected media',
+    });
 
     // Process images in batches with progress bar
     const ids = [...selected];
     const totalImages = ids.length;
     let processed = 0;
-    const batchSize = 1;
+    const batchSize = 5;
 
     function processBatch() {
         const batch = ids.splice(0, batchSize);
         if (batch.length === 0) {
             setTimeout(() => {
-                updateProgressBar(100);
+                updateProgressBar(100, {
+                    processed: totalImages,
+                    total: totalImages,
+                    label: 'Generating alt text for selected media',
+                });
                 button.textContent = originalText;
                 button.disabled = false;
             }, 500);
@@ -650,10 +694,23 @@ function processBatchSelection(e, button) {
         .then(data => {
             processed += batch.length;
             const progress = Math.min((processed / totalImages) * 100, 99);
-            updateProgressBar(progress);
-            setTimeout(processBatch, 100); // Add small delay between batches
+            updateProgressBar(progress, {
+                processed,
+                total: totalImages,
+                label: 'Generating alt text for selected media',
+            });
+            processBatch();
         })
-        .catch(error => console.error('Error:', error))
+        .catch(error => {
+            console.error('Error:', error);
+            markProgressAsError('Batch generation stopped before all selected images were processed.', {
+                processed,
+                total: totalImages,
+            });
+            button.textContent = originalText;
+            button.disabled = false;
+            showError('Batch generation stopped before all selected images were processed.');
+        })
         .finally(() => {
             if (ids.length === 0) {
                 button.textContent = originalText;
@@ -676,36 +733,252 @@ function processBatchSelection(e, button) {
  * short delay.
  *
  * @param {number} progress - The progress percentage to display (between 0 and 100).
+ * @param {Object} details - Additional progress metadata.
  */
-function updateProgressBar(progress) {
-    let progressBar = document.querySelector('.alt-text-progress');
+function updateProgressBar(progress, details = {}) {
+    const progressContainer = ensureProgressContainer();
 
-    if (!progressBar) {
-        const progressContainer = document.createElement('div');
-        progressContainer.className = 'alt-text-progress-container';
-        progressContainer.innerHTML = `
-            <div class="alt-text-progress">
-                <div class="progress-bar"></div>
-                <div class="progress-text">0%</div>
-            </div>
-        `;
-
-        const batchButton = document.querySelector('.process-alt-text-batch');
-        batchButton.insertAdjacentElement('afterend', progressContainer);
-        progressBar = progressContainer.querySelector('.alt-text-progress');
+    if (!progressContainer) {
+        return;
     }
 
-    const bar = progressBar.querySelector('.progress-bar');
-    const text = progressBar.querySelector('.progress-text');
+    const progressBar = progressContainer.querySelector('.alt-text-progress');
+    const bar = progressContainer.querySelector('.progress-bar');
+    const text = progressContainer.querySelector('.progress-text');
+    const count = progressContainer.querySelector('.progress-count');
+    const label = progressContainer.querySelector('.progress-label');
+    const total = Number.isFinite(details.total) ? details.total : null;
+    const processed = Number.isFinite(details.processed) ? details.processed : null;
+    const roundedProgress = Math.round(progress);
+
+    progressContainer.hidden = false;
+    progressContainer.dataset.state = progress >= 100 ? 'complete' : 'active';
+    progressBar.setAttribute('aria-valuenow', String(roundedProgress));
+
+    if (details.label) {
+        label.textContent = details.label;
+    }
+
+    if (null !== processed && null !== total) {
+        count.textContent = `${processed} of ${total}`;
+        text.textContent = `${roundedProgress}% complete`;
+    } else {
+        count.textContent = `${roundedProgress}%`;
+        text.textContent = `${roundedProgress}% complete`;
+    }
 
     bar.style.width = `${progress}%`;
-    text.textContent = `${Math.round(progress)}%`;
 
     if (progress >= 100) {
         setTimeout(() => {
             window.location.reload();
         }, 1000);
     }
+}
+
+/**
+ * Finds the current media-library toolbar host across WordPress layouts.
+ *
+ * @returns {HTMLElement|null}
+ */
+function getBatchToolbarHost() {
+    const selectors = [
+        '.attachments-browser .media-toolbar-primary',
+        '.attachments-browser .media-toolbar-secondary',
+        '.attachments-browser .media-toolbar-mode-select',
+        '.attachments-browser .media-toolbar',
+        '.media-frame-toolbar .media-toolbar-primary',
+        '.media-frame-toolbar .media-toolbar-secondary',
+        '.media-frame-toolbar .media-toolbar',
+        '.mode-edit .media-toolbar',
+    ];
+
+    const seen = new Set();
+    const candidates = [];
+
+    for (const selector of selectors) {
+        document.querySelectorAll(selector).forEach((element) => {
+            if (!seen.has(element)) {
+                seen.add(element);
+                candidates.push(element);
+            }
+        });
+    }
+
+    for (const element of candidates) {
+        if (isElementVisible(element)) {
+            return element;
+        }
+    }
+
+    return candidates[0] || null;
+}
+
+/**
+ * Ensures the batch button exists in the active toolbar.
+ *
+ * @param {HTMLElement} mediaToolbar - The toolbar that should own the button.
+ * @returns {HTMLButtonElement}
+ */
+function ensureBatchButton(mediaToolbar) {
+    let batchButton = document.querySelector('.process-alt-text-batch');
+
+    if (!batchButton) {
+        batchButton = document.createElement('button');
+        batchButton.className = 'button process-alt-text-batch';
+        batchButton.type = 'button';
+        batchButton.textContent = 'Generate Alt Text for Selected';
+        batchButton.addEventListener('click', function(e) {
+            processBatchSelection(e, this);
+        });
+    }
+
+    if (batchButton.parentNode !== mediaToolbar) {
+        mediaToolbar.appendChild(batchButton);
+    }
+
+    batchButton.hidden = false;
+
+    return batchButton;
+}
+
+/**
+ * Returns the currently selected media attachment IDs.
+ *
+ * @returns {string[]}
+ */
+function getSelectedAttachmentIds() {
+    return Array.from(new Set(
+        Array.from(document.querySelectorAll('.attachment.selected, .attachments .selected[data-id], [aria-selected="true"][data-id]'))
+            .map((element) => element.dataset.id)
+            .filter(Boolean)
+    ));
+}
+
+/**
+ * Schedules a batch-toolbar refresh after the current UI event finishes.
+ *
+ * @returns {void}
+ */
+function scheduleBatchProcessingRefresh() {
+    window.requestAnimationFrame(() => {
+        handleBatchProcessing();
+    });
+}
+
+/**
+ * Checks whether an element is currently visible in the layout.
+ *
+ * @param {Element} element - The element to inspect.
+ * @returns {boolean}
+ */
+function isElementVisible(element) {
+    if (!(element instanceof Element)) {
+        return false;
+    }
+
+    const style = window.getComputedStyle(element);
+
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+        return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+
+    return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * Finds a stable host element for the batch progress UI.
+ *
+ * @returns {HTMLElement|null}
+ */
+function getBatchProgressHost() {
+    const selectors = [
+        '.attachments-browser',
+        '.media-frame-content',
+        '.upload-php .wrap',
+        '.wrap',
+    ];
+
+    for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+            return element;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Returns the existing progress container or creates one in a resilient host.
+ *
+ * @returns {HTMLElement|null}
+ */
+function ensureProgressContainer() {
+    let progressContainer = document.querySelector('.alt-text-progress-container');
+
+    if (progressContainer) {
+        return progressContainer;
+    }
+
+    const host = getBatchProgressHost();
+    if (!host) {
+        return null;
+    }
+
+    progressContainer = document.createElement('div');
+    progressContainer.className = 'alt-text-progress-container';
+    progressContainer.dataset.state = 'idle';
+    progressContainer.hidden = true;
+    progressContainer.innerHTML = `
+        <div class="alt-text-progress-meta" role="status" aria-live="polite">
+            <span class="progress-label">Generating alt text</span>
+            <span class="progress-count">0 of 0</span>
+        </div>
+        <div class="alt-text-progress" role="progressbar" aria-label="Alt text generation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="progress-bar"></div>
+            <div class="progress-text">0% complete</div>
+        </div>
+    `;
+
+    const toolbar = getBatchToolbarHost();
+    if (toolbar && toolbar.parentNode) {
+        toolbar.insertAdjacentElement('afterend', progressContainer);
+    } else {
+        host.prepend(progressContainer);
+    }
+
+    return progressContainer;
+}
+
+/**
+ * Marks the progress indicator as failed while preserving the last known count.
+ *
+ * @param {string} message - Error message to show in the indicator.
+ * @param {Object} details - Additional progress metadata.
+ */
+function markProgressAsError(message, details = {}) {
+    const progressContainer = ensureProgressContainer();
+
+    if (!progressContainer) {
+        return;
+    }
+
+    const label = progressContainer.querySelector('.progress-label');
+    const count = progressContainer.querySelector('.progress-count');
+    const text = progressContainer.querySelector('.progress-text');
+
+    progressContainer.hidden = false;
+    progressContainer.dataset.state = 'error';
+    label.textContent = message;
+
+    if (Number.isFinite(details.processed) && Number.isFinite(details.total)) {
+        count.textContent = `${details.processed} of ${details.total}`;
+    }
+
+    text.textContent = 'Stopped before completion';
 }
 
 /**

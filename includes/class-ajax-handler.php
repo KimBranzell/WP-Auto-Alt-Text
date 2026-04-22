@@ -90,13 +90,30 @@ class Auto_Alt_Text_Ajax_Handler {
         $results = [];
 
         foreach ($ids as $id) {
+            if (!wp_attachment_is_image($id)) {
+                $results[$id] = [
+                    'success' => false,
+                    'message' => self::ERROR_INVALID_ATTACHMENT,
+                ];
+                continue;
+            }
+
             $image_url = wp_get_attachment_url($id);
             if ($image_url) {
-                $alt_text = $openai->generate_alt_text($image_url, $id);
+                $alt_text = $openai->generate_alt_text($image_url, $id, 'batch');
                 if ($alt_text) {
-                    $results[$id] = $alt_text;
+                    $results[$id] = [
+                        'success' => true,
+                        'alt_text' => $alt_text,
+                    ];
+                    continue;
                 }
             }
+
+            $results[$id] = [
+                'success' => false,
+                'message' => $openai->get_last_error() ?: __('Failed to generate alt text', 'WP-Auto-Alt-Text'),
+            ];
         }
 
         wp_send_json_success($results);

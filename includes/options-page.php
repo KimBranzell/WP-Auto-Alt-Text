@@ -188,7 +188,12 @@ function auto_alt_text_options() {
                                 value="<?php echo esc_attr($decrypted_key); ?>"
                             />
                             <p class="description">
-                                <?php esc_html_e('Pluginen använder OpenAI Responses API med modellen gpt-5.2 för textgenerering.', 'WP-Auto-Alt-Text'); ?>
+                                <?php
+                                printf(
+                                    esc_html__('Pluginen använder OpenAI Responses API med modellen %s för textgenerering och anpassar automatiskt takten efter OpenAI:s aktuella rate limit-headers.', 'WP-Auto-Alt-Text'),
+                                    esc_html(Auto_Alt_Text_OpenAI::get_model_name())
+                                );
+                                ?>
                             </p>
                         </td>
                     </tr>

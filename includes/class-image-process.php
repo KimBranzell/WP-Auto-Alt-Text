@@ -10,8 +10,6 @@ class Auto_Alt_Text_Image_Process {
 
       add_action('add_attachment', array($this, 'handle_new_attachment'));
       add_filter('attachment_fields_to_edit', array($this, 'add_custom_generate_alt_text_button'), 10, 2);
-      add_action('wp_ajax_generate_alt_text_for_attachment', array($this, 'generate_alt_text_for_attachment'));
-      add_action('wp_ajax_process_image_batch', array($this, 'process_image_batch'));
   }
 
   /**
@@ -285,9 +283,6 @@ class Auto_Alt_Text_Image_Process {
             'processed_at' => current_time('mysql')
           ];
         }
-
-        // Rate limiting between API calls
-        usleep(500000);
 
       } catch (Exception $e) {
         $results[$id] = [

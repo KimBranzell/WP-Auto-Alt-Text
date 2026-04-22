@@ -2,7 +2,10 @@
 class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/responses';
     private const MODEL = 'gpt-5.2';
-    private const MAX_TOKENS = 300;
+    private const MAX_TOKENS = 120;
+    private const MAX_API_RETRIES = 3;
+    private const ESTIMATED_IMAGE_INPUT_TOKENS = 1200;
+    private const ESTIMATED_CHARS_PER_TOKEN = 4;
     private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
 
     private $api_key;
@@ -17,6 +20,24 @@ class Auto_Alt_Text_OpenAI  {
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
         $this->statistics = new Auto_Alt_Text_Statistics();
         $this->language_manager = $language_manager ?? new Auto_Alt_Text_Language_Manager();
+    }
+
+    /**
+     * Returns the configured OpenAI model name.
+     *
+     * @return string
+     */
+    public static function get_model_name() {
+        return self::MODEL;
+    }
+
+    /**
+     * Returns the default max output tokens for alt text generation.
+     *
+     * @return int
+     */
+    public static function get_default_max_output_tokens() {
+        return self::MAX_TOKENS;
     }
 
     /**
@@ -697,11 +718,7 @@ class Auto_Alt_Text_OpenAI  {
      * @throws Exception If the API request fails or the rate limit is exceeded.
      */
     private function callAPI($data) {
-        if (!$this->rate_limiter->can_make_request()) {
-            throw new Exception( esc_html__( 'Rate limit exceeded. Please try again later.', 'WP-Auto-Alt-Text' ) );
-        }
-
-        // Use WordPress HTTP API instead of cURL for better compatibility
+        $estimated_tokens = $this->estimate_request_tokens($data);
         $args = [
             'headers' => [
                 'Content-Type' => 'application/json',
@@ -711,39 +728,61 @@ class Auto_Alt_Text_OpenAI  {
             'timeout' => 30,
             'sslverify' => true,
         ];
+        $max_attempts = self::MAX_API_RETRIES + 1;
 
-        $response = wp_remote_post(self::API_URL, $args);
-        $this->rate_limiter->record_request();
+        for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
+            $this->rate_limiter->wait_for_capacity($estimated_tokens);
+            $this->rate_limiter->record_request($estimated_tokens);
 
-        if (is_wp_error($response)) {
-            $friendly_error = $this->map_api_error_message($response->get_error_message(), 0);
-            throw new Exception( esc_html( $friendly_error ) );
-        }
+            $response = wp_remote_post(self::API_URL, $args);
 
-        $http_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
+            if (is_wp_error($response)) {
+                if ($attempt < $max_attempts && $this->should_retry_transport_error($response)) {
+                    usleep((int) ceil($this->calculate_retry_delay([], $attempt) * 1000000));
+                    continue;
+                }
 
-        if (empty($body)) {
-            $friendly_error = $this->map_api_error_message(__('Unknown API error', 'WP-Auto-Alt-Text'), $http_code);
-            throw new Exception( esc_html( $friendly_error ) );
-        }
+                $friendly_error = $this->map_api_error_message($response->get_error_message(), 0);
+                throw new Exception( esc_html( $friendly_error ) );
+            }
 
-        $response_data = json_decode($body, true);
+            $headers = $this->normalize_response_headers(wp_remote_retrieve_headers($response));
+            $this->rate_limiter->record_response_headers($headers);
 
-        if ($http_code !== 200) {
-            $raw_error = $response_data['error']['message'] ?? __('Unknown API error', 'WP-Auto-Alt-Text');
+            $http_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($body, true);
+
+            if (200 === $http_code && !empty($body) && is_array($response_data)) {
+                return $response_data;
+            }
+
+            $raw_error = is_array($response_data)
+                ? ($response_data['error']['message'] ?? __('Unknown API error', 'WP-Auto-Alt-Text'))
+                : __('Unknown API error', 'WP-Auto-Alt-Text');
             $friendly_error = $this->map_api_error_message($raw_error, $http_code);
 
             Auto_Alt_Text_Logger::log('OpenAI API request failed', 'error', [
                 'http_code' => $http_code,
                 'raw_error' => $raw_error,
-                'friendly_error' => $friendly_error
+                'friendly_error' => $friendly_error,
+                'attempt' => $attempt,
             ]);
+
+            if ($attempt < $max_attempts && $this->should_retry_http_code($http_code)) {
+                if (429 === $http_code) {
+                    $this->rate_limiter->record_rate_limit_error($headers, $attempt);
+                    continue;
+                }
+
+                usleep((int) ceil($this->calculate_retry_delay($headers, $attempt) * 1000000));
+                continue;
+            }
 
             throw new Exception( esc_html( $friendly_error ) );
         }
 
-        return $response_data;
+        throw new Exception( esc_html__( 'Unable to generate alt text right now. Please try again.', 'WP-Auto-Alt-Text' ) );
     }
 
     /**
@@ -790,8 +829,213 @@ class Auto_Alt_Text_OpenAI  {
         return [
             'model' => self::MODEL,
             'input' => $input,
-            'max_output_tokens' => $max_output_tokens
+            'max_output_tokens' => max(1, (int) $max_output_tokens)
         ];
+    }
+
+    /**
+     * Estimates the request token footprint for pacing decisions.
+     *
+     * @param array $data Request payload.
+     * @return int
+     */
+    private function estimate_request_tokens($data) {
+        $max_output_tokens = isset($data['max_output_tokens']) ? (int) $data['max_output_tokens'] : self::MAX_TOKENS;
+        $text_characters = 0;
+        $image_count = 0;
+
+        $this->collect_request_metrics($data['input'] ?? [], $text_characters, $image_count);
+
+        $estimated_input_tokens = (int) ceil($text_characters / self::ESTIMATED_CHARS_PER_TOKEN);
+        $estimated_input_tokens += $image_count * self::ESTIMATED_IMAGE_INPUT_TOKENS;
+
+        return max(1, $estimated_input_tokens + max(1, $max_output_tokens));
+    }
+
+    /**
+     * Collects text and image counts from a request payload.
+     *
+     * @param mixed $node Current request node.
+     * @param int   $text_characters Total text characters.
+     * @param int   $image_count Total images.
+     * @return void
+     */
+    private function collect_request_metrics($node, &$text_characters, &$image_count) {
+        if (is_string($node)) {
+            $text_characters += strlen($node);
+            return;
+        }
+
+        if (!is_array($node)) {
+            return;
+        }
+
+        foreach ($node as $key => $value) {
+            if ('image_url' === $key && is_string($value)) {
+                $image_count++;
+                continue;
+            }
+
+            if ('text' === $key && is_string($value)) {
+                $text_characters += strlen($value);
+                continue;
+            }
+
+            $this->collect_request_metrics($value, $text_characters, $image_count);
+        }
+    }
+
+    /**
+     * Converts response headers to a normalized lowercase array.
+     *
+     * @param mixed $headers Response headers.
+     * @return array
+     */
+    private function normalize_response_headers($headers) {
+        if (is_object($headers)) {
+            if (method_exists($headers, 'getAll')) {
+                $headers = $headers->getAll();
+            } else {
+                $headers = (array) $headers;
+            }
+        }
+
+        if (!is_array($headers)) {
+            return [];
+        }
+
+        $normalized_headers = [];
+
+        foreach ($headers as $key => $value) {
+            $normalized_key = strtolower(trim((string) $key));
+
+            if (is_array($value)) {
+                $normalized_headers[$normalized_key] = implode(', ', array_map('strval', $value));
+                continue;
+            }
+
+            $normalized_headers[$normalized_key] = is_scalar($value) ? (string) $value : '';
+        }
+
+        return $normalized_headers;
+    }
+
+    /**
+     * Determines whether an HTTP status code should be retried.
+     *
+     * @param int $http_code HTTP status code.
+     * @return bool
+     */
+    private function should_retry_http_code($http_code) {
+        return in_array((int) $http_code, [429, 500, 502, 503, 504], true);
+    }
+
+    /**
+     * Determines whether a transport error should be retried.
+     *
+     * @param WP_Error $error Transport error.
+     * @return bool
+     */
+    private function should_retry_transport_error($error) {
+        if (!$error instanceof WP_Error) {
+            return false;
+        }
+
+        $message = strtolower($error->get_error_message());
+        $retryable_fragments = [
+            'timed out',
+            'timeout',
+            'could not resolve host',
+            'connection refused',
+            'connection reset',
+            'temporarily unavailable',
+        ];
+
+        foreach ($retryable_fragments as $fragment) {
+            if (false !== strpos($message, $fragment)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Calculates the next retry delay using response hints and jitter.
+     *
+     * @param array $headers Response headers.
+     * @param int   $attempt Retry attempt.
+     * @return float
+     */
+    private function calculate_retry_delay($headers, $attempt) {
+        $reset_hint = 0.0;
+
+        if (is_array($headers)) {
+            $reset_hint = max(
+                $this->parse_retry_after_header($headers['retry-after'] ?? null),
+                $this->parse_retry_after_header($headers['x-ratelimit-reset-requests'] ?? null),
+                $this->parse_retry_after_header($headers['x-ratelimit-reset-tokens'] ?? null)
+            );
+        }
+
+        $exponential_delay = min(15.0, (float) pow(2, max(0, (int) $attempt - 1)));
+        $jitter = wp_rand(100, 600) / 1000;
+
+        return max($reset_hint, $exponential_delay + $jitter);
+    }
+
+    /**
+     * Parses a retry-after or reset header value into seconds.
+     *
+     * @param mixed $value Header value.
+     * @return float
+     */
+    private function parse_retry_after_header($value) {
+        if (is_numeric($value)) {
+            return max(0.0, (float) $value);
+        }
+
+        if (!is_string($value) || '' === trim($value)) {
+            return 0.0;
+        }
+
+        $normalized_value = strtolower(trim($value));
+
+        if (preg_match_all('/(\d+(?:\.\d+)?)(ms|s|m|h|d)/', $normalized_value, $matches, PREG_SET_ORDER)) {
+            $seconds = 0.0;
+
+            foreach ($matches as $match) {
+                $segment_value = (float) $match[1];
+
+                switch ($match[2]) {
+                    case 'd':
+                        $seconds += $segment_value * DAY_IN_SECONDS;
+                        break;
+                    case 'h':
+                        $seconds += $segment_value * HOUR_IN_SECONDS;
+                        break;
+                    case 'm':
+                        $seconds += $segment_value * MINUTE_IN_SECONDS;
+                        break;
+                    case 's':
+                        $seconds += $segment_value;
+                        break;
+                    case 'ms':
+                        $seconds += $segment_value / 1000;
+                        break;
+                }
+            }
+
+            return max(0.0, $seconds);
+        }
+
+        $timestamp = strtotime($value);
+
+        if (false === $timestamp) {
+            return 0.0;
+        }
+
+        return max(0.0, $timestamp - time());
     }
 
     /**

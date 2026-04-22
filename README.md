@@ -23,7 +23,7 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - One-click AI-powered alt text generation
 - WP CLI and REST API support for bulk processing in the terminal
 - Bulk processing capabilities
-- Rate limiting to manage API costs
+- Adaptive request pacing based on OpenAI rate-limit headers
 - Simple integration with WordPress media library
 - Support for multiple image formats (including AVIF and WebP)
 - Clean and intuitive user interface
@@ -87,7 +87,7 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 ### Available Settings
 
 - API Key management
-- Rate limiting controls
+- Automatic throughput adaptation based on your OpenAI project limits
 - Default alt text prompt templates
 - Processing preferences
 
