@@ -49,6 +49,15 @@ class Auto_Alt_Text_Activator {
     }
 
     /**
+     * Retrieves the name of the queue table in the database.
+     *
+     * @return string The name of the queue table.
+     */
+    private static function get_queue_table_name() {
+        return self::get_db()->prefix . 'auto_alt_text_queue';
+    }
+
+    /**
      * Checks if the specified column exists in the given database table.
      *
      * @param string $table The name of the database table.
@@ -111,8 +120,29 @@ class Auto_Alt_Text_Activator {
                 PRIMARY KEY  (id)
             ) $charset_collate;";
 
+            $queue_table = self::get_queue_table_name();
+            $create_queue_sql = "CREATE TABLE {$queue_table} (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                attachment_id bigint(20) NOT NULL,
+                batch_id varchar(64) NOT NULL,
+                generation_type varchar(50) NOT NULL DEFAULT 'batch',
+                status varchar(20) NOT NULL DEFAULT 'pending',
+                attempts tinyint(3) NOT NULL DEFAULT 0,
+                user_id bigint(20) NOT NULL DEFAULT 0,
+                result_text text DEFAULT NULL,
+                error_message text DEFAULT NULL,
+                created_at datetime NOT NULL,
+                started_at datetime DEFAULT NULL,
+                completed_at datetime DEFAULT NULL,
+                PRIMARY KEY  (id),
+                KEY batch_id (batch_id),
+                KEY attachment_id (attachment_id),
+                KEY status (status)
+            ) $charset_collate;";
+
             dbDelta($create_stats_sql);
             dbDelta($create_logs_sql);
+            dbDelta($create_queue_sql);
 
 
         } catch (Exception $e) {

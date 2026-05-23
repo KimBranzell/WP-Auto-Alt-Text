@@ -13,6 +13,10 @@ class Auto_Alt_Text_Admin {
         add_filter('handle_bulk_actions-upload', [$this, 'handle_bulk_actions'], 10, 3);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAutoAltTextScript']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueStyles']);
+        add_action('admin_notices', [$this, 'show_queue_completion_notice']);
+
+        add_filter('heartbeat_received', [$this, 'handle_heartbeat'], 10, 2);
+        add_filter('heartbeat_nopriv_received', [$this, 'handle_heartbeat'], 10, 2);
     }
 
     /**
@@ -100,11 +104,16 @@ class Auto_Alt_Text_Admin {
 
         wp_script_add_data(self::SCRIPT_HANDLE, 'type', 'module');
 
+        $queue_manager = new Auto_Alt_Text_Queue_Manager();
+        $queue_status = $queue_manager->get_queue_status();
+
         wp_localize_script(self::SCRIPT_HANDLE, 'autoAltTextData', [
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('auto_alt_text_batch_nonce'),
 			'actionNonce' => wp_create_nonce('auto_alt_text_nonce'),
 			'brandTonalityEnabled' => (bool) get_option('wp_auto_alt_text_enable_brand_tonality', false),
+            'queueTotal' => $queue_status['total'],
+            'queuePending' => $queue_status['pending'],
         ]);
     }
 
@@ -121,6 +130,44 @@ class Auto_Alt_Text_Admin {
         $screen = get_current_screen();
 
         return $screen && method_exists($screen, 'is_block_editor') && $screen->is_block_editor();
+    }
+
+    /**
+     * Shows an admin notice when a background queue batch completes.
+     */
+    public function show_queue_completion_notice() {
+        $completed_batch = get_transient('aat_queue_completed');
+        if (!$completed_batch) {
+            return;
+        }
+        delete_transient('aat_queue_completed');
+        ?>
+        <div class="notice notice-success is-dismissible">
+            <p>
+                <?php
+                printf(
+                    esc_html__('WP Auto Alt Text: Background generation complete! %d images processed successfully.', 'WP-Auto-Alt-Text'),
+                    esc_html($completed_batch['completed'])
+                );
+                ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
+     * Handles Heartbeat API responses for queue progress.
+     */
+    public function handle_heartbeat($response, $data) {
+        if (!isset($data['aat_check_queue'])) {
+            return $response;
+        }
+
+        $batch_id = isset($data['aat_batch_id']) ? sanitize_text_field($data['aat_batch_id']) : null;
+        $manager = new Auto_Alt_Text_Queue_Manager();
+        $response['aat_queue'] = $manager->get_queue_status($batch_id);
+
+        return $response;
     }
 
     /**

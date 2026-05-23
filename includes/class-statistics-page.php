@@ -140,7 +140,10 @@ class Auto_Alt_Text_Statistics_Page {
 									<span class="status-badge edited">Edited</span>
 								<?php endif; ?>
 							</td>
-							<td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
+							<td><?php
+    $user = get_user_by('id', $generation->user_id);
+    echo esc_html($user ? $user->display_name : __('Deleted user', 'WP-Auto-Alt-Text'));
+?></td>
 							<td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' sedan'); ?></td>
 							<td><?php echo esc_html($generation->tokens_used); ?></td>
 						</tr>

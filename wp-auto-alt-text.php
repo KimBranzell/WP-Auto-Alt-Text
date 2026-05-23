@@ -97,6 +97,8 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-batch-processor.php';
 		require_once __DIR__ . '/includes/class-statistics.php';
 		require_once __DIR__ . '/includes/class-statistics-page.php';
+		require_once __DIR__ . '/includes/class-queue-manager.php';
+		require_once __DIR__ . '/includes/class-background-processor.php';
 		require_once __DIR__ . '/includes/class-ajax-handler.php';
 		require_once __DIR__ . '/includes/class-image-process.php';
 		require_once __DIR__ . '/includes/class-dashboard-widget.php';
@@ -196,7 +198,17 @@ class WP_Auto_Alt_Text_Plugin {
 		new Auto_Alt_Text_Logger();
 		new Auto_Alt_Text_REST_API();
 		new Auto_Alt_Text_WP_Media_Folder();
+
+		new Auto_Alt_Text_Background_Processor(
+			new Auto_Alt_Text_Queue_Manager(),
+			$this->components['openai'],
+			$this->components['language_manager']
+		);
 	}
 }
 
 WP_Auto_Alt_Text_Plugin::get_instance()->init();
+
+register_deactivation_hook(__FILE__, function () {
+    Auto_Alt_Text_Background_Processor::deactivate();
+});

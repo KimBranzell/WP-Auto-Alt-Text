@@ -30,11 +30,26 @@ class Auto_Alt_Text_Dashboard_Widget {
       $stats = $this->statistics->get_stats();
       $total_generations = isset( $stats['total_generations'] ) ? (int) $stats['total_generations'] : 0;
       $total_tokens = isset( $stats['total_tokens'] ) ? (int) $stats['total_tokens'] : 0;
+
+      $queue_manager = new Auto_Alt_Text_Queue_Manager();
+      $queue_status = $queue_manager->get_queue_status();
       ?>
       <p>
       <?php echo esc_html__( 'Images Processed:', 'WP-Auto-Alt-Text' ); ?> <?php echo esc_html( number_format_i18n( $total_generations ) ); ?><br>
       <?php echo esc_html__( 'Tokens Used:', 'WP-Auto-Alt-Text' ); ?> <?php echo esc_html( number_format_i18n( $total_tokens ) ); ?>
       </p>
+      <?php if ($queue_status['total'] > 0): ?>
+      <hr>
+      <p>
+        <strong><?php esc_html_e('Background Queue:', 'WP-Auto-Alt-Text'); ?></strong><br>
+        <?php esc_html_e('Pending:', 'WP-Auto-Alt-Text'); ?> <?php echo esc_html($queue_status['pending']); ?><br>
+        <?php esc_html_e('Processing:', 'WP-Auto-Alt-Text'); ?> <?php echo esc_html($queue_status['processing']); ?><br>
+        <?php esc_html_e('Completed:', 'WP-Auto-Alt-Text'); ?> <?php echo esc_html($queue_status['completed']); ?><br>
+        <?php if ($queue_status['failed'] > 0): ?>
+          <?php esc_html_e('Failed:', 'WP-Auto-Alt-Text'); ?> <?php echo esc_html($queue_status['failed']); ?><br>
+        <?php endif; ?>
+      </p>
+      <?php endif; ?>
       <?php
   }
 }

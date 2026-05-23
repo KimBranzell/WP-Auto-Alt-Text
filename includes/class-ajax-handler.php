@@ -8,6 +8,9 @@ class Auto_Alt_Text_Ajax_Handler {
     private const ERROR_MISSING_ID = 'Missing attachment ID';
     private const ERROR_INVALID_ATTACHMENT = 'Invalid attachment ID';
     private const ERROR_INSUFFICIENT_PERMISSIONS = 'Insufficient permissions';
+
+    private $queue_manager;
+
     /**
      * Registers AJAX actions for generating alt text for attachments and processing image batches.
      */
@@ -15,6 +18,9 @@ class Auto_Alt_Text_Ajax_Handler {
         add_action('wp_ajax_generate_alt_text_for_attachment', [$this, 'generate_alt_text_for_attachment']);
         add_action('wp_ajax_process_image_batch', [$this, 'process_image_batch']);
         add_action('wp_ajax_regenerate_alt_text_with_feedback', [$this, 'regenerate_alt_text_with_feedback']);
+        add_action('wp_ajax_aat_enqueue_batch', [$this, 'enqueue_batch']);
+        add_action('wp_ajax_aat_queue_status', [$this, 'get_queue_status']);
+        add_action('wp_ajax_aat_heartbeat_queue', [$this, 'heartbeat_queue_status']);
     }
 
     /**
@@ -118,6 +124,82 @@ class Auto_Alt_Text_Ajax_Handler {
 
         wp_send_json_success($results);
     }
+    /**
+     * Enqueues images for background batch processing instead of processing inline.
+     */
+    public function enqueue_batch() {
+        check_ajax_referer(self::BATCH_NONCE_ACTION, 'nonce');
+
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
+
+        $ids = isset($_POST['ids']) ? json_decode(stripslashes($_POST['ids'])) : [];
+
+        if (!is_array($ids) || empty($ids)) {
+            wp_send_json_error(['message' => 'No attachment IDs provided']);
+            return;
+        }
+
+        $ids = array_map('intval', $ids);
+        $ids = array_filter($ids, function($id) {
+            return $id > 0 && wp_attachment_is_image($id);
+        });
+
+        if (empty($ids)) {
+            wp_send_json_error(['message' => 'No valid image IDs provided']);
+            return;
+        }
+
+        $manager = new Auto_Alt_Text_Queue_Manager();
+        $result = $manager->enqueue_batch(array_values($ids), 'batch');
+
+        Auto_Alt_Text_Logger::log("Enqueued {$result['inserted']} images for background processing", 'info', [
+            'batch_id' => $result['batch_id'],
+        ]);
+
+        wp_send_json_success($result);
+    }
+
+    /**
+     * Returns queue status for a specific batch or overall.
+     */
+    public function get_queue_status() {
+        check_ajax_referer(self::BATCH_NONCE_ACTION, 'nonce');
+
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
+
+        $batch_id = isset($_POST['batch_id']) ? sanitize_text_field($_POST['batch_id']) : null;
+
+        $manager = new Auto_Alt_Text_Queue_Manager();
+        $status = $manager->get_queue_status($batch_id);
+
+        wp_send_json_success($status);
+    }
+
+    /**
+     * Lightweight queue status endpoint for Heartbeat API polling.
+     */
+    public function heartbeat_queue_status() {
+        check_ajax_referer(self::BATCH_NONCE_ACTION, 'nonce');
+
+        if (!current_user_can('upload_files')) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
+
+        $batch_id = isset($_POST['batch_id']) ? sanitize_text_field($_POST['batch_id']) : null;
+
+        $manager = new Auto_Alt_Text_Queue_Manager();
+        $status = $manager->get_queue_status($batch_id);
+
+        wp_send_json_success($status);
+    }
+
     /**
      * Applies the generated alt text to the specified image attachment.
      *

@@ -56,6 +56,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     handleBatchProcessing(observer);
 
+    // Show persistent queue progress if there's background activity
+    if (autoAltTextData.queuePending > 0) {
+        const total = autoAltTextData.queueTotal;
+        showBackgroundProgress(total, null);
+    }
+
     if (bulkIds) {
         const ids = bulkIds.split(',');
         const totalImages = ids.length;
@@ -599,22 +605,26 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
 
 /**
  * Handles the batch processing of generating alt text for selected images.
- * If the media toolbar is present and does not already have a "Generate Alt Text for Selected" button,
- * this function creates the button and attaches a click event listener that calls `processBatchSelection`.
+ * If the media toolbar is present and does not already have buttons,
+ * this function creates them and attaches click event listeners.
  *
  * @param {MutationObserver} obs - The MutationObserver instance that triggered this function.
  */
 function handleBatchProcessing(obs) {
     const selectedIds = getSelectedAttachmentIds();
     const hasMultiSelection = selectedIds.length > 1;
-    const existingButton = document.querySelector('.process-alt-text-batch');
 
     if (!hasMultiSelection) {
+        const existingButton = document.querySelector('.process-alt-text-batch');
         if (existingButton) {
             existingButton.hidden = true;
             existingButton.disabled = false;
         }
-
+        const bgButton = document.querySelector('.process-alt-text-batch-bg');
+        if (bgButton) {
+            bgButton.hidden = true;
+            bgButton.disabled = false;
+        }
         return;
     }
 
@@ -625,17 +635,202 @@ function handleBatchProcessing(obs) {
 
     const batchButton = ensureBatchButton(mediaToolbar);
     batchButton.hidden = false;
+
+    const bgButton = ensureBatchBackgroundButton(mediaToolbar);
+    bgButton.hidden = false;
 }
 
 /**
- * Handles the batch processing of generating alt text for selected images.
- * This function is called when the "Generate Alt Text for Selected" button is clicked.
- * It retrieves the selected image IDs, disables the button, initializes the progress bar,
- * and then processes the images in batches, updating the progress bar as it goes.
- * Once all images have been processed, the button is re-enabled and the page is reloaded.
- *
- * @param {Event} e - The click event object.
- * @param {HTMLButtonElement} button - The "Generate Alt Text for Selected" button element.
+ * Processes a batch in the background by enqueueing items to the queue table.
+ * The user can navigate away and the queue continues processing via WP-Cron/Action Scheduler.
+ */
+async function processBatchInBackground(e, button) {
+    e.preventDefault();
+
+    const selected = getSelectedAttachmentIds();
+
+    if (selected.length <= 1) {
+        alert('Please select at least two images first');
+        return;
+    }
+
+    const originalText = button.textContent;
+    button.textContent = 'Enqueuing...';
+    button.disabled = true;
+
+    try {
+        const response = await fetch(autoAltTextData.ajaxurl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'aat_enqueue_batch',
+                nonce: autoAltTextData.nonce,
+                ids: JSON.stringify(selected.map(id => parseInt(id, 10)))
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.data?.message || 'Failed to enqueue batch');
+        }
+
+        showBackgroundProgress(selected.length, data.data.batch_id);
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Failed to start background generation: ' + error.message);
+    } finally {
+        button.textContent = originalText;
+        button.disabled = false;
+    }
+}
+
+/**
+ * Shows a progress indicator for background batch processing
+ * and starts Heartbeat polling for updates.
+ */
+function showBackgroundProgress(total, batchId) {
+    const progressContainer = ensureProgressContainer();
+    if (!progressContainer) return;
+
+    progressContainer.hidden = false;
+    progressContainer.dataset.state = 'active';
+    progressContainer.dataset.batchId = batchId;
+
+    const label = progressContainer.querySelector('.progress-label');
+    const count = progressContainer.querySelector('.progress-count');
+    const text = progressContainer.querySelector('.progress-text');
+    const bar = progressContainer.querySelector('.progress-bar');
+
+    label.textContent = 'Background generation started — you can leave this page';
+    count.textContent = `0 of ${total}`;
+    text.textContent = 'Processing in background...';
+    bar.style.width = '0%';
+
+    startQueuePolling(batchId);
+}
+
+/**
+ * Starts polling the server for background queue progress.
+ * Uses WordPress Heartbeat API when available, falls back to AJAX polling.
+ */
+function startQueuePolling(batchId) {
+    if (typeof wp !== 'undefined' && wp.heartbeat) {
+        wp.heartbeat.enqueue('aat_check_queue', true);
+        wp.heartbeat.enqueue('aat_batch_id', batchId);
+
+        jQuery(document).on('heartbeat-tick.wp-auto-alt-text', function(event, data) {
+            if (!data.aat_queue) return;
+            updateQueueProgressUI(data.aat_queue);
+        });
+
+        jQuery(document).on('heartbeat-tick.wp-auto-alt-text-warning', function() {
+            stopQueuePolling();
+        });
+    } else {
+        pollQueueViaAjax(batchId);
+    }
+}
+
+/**
+ * Stops Heartbeat-based queue polling.
+ */
+function stopQueuePolling() {
+    if (typeof wp !== 'undefined' && wp.heartbeat) {
+        wp.heartbeat.dequeue('aat_check_queue');
+        wp.heartbeat.dequeue('aat_batch_id');
+        jQuery(document).off('.wp-auto-alt-text');
+    }
+}
+
+/**
+ * Polls queue status via AJAX as a fallback when Heartbeat is unavailable.
+ */
+function pollQueueViaAjax(batchId) {
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch(autoAltTextData.ajaxurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'aat_queue_status',
+                    nonce: autoAltTextData.nonce,
+                    batch_id: batchId
+                })
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                clearInterval(interval);
+                return;
+            }
+
+            const completed = updateQueueProgressUI(data.data);
+
+            if (completed) {
+                clearInterval(interval);
+            }
+        } catch (error) {
+            console.error('Queue poll error:', error);
+            clearInterval(interval);
+        }
+    }, 3000);
+}
+
+/**
+ * Updates the progress bar UI from queue status data.
+ * Returns true if all items are done.
+ */
+function updateQueueProgressUI(status) {
+    const progressContainer = document.querySelector('.alt-text-progress-container');
+    if (!progressContainer) return false;
+
+    const total = status.total || 0;
+    const completed = status.completed || 0;
+    const failed = status.failed || 0;
+    const pending = status.pending || 0;
+    const processing = status.processing || 0;
+    const done = completed + failed;
+    const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    const label = progressContainer.querySelector('.progress-label');
+    const count = progressContainer.querySelector('.progress-count');
+    const text = progressContainer.querySelector('.progress-text');
+    const bar = progressContainer.querySelector('.progress-bar');
+
+    count.textContent = `${completed} of ${total}`;
+
+    if (done >= total && total > 0) {
+        label.textContent = failed > 0
+            ? `Background generation complete — ${completed} succeeded, ${failed} failed`
+            : 'Background generation complete!';
+        progressContainer.dataset.state = 'complete';
+        bar.style.width = '100%';
+        text.textContent = '100% complete';
+        stopQueuePolling();
+        return true;
+    }
+
+    if (processing > 0) {
+        label.textContent = 'Processing in background...';
+    } else if (pending > 0) {
+        label.textContent = `${pending} images waiting in queue`;
+    }
+
+    bar.style.width = `${percent}%`;
+    text.textContent = `${percent}% complete`;
+
+    return false;
+}
+
+/**
+ * Handles the batch processing of generating alt text for selected images (synchronous).
+ * This function is called when the "Generate Now" button is clicked.
+ * Kept as a fallback for small batches.
  */
 function processBatchSelection(e, button) {
     e.preventDefault();
@@ -651,14 +846,12 @@ function processBatchSelection(e, button) {
     button.textContent = 'Generating...';
     button.disabled = true;
 
-    // Initialize progress bar at 0%
     updateProgressBar(0, {
         processed: 0,
         total: selected.length,
         label: 'Generating alt text for selected media',
     });
 
-    // Process images in batches with progress bar
     const ids = [...selected];
     const totalImages = ids.length;
     let processed = 0;
@@ -815,7 +1008,7 @@ function getBatchToolbarHost() {
 }
 
 /**
- * Ensures the batch button exists in the active toolbar.
+ * Ensures the synchronous batch button exists in the active toolbar.
  *
  * @param {HTMLElement} mediaToolbar - The toolbar that should own the button.
  * @returns {HTMLButtonElement}
@@ -827,7 +1020,7 @@ function ensureBatchButton(mediaToolbar) {
         batchButton = document.createElement('button');
         batchButton.className = 'button process-alt-text-batch';
         batchButton.type = 'button';
-        batchButton.textContent = 'Generate Alt Text for Selected';
+        batchButton.textContent = 'Generate Alt Text Now';
         batchButton.addEventListener('click', function(e) {
             processBatchSelection(e, this);
         });
@@ -840,6 +1033,38 @@ function ensureBatchButton(mediaToolbar) {
     batchButton.hidden = false;
 
     return batchButton;
+}
+
+/**
+ * Ensures the background batch button exists in the active toolbar.
+ *
+ * @param {HTMLElement} mediaToolbar - The toolbar that should own the button.
+ * @returns {HTMLButtonElement}
+ */
+function ensureBatchBackgroundButton(mediaToolbar) {
+    let bgButton = document.querySelector('.process-alt-text-batch-bg');
+
+    if (!bgButton) {
+        bgButton = document.createElement('button');
+        bgButton.className = 'button button-primary process-alt-text-batch-bg';
+        bgButton.type = 'button';
+        bgButton.textContent = 'Generate in Background';
+        bgButton.addEventListener('click', function(e) {
+            processBatchInBackground(e, this);
+        });
+    }
+
+    if (bgButton.parentNode !== mediaToolbar) {
+        const separator = document.createElement('span');
+        separator.className = 'separator';
+        separator.textContent = ' ';
+        mediaToolbar.appendChild(separator);
+        mediaToolbar.appendChild(bgButton);
+    }
+
+    bgButton.hidden = false;
+
+    return bgButton;
 }
 
 /**
