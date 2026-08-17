@@ -8,8 +8,14 @@ namespace {
             public static $successes = [];
             public static $warnings = [];
 
+            public static $lines = [];
+
             public static function log($message) {
                 self::$logs[] = $message;
+            }
+
+            public static function line($message = '') {
+                self::$lines[] = $message;
             }
 
             public static function success($message) {
@@ -107,6 +113,7 @@ namespace {
             WP_CLI::$logs = [];
             WP_CLI::$successes = [];
             WP_CLI::$warnings = [];
+            WP_CLI::$lines = [];
         }
 
         public function tearDown(): void {
@@ -355,6 +362,72 @@ namespace {
             );
 
             unlink($image_path);
+        }
+
+        public function test_queue_command_outputs_counts() {
+            Auto_Alt_Text_Activator::activate();
+            global $wpdb;
+            $wpdb->query('TRUNCATE TABLE ' . Auto_Alt_Text_Queue::get_table_name());
+            (new Auto_Alt_Text_Queue())->enqueue(self::factory()->attachment->create(), 'upload');
+
+            $cli = $this->create_cli();
+            $cli->queue([], []);
+
+            $output = implode("\n", WP_CLI::$lines);
+
+            Assert::assertStringContainsString('Pending:     1', $output);
+            Assert::assertStringContainsString('Queue status: running', $output);
+        }
+
+        public function test_queue_command_retry_failed_requeues() {
+            Auto_Alt_Text_Activator::activate();
+            global $wpdb;
+            $wpdb->query('TRUNCATE TABLE ' . Auto_Alt_Text_Queue::get_table_name());
+            $queue = new Auto_Alt_Text_Queue();
+            $id = self::factory()->attachment->create();
+            $queue->enqueue($id, 'upload');
+            $wpdb->update(Auto_Alt_Text_Queue::get_table_name(),
+                ['status' => Auto_Alt_Text_Queue::STATUS_FAILED], ['attachment_id' => $id]);
+
+            $cli = $this->create_cli();
+            $cli->queue([], ['retry-failed' => true]);
+
+            Assert::assertSame(1, $queue->get_counts()['pending']);
+            Assert::assertSame(0, $queue->get_counts()['failed']);
+            Assert::assertNotEmpty(WP_CLI::$successes);
+            Assert::assertStringContainsString('1 failed job(s) re-queued.', WP_CLI::$successes[0]);
+        }
+
+        public function test_queue_command_shows_paused_status_during_quota_incident() {
+            Auto_Alt_Text_Activator::activate();
+            global $wpdb;
+            $wpdb->query('TRUNCATE TABLE ' . Auto_Alt_Text_Queue::get_table_name());
+            (new Auto_Alt_Text_Queue())->enqueue(self::factory()->attachment->create(), 'upload');
+
+            // Prevent email from being sent during the test
+            add_filter('pre_wp_mail', '__return_true');
+
+            // Record a quota incident
+            Auto_Alt_Text_Quota_Monitor::record_failure('You exceeded your current quota');
+
+            $cli = $this->create_cli();
+            $cli->queue([], []);
+
+            $output = implode("\n", WP_CLI::$lines);
+
+            // Get the stored incident to verify the timestamp format
+            $incident = Auto_Alt_Text_Quota_Monitor::get_incident();
+            Assert::assertNotNull($incident);
+
+            $expected_timestamp = gmdate('Y-m-d H:i', (int) $incident['detected_at']);
+
+            // Verify the PAUSED status message format
+            Assert::assertStringContainsString('Queue status: PAUSED — quota incident since ' . $expected_timestamp, $output);
+            Assert::assertStringContainsString('(last error: "You exceeded your current quota")', $output);
+
+            // Cleanup
+            delete_option(Auto_Alt_Text_Quota_Monitor::OPTION);
+            remove_filter('pre_wp_mail', '__return_true');
         }
 
         private function create_cli($language_manager = null) {

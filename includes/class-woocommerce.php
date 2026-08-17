@@ -1,13 +1,11 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_WooCommerce {
-    private $openai;
-    private $batch_processor;
+    private $queue;
     private $statistics;
 
     public function __construct() {
-        $this->openai = new Auto_Alt_Text_OpenAI();
-        $this->batch_processor = new Auto_Alt_Text_Batch_Processor($this->openai, 10);
+        $this->queue = new Auto_Alt_Text_Queue();
         $this->statistics = new Auto_Alt_Text_Statistics();
 
         // Product creation and updates
@@ -114,64 +112,54 @@ class Auto_Alt_Text_WooCommerce {
     }
 
     /**
-     * Processes the product images, including the main product image, gallery images, and variation images.
-     * Generates alt text for each unique image using the OpenAI API.
-     *
-     * @param int $product_id The ID of the product to process.
+     * Collects the product's image attachments and enqueues the ones still
+     * missing alt text. No API calls happen in the product-update request —
+     * generation runs in the background queue (see Auto_Alt_Text_Queue).
      */
     public function process_product_images($product_id) {
         $product = wc_get_product($product_id);
+        if (!$product) {
+            return;
+        }
 
-        // Collect all image IDs
         $image_ids = [];
-
-        // Main product image
         $main_image_id = $product->get_image_id();
         if ($main_image_id) {
             $image_ids[] = $main_image_id;
         }
-
-        // Gallery images
         $gallery_ids = $product->get_gallery_image_ids();
         if (!empty($gallery_ids)) {
             $image_ids = array_merge($image_ids, $gallery_ids);
         }
-
-        // Process variation images for variable products
         if ($product->is_type('variable')) {
-            $variations = $product->get_children();
-            foreach ($variations as $variation_id) {
+            foreach ($product->get_children() as $variation_id) {
                 $variation = wc_get_product($variation_id);
-                $variation_image_id = $variation->get_image_id();
-                if ($variation_image_id) {
-                    $image_ids[] = $variation_image_id;
+                if ($variation && $variation->get_image_id()) {
+                    $image_ids[] = $variation->get_image_id();
                 }
             }
         }
 
-        // Process unique image IDs
-        $unique_ids = array_unique(array_filter($image_ids));
-        foreach ($unique_ids as $attachment_id) {
-            $image_url = wp_get_attachment_url($attachment_id);
-            $this->openai->generate_alt_text($image_url, $attachment_id, 'woocommerce');
+        foreach (array_unique(array_filter($image_ids)) as $attachment_id) {
+            $this->enqueue_if_missing_alt($attachment_id, 'woocommerce');
         }
     }
 
-    /**
-     * Processes the image for a specific variation of a product.
-     * Generates alt text for the variation image using the OpenAI API.
-     *
-     * @param int $variation_id The ID of the product variation.
-     * @param int $loop The loop index for the variation.
-     */
     public function process_variation_image($variation_id, $loop) {
         $variation = wc_get_product($variation_id);
-        $image_id = $variation->get_image_id();
-
-        if ($image_id) {
-            $image_url = wp_get_attachment_url($image_id);
-            $this->openai->generate_alt_text($image_url, $image_id, 'woocommerce_variation');
+        if ($variation && $variation->get_image_id()) {
+            $this->enqueue_if_missing_alt($variation->get_image_id(), 'woocommerce_variation');
         }
+    }
+
+    private function enqueue_if_missing_alt($attachment_id, $generation_type) {
+        if (!get_option('auto_alt_text_auto_generate', true)) {
+            return;
+        }
+        if (get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
+            return;
+        }
+        $this->queue->enqueue($attachment_id, $generation_type);
     }
 
     /**

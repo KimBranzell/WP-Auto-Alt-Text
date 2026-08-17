@@ -747,4 +747,76 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
       $format = isset($assoc_args['format']) ? $assoc_args['format'] : 'table';
       WP_CLI\Utils\format_items($format, $stats, ['metric', 'value']);
     }
+
+    /**
+     * Shows and manages the background generation queue.
+     *
+     * ## OPTIONS
+     *
+     * [--status=<status>]
+     * : Filter the job list. One of: pending, processing, failed, done.
+     *
+     * [--retry-failed]
+     * : Re-queue all failed jobs.
+     *
+     * [--limit=<n>]
+     * : Max jobs to list. Default 50.
+     *
+     * ## EXAMPLES
+     *
+     *     wp auto-alt-text queue
+     *     wp auto-alt-text queue --status=failed
+     *     wp auto-alt-text queue --retry-failed
+     *
+     * @when after_wp_load
+     */
+    public function queue($args, $assoc_args) {
+        $queue = new Auto_Alt_Text_Queue();
+
+        if (!empty($assoc_args['retry-failed'])) {
+            $requeued = $queue->retry_failed();
+            WP_CLI::success(sprintf('%d failed job(s) re-queued.', $requeued));
+        }
+
+        $incident = Auto_Alt_Text_Quota_Monitor::get_incident();
+        if ($incident) {
+            WP_CLI::line(sprintf(
+                'Queue status: PAUSED — quota incident since %s (last error: "%s")',
+                gmdate('Y-m-d H:i', (int) $incident['detected_at']),
+                $incident['last_error']
+            ));
+        } else {
+            WP_CLI::line('Queue status: running (no active quota incident)');
+        }
+        WP_CLI::line('');
+
+        $counts = $queue->get_counts();
+        WP_CLI::line(sprintf('Pending:     %d', $counts['pending']));
+        WP_CLI::line(sprintf('Processing:  %d', $counts['processing']));
+        WP_CLI::line(sprintf('Failed:      %d', $counts['failed']));
+        WP_CLI::line(sprintf('Done (7d):   %d', $counts['done']));
+        WP_CLI::line('');
+
+        $status = $assoc_args['status'] ?? null;
+        $limit = (int) ($assoc_args['limit'] ?? 50);
+        $jobs = $queue->get_jobs($status, $limit);
+
+        if (empty($jobs)) {
+            WP_CLI::line($status ? sprintf('No %s jobs.', $status) : 'No jobs waiting.');
+            return;
+        }
+
+        $rows = array_map(function ($job) {
+            return [
+                'id'              => $job->id,
+                'attachment_id'   => $job->attachment_id,
+                'type'            => $job->generation_type,
+                'status'          => $job->status,
+                'attempts'        => $job->attempts,
+                'next_attempt_at' => $job->next_attempt_at,
+                'last_error'      => $job->last_error ? mb_substr($job->last_error, 0, 60) : '',
+            ];
+        }, $jobs);
+        WP_CLI\Utils\format_items('table', $rows, ['id', 'attachment_id', 'type', 'status', 'attempts', 'next_attempt_at', 'last_error']);
+    }
 }

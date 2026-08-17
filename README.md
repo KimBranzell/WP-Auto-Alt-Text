@@ -144,6 +144,26 @@ For large libraries, use WP-CLI to generate alt text without browser timeouts:
 - `wp auto-alt-text translate --all` — Translate existing source alt texts across WPML media translations.
 - `wp auto-alt-text translate --ids=123,456` — Translate specific attachment groups without re-analyzing the image.
 - `wp auto-alt-text stats` — Show generation statistics.
+- `wp auto-alt-text queue` — Inspect the background processing queue.
+- `wp auto-alt-text queue --status=failed` — Show failed queue jobs with their error messages.
+- `wp auto-alt-text queue --retry-failed` — Re-queue all failed jobs for processing.
+- `wp auto-alt-text queue --limit=50` — Show up to 50 queue entries (default: all).
+
+## Background Processing
+
+Automatic alt text generation (image uploads, WooCommerce product saves) does not call OpenAI during the triggering request. Images are added to a persistent queue and processed in the background by WP-Cron, a few at a time. Failed jobs are retried with increasing delays; if your OpenAI quota runs out, the queue pauses, a site admin is emailed once, and processing resumes automatically when the quota is restored.
+
+For reliable background processing we strongly recommend real server cron instead of WordPress' visitor-triggered cron:
+
+1. Add to `wp-config.php`:
+
+    define('DISABLE_WP_CRON', true);
+
+2. Add a system crontab entry running every minute:
+
+    * * * * * cd /path/to/site && wp cron event run --due-now >/dev/null 2>&1
+
+Inspect the queue at any time with `wp auto-alt-text queue` (add `--status=failed` to see errors, `--retry-failed` to re-queue failed jobs), or in the plugin's statistics page in wp-admin.
 
 ## Contributing
 

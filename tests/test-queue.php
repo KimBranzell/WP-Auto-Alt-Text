@@ -1,0 +1,238 @@
+<?php
+class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
+    private $queue;
+
+    public function setUp(): void {
+        parent::setUp();
+        Auto_Alt_Text_Activator::activate();
+        $this->queue = new Auto_Alt_Text_Queue();
+        global $wpdb;
+        $wpdb->query('TRUNCATE TABLE ' . Auto_Alt_Text_Queue::get_table_name());
+    }
+
+    public function test_queue_table_exists() {
+        global $wpdb;
+        $table = Auto_Alt_Text_Queue::get_table_name();
+        $this->assertSame($table, $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)));
+    }
+
+    public function test_enqueue_creates_pending_job() {
+        $id = self::factory()->attachment->create();
+        $this->assertTrue($this->queue->enqueue($id, 'woocommerce'));
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT * FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d', $id
+        ));
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $row->status);
+        $this->assertSame('woocommerce', $row->generation_type);
+        $this->assertSame('0', $row->attempts);
+    }
+
+    public function test_enqueue_dedupes_active_jobs() {
+        $id = self::factory()->attachment->create();
+        $this->assertTrue($this->queue->enqueue($id, 'woocommerce'));
+        $this->assertFalse($this->queue->enqueue($id, 'upload'));
+        global $wpdb;
+        $count = $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(*) FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d', $id
+        ));
+        $this->assertSame('1', $count);
+    }
+
+    public function test_enqueue_allows_requeue_after_done() {
+        $id = self::factory()->attachment->create();
+        $this->queue->enqueue($id, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(),
+            ['status' => Auto_Alt_Text_Queue::STATUS_DONE], ['attachment_id' => $id]);
+        $this->assertTrue($this->queue->enqueue($id, 'woocommerce'));
+    }
+
+    /** Helper: build a queue whose processor returns a fixed result and records calls. */
+    private function queue_with_result($result, &$calls = null) {
+        $calls = [];
+        return new Auto_Alt_Text_Queue(function ($attachment_id, $type) use ($result, &$calls) {
+            $calls[] = $attachment_id;
+            return $result;
+        });
+    }
+
+    private function get_job($attachment_id) {
+        global $wpdb;
+        return $wpdb->get_row($wpdb->prepare(
+            'SELECT * FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d', $attachment_id
+        ));
+    }
+
+    public function test_run_marks_success_done() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $this->assertSame([$id], $calls);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+    }
+
+    public function test_run_skips_attachment_with_existing_alt_text_without_processing() {
+        $id = self::factory()->attachment->create();
+        update_post_meta($id, '_wp_attachment_image_alt', 'Already described');
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $this->assertSame([], $calls);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+    }
+
+    public function test_retryable_failure_reschedules_with_backoff() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'retry', 'error' => 'HTTP 500'], $calls);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $job->status);
+        $this->assertSame('1', $job->attempts);
+        $this->assertSame('HTTP 500', $job->last_error);
+        // attempts=1 → delay 2^1 * 60 = 120 s
+        $delta = strtotime($job->next_attempt_at) - strtotime($job->updated_at);
+        $this->assertGreaterThanOrEqual(110, $delta);
+        $this->assertLessThanOrEqual(130, $delta);
+    }
+
+    public function test_job_fails_after_max_attempts() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'retry', 'error' => 'HTTP 500']);
+        $queue->enqueue($id, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(),
+            ['attempts' => Auto_Alt_Text_Queue::MAX_ATTEMPTS - 1], ['attachment_id' => $id]);
+        $queue->run();
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_FAILED, $this->get_job($id)->status);
+    }
+
+    public function test_permanent_failure_marks_failed_immediately() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'failed', 'error' => 'Invalid image']);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_FAILED, $job->status);
+        $this->assertSame('Invalid image', $job->last_error);
+    }
+
+    public function test_quota_result_leaves_job_pending_and_stops_run() {
+        $id1 = self::factory()->attachment->create();
+        $id2 = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'quota', 'error' => 'insufficient_quota'], $calls);
+        $queue->enqueue($id1, 'upload');
+        $queue->enqueue($id2, 'upload');
+        $queue->run();
+        $this->assertCount(1, $calls);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($id1)->status);
+        $this->assertSame('0', $this->get_job($id1)->attempts);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($id2)->status);
+    }
+
+    public function test_future_jobs_are_not_claimed() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(),
+            ['next_attempt_at' => gmdate('Y-m-d H:i:s', time() + 3600)], ['attachment_id' => $id]);
+        $queue->run();
+        $this->assertSame([], $calls);
+    }
+
+    public function test_stuck_processing_jobs_are_recovered() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(), [
+            'status'     => Auto_Alt_Text_Queue::STATUS_PROCESSING,
+            'updated_at' => gmdate('Y-m-d H:i:s', time() - 16 * MINUTE_IN_SECONDS),
+        ], ['attachment_id' => $id]);
+        $queue->run();
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+    }
+
+    public function test_deleted_attachment_marks_job_done() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        wp_delete_attachment($id, true);
+        $queue->run();
+        $this->assertSame([], $calls);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+    }
+
+    public function test_run_does_not_release_or_process_other_runners_fresh_processing_jobs() {
+        $mine = self::factory()->attachment->create();
+        $theirs = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($mine, 'upload');
+        $queue->enqueue($theirs, 'upload');
+        global $wpdb;
+        // Simulate a concurrent runner holding $theirs: processing, fresh updated_at.
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(), [
+            'status'     => Auto_Alt_Text_Queue::STATUS_PROCESSING,
+            'updated_at' => gmdate('Y-m-d H:i:s', time() - 2 * MINUTE_IN_SECONDS),
+        ], ['attachment_id' => $theirs]);
+        $queue->run();
+        $this->assertSame([$mine], $calls, 'Must not process another runner\'s in-flight job');
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PROCESSING, $this->get_job($theirs)->status,
+            'Must not release another runner\'s fresh processing job');
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($mine)->status);
+    }
+
+    public function test_get_counts_and_retry_failed() {
+        $a = self::factory()->attachment->create();
+        $b = self::factory()->attachment->create();
+        $this->queue->enqueue($a, 'upload');
+        $this->queue->enqueue($b, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(),
+            ['status' => Auto_Alt_Text_Queue::STATUS_FAILED], ['attachment_id' => $b]);
+        $counts = $this->queue->get_counts();
+        $this->assertSame(1, $counts['pending']);
+        $this->assertSame(1, $counts['failed']);
+        $this->assertSame(1, $this->queue->retry_failed());
+        $this->assertSame(2, $this->queue->get_counts()['pending']);
+    }
+
+    public function test_run_exits_immediately_during_quota_incident() {
+        add_filter('pre_wp_mail', '__return_true');
+        Auto_Alt_Text_Quota_Monitor::record_failure('quota');
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $this->assertSame([], $calls, 'No jobs processed while quota incident active and probe not due');
+        delete_option(Auto_Alt_Text_Quota_Monitor::OPTION);
+    }
+
+    public function test_run_probes_single_job_when_probe_due() {
+        add_filter('pre_wp_mail', '__return_true');
+        Auto_Alt_Text_Quota_Monitor::record_failure('quota');
+        $incident = get_option(Auto_Alt_Text_Quota_Monitor::OPTION);
+        $incident['last_probe_at'] = time() - 16 * MINUTE_IN_SECONDS;
+        update_option(Auto_Alt_Text_Quota_Monitor::OPTION, $incident, false);
+
+        $a = self::factory()->attachment->create();
+        $b = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($a, 'upload');
+        $queue->enqueue($b, 'upload');
+        $queue->run();
+        $this->assertCount(1, $calls, 'Probe processes exactly one job');
+        delete_option(Auto_Alt_Text_Quota_Monitor::OPTION);
+    }
+
+    public function test_cron_event_is_scheduled() {
+        WP_Auto_Alt_Text_Plugin::get_instance()->maybe_schedule_queue_cron();
+        $this->assertNotFalse(wp_next_scheduled('aat_queue_tick'));
+        $schedules = wp_get_schedules();
+        $this->assertArrayHasKey('aat_minutely', $schedules);
+        $this->assertSame(60, $schedules['aat_minutely']['interval']);
+    }
+}

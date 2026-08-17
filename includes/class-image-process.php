@@ -28,6 +28,10 @@ class Auto_Alt_Text_Image_Process {
         return;
     }
 
+    if (!get_option('auto_alt_text_auto_generate', true)) {
+        return;
+    }
+
     $upload_language = $this->language_manager->get_current_language();
     $source_language = $this->language_manager->get_default_language();
 
@@ -51,26 +55,14 @@ class Auto_Alt_Text_Image_Process {
     ]);
 
     if ($upload_language === $attachment_language) {
-        try {
-            $image_url = $this->get_image_url_for_openai($attachment_id);
-            $base_alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'upload');
+        $queue = new Auto_Alt_Text_Queue();
+        $queued = $queue->enqueue($attachment_id, 'upload');
 
-            if (empty($base_alt_text)) {
-                throw new Exception('Failed to generate alt text');
-            }
-
-            update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($base_alt_text));
-
-            Auto_Alt_Text_Logger::log("Alt text generated for attachment language", "info", [
-                'attachment_id' => $attachment_id,
-              'language' => $attachment_language
-            ]);
-        } catch (Exception $e) {
-            Auto_Alt_Text_Logger::log("Alt text generation failed", "error", [
-                'attachment_id' => $attachment_id,
-                'error' => $e->getMessage()
-            ]);
-        }
+        Auto_Alt_Text_Logger::log("Attachment queued for alt text generation", "info", [
+            'attachment_id' => $attachment_id,
+            'queued' => $queued,
+            'language' => $attachment_language,
+        ]);
     }
   }
 

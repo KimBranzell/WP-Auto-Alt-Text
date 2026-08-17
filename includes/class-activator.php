@@ -49,6 +49,15 @@ class Auto_Alt_Text_Activator {
     }
 
     /**
+     * Retrieves the name of the generation queue table.
+     *
+     * @return string
+     */
+    private static function get_queue_table_name() {
+        return self::get_db()->prefix . 'aat_queue';
+    }
+
+    /**
      * Checks if the specified column exists in the given database table.
      *
      * @param string $table The name of the database table.
@@ -80,6 +89,7 @@ class Auto_Alt_Text_Activator {
         $charset_collate = $wpdb->get_charset_collate();
         $stats_table = self::get_stats_table_name();
         $logs_table = self::get_logs_table_name();
+        $queue_table = self::get_queue_table_name();
 
         try {
             // Create or update tables using dbDelta which handles schema changes safely
@@ -111,8 +121,24 @@ class Auto_Alt_Text_Activator {
                 PRIMARY KEY  (id)
             ) $charset_collate;";
 
+            $create_queue_sql = "CREATE TABLE {$queue_table} (
+                id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+                attachment_id bigint(20) unsigned NOT NULL,
+                generation_type varchar(32) NOT NULL DEFAULT 'upload',
+                status varchar(16) NOT NULL DEFAULT 'pending',
+                attempts tinyint unsigned NOT NULL DEFAULT 0,
+                next_attempt_at datetime NOT NULL,
+                last_error text DEFAULT NULL,
+                created_at datetime NOT NULL,
+                updated_at datetime NOT NULL,
+                PRIMARY KEY  (id),
+                KEY idx_attachment (attachment_id),
+                KEY idx_claim (status,next_attempt_at)
+            ) $charset_collate;";
+
             dbDelta($create_stats_sql);
             dbDelta($create_logs_sql);
+            dbDelta($create_queue_sql);
 
 
         } catch (Exception $e) {

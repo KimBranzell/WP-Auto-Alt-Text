@@ -3,7 +3,8 @@ class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/responses';
     private const MODEL = 'gpt-5.2';
     private const MAX_TOKENS = 120;
-    private const MAX_API_RETRIES = 3;
+    private const MAX_API_RETRIES = 1;          // sync default: 2 attempts total (was 3 → 4 attempts)
+    private const MAX_RETRY_DELAY_SECONDS = 5.0; // was hardcoded 15.0
     private const ESTIMATED_IMAGE_INPUT_TOKENS = 1200;
     private const ESTIMATED_CHARS_PER_TOKEN = 4;
     private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
@@ -13,6 +14,8 @@ class Auto_Alt_Text_OpenAI  {
     private $rate_limiter;
     private $statistics;
     private $language_manager;
+    private $max_api_attempts;
+    private $last_error_class = null;
 
     public function __construct(?Auto_Alt_Text_Language_Manager $language_manager = null) {
         $encrypted_key = get_option('auto_alt_text_api_key');
@@ -20,6 +23,7 @@ class Auto_Alt_Text_OpenAI  {
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
         $this->statistics = new Auto_Alt_Text_Statistics();
         $this->language_manager = $language_manager ?? new Auto_Alt_Text_Language_Manager();
+        $this->max_api_attempts = self::MAX_API_RETRIES + 1;
     }
 
     /**
@@ -155,6 +159,7 @@ class Auto_Alt_Text_OpenAI  {
     public function save_api_key($key) {
         $encrypted_key = $this->encrypt_api_key($key);
         update_option('auto_alt_text_api_key', $encrypted_key);
+        $this->api_key = $key;
     }
 
     /**
@@ -168,6 +173,22 @@ class Auto_Alt_Text_OpenAI  {
      */
     public function get_last_error() {
         return $this->last_error;
+    }
+
+    /**
+     * Overrides how many total API attempts a call may make. The queue
+     * runner sets 1 — retry timing lives in the queue, not in sleep().
+     */
+    public function set_max_api_attempts($attempts) {
+        $this->max_api_attempts = max(1, (int) $attempts);
+    }
+
+    /**
+     * Error class of the last failed call:
+     * 'quota' | 'rate_limit' | 'transient' | 'permanent' | null.
+     */
+    public function get_last_error_class() {
+        return $this->last_error_class;
     }
 
     /**
@@ -306,6 +327,7 @@ class Auto_Alt_Text_OpenAI  {
 
         if (!get_option('auto_alt_text_auto_generate', true)) {
             $this->last_error = __('OpenAI returned an empty response. Please try again.', 'WP-Auto-Alt-Text');
+            $this->last_error_class = 'permanent';
             return null;
         }
 
@@ -325,12 +347,18 @@ class Auto_Alt_Text_OpenAI  {
                 Auto_Alt_Text_Logger::log("Retrieved alt text from cache", "info", [
                     'attachment_id' => $attachment_id
                 ]);
+
+                if (!$preview_mode && !empty($cached_response)) {
+                    update_post_meta($attachment_id, '_wp_attachment_image_alt', $cached_response);
+                }
+
                 return $cached_response;
             }
         }
 
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
+            $this->last_error_class = 'permanent';
             return null;
         }
 
@@ -718,6 +746,7 @@ class Auto_Alt_Text_OpenAI  {
      * @throws Exception If the API request fails or the rate limit is exceeded.
      */
     private function callAPI($data) {
+        $this->last_error_class = null;
         $estimated_tokens = $this->estimate_request_tokens($data);
         $args = [
             'headers' => [
@@ -728,7 +757,7 @@ class Auto_Alt_Text_OpenAI  {
             'timeout' => 30,
             'sslverify' => true,
         ];
-        $max_attempts = self::MAX_API_RETRIES + 1;
+        $max_attempts = $this->max_api_attempts;
 
         for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
             $this->rate_limiter->wait_for_capacity($estimated_tokens);
@@ -742,6 +771,7 @@ class Auto_Alt_Text_OpenAI  {
                     continue;
                 }
 
+                $this->last_error_class = 'transient';
                 $friendly_error = $this->map_api_error_message($response->get_error_message(), 0);
                 throw new Exception( esc_html( $friendly_error ) );
             }
@@ -754,6 +784,8 @@ class Auto_Alt_Text_OpenAI  {
             $response_data = json_decode($body, true);
 
             if (200 === $http_code && !empty($body) && is_array($response_data)) {
+                $this->last_error_class = null;
+                Auto_Alt_Text_Quota_Monitor::record_success();
                 return $response_data;
             }
 
@@ -761,20 +793,27 @@ class Auto_Alt_Text_OpenAI  {
                 ? ($response_data['error']['message'] ?? __('Unknown API error', 'WP-Auto-Alt-Text'))
                 : __('Unknown API error', 'WP-Auto-Alt-Text');
             $friendly_error = $this->map_api_error_message($raw_error, $http_code);
+            $error_class = $this->classify_api_error(is_array($response_data) ? $response_data : [], $http_code);
+            $this->last_error_class = $error_class;
 
             Auto_Alt_Text_Logger::log('OpenAI API request failed', 'error', [
                 'http_code' => $http_code,
                 'raw_error' => $raw_error,
+                'error_class' => $error_class,
                 'friendly_error' => $friendly_error,
                 'attempt' => $attempt,
             ]);
 
-            if ($attempt < $max_attempts && $this->should_retry_http_code($http_code)) {
-                if (429 === $http_code) {
+            if ('quota' === $error_class) {
+                Auto_Alt_Text_Quota_Monitor::record_failure($raw_error);
+                throw new Exception( esc_html__( 'OpenAI quota exhausted — check your OpenAI billing. Generation is paused until the quota is restored.', 'WP-Auto-Alt-Text' ) );
+            }
+
+            if ($attempt < $max_attempts && in_array($error_class, ['rate_limit', 'transient'], true)) {
+                if ('rate_limit' === $error_class) {
                     $this->rate_limiter->record_rate_limit_error($headers, $attempt);
                     continue;
                 }
-
                 usleep((int) ceil($this->calculate_retry_delay($headers, $attempt) * 1000000));
                 continue;
             }
@@ -783,6 +822,34 @@ class Auto_Alt_Text_OpenAI  {
         }
 
         throw new Exception( esc_html__( 'Unable to generate alt text right now. Please try again.', 'WP-Auto-Alt-Text' ) );
+    }
+
+    /**
+     * Classifies an API error response for retry policy.
+     *
+     * @return string 'quota' | 'rate_limit' | 'transient' | 'permanent'
+     */
+    private function classify_api_error($response_data, $http_code) {
+        $type = strtolower((string) ($response_data['error']['type'] ?? ''));
+        $code = strtolower((string) ($response_data['error']['code'] ?? ''));
+        $message = strtolower((string) ($response_data['error']['message'] ?? ''));
+
+        if ('insufficient_quota' === $type || 'insufficient_quota' === $code
+            || 'billing_hard_limit_reached' === $code
+            || strpos($message, 'exceeded your current quota') !== false
+            || strpos($message, 'billing hard limit') !== false) {
+            return 'quota';
+        }
+
+        if (429 === $http_code) {
+            return 'rate_limit';
+        }
+
+        if ($http_code >= 500 || 408 === $http_code) {
+            return 'transient';
+        }
+
+        return 'permanent';
     }
 
     /**
@@ -799,8 +866,12 @@ class Auto_Alt_Text_OpenAI  {
             return __('Authentication failed. Please verify your OpenAI API key.', 'WP-Auto-Alt-Text');
         }
 
-        if ($http_code === 429 || strpos($error_message, 'rate limit') !== false || strpos($error_message, 'quota') !== false) {
-            return __('OpenAI rate or quota limit reached. Please wait and try again.', 'WP-Auto-Alt-Text');
+        if (strpos($error_message, 'exceeded your current quota') !== false || strpos($error_message, 'billing hard limit') !== false) {
+            return __('OpenAI quota exhausted — check your OpenAI billing. Generation is paused until the quota is restored.', 'WP-Auto-Alt-Text');
+        }
+
+        if ($http_code === 429 || strpos($error_message, 'rate limit') !== false) {
+            return __('OpenAI rate limit reached. Please wait and try again.', 'WP-Auto-Alt-Text');
         }
 
         if ($http_code === 400 || strpos($error_message, 'max_output_tokens') !== false || strpos($error_message, 'unsupported parameter') !== false || strpos($error_message, 'input_image') !== false || strpos($error_message, 'responses') !== false) {
@@ -921,16 +992,6 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Determines whether an HTTP status code should be retried.
-     *
-     * @param int $http_code HTTP status code.
-     * @return bool
-     */
-    private function should_retry_http_code($http_code) {
-        return in_array((int) $http_code, [429, 500, 502, 503, 504], true);
-    }
-
-    /**
      * Determines whether a transport error should be retried.
      *
      * @param WP_Error $error Transport error.
@@ -978,10 +1039,10 @@ class Auto_Alt_Text_OpenAI  {
             );
         }
 
-        $exponential_delay = min(15.0, (float) pow(2, max(0, (int) $attempt - 1)));
+        $exponential_delay = min(self::MAX_RETRY_DELAY_SECONDS, (float) pow(2, max(0, (int) $attempt - 1)));
         $jitter = wp_rand(100, 600) / 1000;
 
-        return max($reset_hint, $exponential_delay + $jitter);
+        return min(self::MAX_RETRY_DELAY_SECONDS, max($reset_hint, $exponential_delay + $jitter));
     }
 
     /**

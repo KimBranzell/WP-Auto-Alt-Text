@@ -1,1 +1,9 @@
-.vscode/
+vendor/
+docs/
+composer.lock
+phpunit.xml
+.phpunit.result.cache
+tests/wp-tests-config.php
+!README.md
+*.md
+.*/

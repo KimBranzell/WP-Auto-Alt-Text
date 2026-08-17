@@ -67,6 +67,8 @@ class Auto_Alt_Text_Statistics_Page {
         <div class="wrap">
             <h1>Alternativ text-statistik</h1>
 
+            <?php $this->render_queue_panel(); ?>
+
             <?php if ($orphaned_count > 0): ?>
                 <div class="notice notice-warning orphaned-alt-text-stats">
                     <p><?php
@@ -175,6 +177,32 @@ class Auto_Alt_Text_Statistics_Page {
             </div>
         <?php endif; ?>
         </div>
+        <?php
+    }
+
+    /**
+     * Renders the background queue summary panel.
+     *
+     * Shows whether background generation is running or paused due to an
+     * active OpenAI quota incident, plus current job counts by status.
+     */
+    private function render_queue_panel() {
+        $queue = new Auto_Alt_Text_Queue();
+        $counts = $queue->get_counts();
+        $incident = Auto_Alt_Text_Quota_Monitor::get_incident();
+        ?>
+        <h2><?php esc_html_e('Background queue', 'WP-Auto-Alt-Text'); ?></h2>
+        <?php if ($incident) : ?>
+            <p><strong><?php esc_html_e('Status: paused — OpenAI quota exhausted. Queued images resume automatically once billing is restored.', 'WP-Auto-Alt-Text'); ?></strong></p>
+        <?php else : ?>
+            <p><?php esc_html_e('Status: running', 'WP-Auto-Alt-Text'); ?></p>
+        <?php endif; ?>
+        <ul>
+            <li><?php printf(esc_html__('Pending: %d', 'WP-Auto-Alt-Text'), (int) $counts['pending']); ?></li>
+            <li><?php printf(esc_html__('Processing: %d', 'WP-Auto-Alt-Text'), (int) $counts['processing']); ?></li>
+            <li><?php printf(esc_html__('Failed: %d', 'WP-Auto-Alt-Text'), (int) $counts['failed']); ?></li>
+            <li><?php printf(esc_html__('Completed (last 7 days): %d', 'WP-Auto-Alt-Text'), (int) $counts['done']); ?></li>
+        </ul>
         <?php
     }
 

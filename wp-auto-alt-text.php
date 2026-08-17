@@ -95,6 +95,8 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-activator.php';
 		require_once __DIR__ . '/includes/class-cache-manager.php';
 		require_once __DIR__ . '/includes/class-batch-processor.php';
+		require_once __DIR__ . '/includes/class-queue.php';
+		require_once __DIR__ . '/includes/class-quota-monitor.php';
 		require_once __DIR__ . '/includes/class-statistics.php';
 		require_once __DIR__ . '/includes/class-statistics-page.php';
 		require_once __DIR__ . '/includes/class-ajax-handler.php';
@@ -146,9 +148,22 @@ class WP_Auto_Alt_Text_Plugin {
 		add_action('admin_enqueue_scripts', [$this->components['admin'], 'enqueueAutoAltTextScript']);
 		add_action('wp_ajax_apply_alt_text', [$this->components['ajax_handler'], 'apply_alt_text']);
 
-		add_action('add_attachment', [$this->components['image_processor'], 'handle_new_attachment']);
     add_action('edit_attachment', [$this->components['image_processor'], 'handle_attachment_update']);
 
+		add_action('admin_notices', ['Auto_Alt_Text_Quota_Monitor', 'render_admin_notice']);
+		add_action('admin_post_aat_dismiss_quota_notice', ['Auto_Alt_Text_Quota_Monitor', 'handle_dismiss_request']);
+
+		add_filter('cron_schedules', function ($schedules) {
+			$schedules['aat_minutely'] = [
+				'interval' => MINUTE_IN_SECONDS,
+				'display'  => __('Every minute (WP Auto Alt Text queue)', 'WP-Auto-Alt-Text'),
+			];
+			return $schedules;
+		});
+		add_action('aat_queue_tick', function () {
+			(new Auto_Alt_Text_Queue())->run();
+		});
+		add_action('init', [$this, 'maybe_schedule_queue_cron']);
 
 		add_action('admin_init', function() {
 			if (function_exists('wp_add_privacy_policy_content')) {
@@ -197,6 +212,20 @@ class WP_Auto_Alt_Text_Plugin {
 		new Auto_Alt_Text_REST_API();
 		new Auto_Alt_Text_WP_Media_Folder();
 	}
+
+	/**
+	 * Ensures the queue tick is scheduled. Runs on init because the plugin
+	 * has no single activation entry point (activate() runs on plugins_loaded).
+	 */
+	public function maybe_schedule_queue_cron() {
+		if (!wp_next_scheduled('aat_queue_tick')) {
+			wp_schedule_event(time(), 'aat_minutely', 'aat_queue_tick');
+		}
+	}
 }
 
 WP_Auto_Alt_Text_Plugin::get_instance()->init();
+
+register_deactivation_hook(__FILE__, function () {
+	wp_clear_scheduled_hook('aat_queue_tick');
+});
