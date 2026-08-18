@@ -191,17 +191,17 @@ class Auto_Alt_Text_Statistics_Page {
         $counts = $queue->get_counts();
         $incident = Auto_Alt_Text_Quota_Monitor::get_incident();
         ?>
-        <h2><?php esc_html_e('Background queue', 'WP-Auto-Alt-Text'); ?></h2>
+        <h2><?php esc_html_e('Bakgrundskö', 'WP-Auto-Alt-Text'); ?></h2>
         <?php if ($incident) : ?>
-            <p><strong><?php esc_html_e('Status: paused — OpenAI quota exhausted. Queued images resume automatically once billing is restored.', 'WP-Auto-Alt-Text'); ?></strong></p>
+            <p><strong><?php esc_html_e('Status: pausad — OpenAI-kvotan är slut. Köade bilder bearbetas automatiskt när kvotan är återställd.', 'WP-Auto-Alt-Text'); ?></strong></p>
         <?php else : ?>
-            <p><?php esc_html_e('Status: running', 'WP-Auto-Alt-Text'); ?></p>
+            <p><?php esc_html_e('Status: igång', 'WP-Auto-Alt-Text'); ?></p>
         <?php endif; ?>
         <ul>
-            <li><?php printf(esc_html__('Pending: %d', 'WP-Auto-Alt-Text'), (int) $counts['pending']); ?></li>
-            <li><?php printf(esc_html__('Processing: %d', 'WP-Auto-Alt-Text'), (int) $counts['processing']); ?></li>
-            <li><?php printf(esc_html__('Failed: %d', 'WP-Auto-Alt-Text'), (int) $counts['failed']); ?></li>
-            <li><?php printf(esc_html__('Completed (last 7 days): %d', 'WP-Auto-Alt-Text'), (int) $counts['done']); ?></li>
+            <li><?php printf(esc_html__('Väntande: %d', 'WP-Auto-Alt-Text'), (int) $counts['pending']); ?></li>
+            <li><?php printf(esc_html__('Bearbetas: %d', 'WP-Auto-Alt-Text'), (int) $counts['processing']); ?></li>
+            <li><?php printf(esc_html__('Misslyckade: %d', 'WP-Auto-Alt-Text'), (int) $counts['failed']); ?></li>
+            <li><?php printf(esc_html__('Klara (senaste 7 dagarna): %d', 'WP-Auto-Alt-Text'), (int) $counts['done']); ?></li>
         </ul>
         <?php
     }

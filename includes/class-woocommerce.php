@@ -2,11 +2,9 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_WooCommerce {
     private $queue;
-    private $statistics;
 
     public function __construct() {
         $this->queue = new Auto_Alt_Text_Queue();
-        $this->statistics = new Auto_Alt_Text_Statistics();
 
         // Product creation and updates
         add_action('woocommerce_new_product', [$this, 'process_product_images']);

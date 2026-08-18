@@ -9,6 +9,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_Quota_Monitor {
     public const OPTION = 'aat_quota_incident';
 
+    /** Timestamp of the last incident email; survives incident clearing. */
+    public const LAST_EMAIL_OPTION = 'aat_quota_last_email_at';
+
     private const PROBE_INTERVAL = 15 * MINUTE_IN_SECONDS;
 
     public static function get_incident() {
@@ -41,6 +44,17 @@ class Auto_Alt_Text_Quota_Monitor {
         }
 
         if (empty($incident['email_sent'])) {
+            // Floor across incidents: a quota flapping around a billing limit
+            // clears and re-creates the incident repeatedly; without this, each
+            // flap would re-arm the one-email-per-incident guard.
+            $last_email_at = (int) get_option(self::LAST_EMAIL_OPTION, 0);
+            if ((time() - $last_email_at) < DAY_IN_SECONDS) {
+                Auto_Alt_Text_Logger::log('Quota incident email suppressed — one already sent within 24 h', 'info');
+                $incident['email_sent'] = true;
+            }
+        }
+
+        if (empty($incident['email_sent'])) {
             $sent = wp_mail(
                 get_option('admin_email'),
                 sprintf(
@@ -61,6 +75,7 @@ class Auto_Alt_Text_Quota_Monitor {
                 ]);
             }
             $incident['email_sent'] = true; // one attempt per incident, even if wp_mail fails
+            update_option(self::LAST_EMAIL_OPTION, time(), false);
         }
 
         update_option(self::OPTION, $incident, false);

@@ -235,4 +235,31 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertArrayHasKey('aat_minutely', $schedules);
         $this->assertSame(60, $schedules['aat_minutely']['interval']);
     }
+
+    public function test_processor_crash_reschedules_job_instead_of_fataling() {
+        $id = self::factory()->attachment->create();
+        $queue = new Auto_Alt_Text_Queue(function () {
+            throw new RuntimeException('imagecreatefromavif(): AVIF not supported');
+        });
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $job->status, 'Crashed job must go back to pending with backoff, not stay processing');
+        $this->assertSame('1', $job->attempts, 'Crash must consume an attempt so MAX_ATTEMPTS is reachable');
+        $this->assertStringContainsString('AVIF not supported', $job->last_error);
+    }
+
+    public function test_run_leaves_jobs_pending_when_auto_generate_disabled() {
+        // Two-step set: update_option($opt, false) on a missing row is a no-op
+        // (old value false == new value); prime with true so false persists.
+        update_option('auto_alt_text_auto_generate', true);
+        update_option('auto_alt_text_auto_generate', false);
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $this->assertSame([], $calls, 'No jobs may be processed while auto-generate is disabled');
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($id)->status, 'Backlog must survive the toggle being off');
+        update_option('auto_alt_text_auto_generate', true);
+    }
 }

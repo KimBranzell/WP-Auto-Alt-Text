@@ -77,6 +77,19 @@ class Auto_Alt_Text_Queue {
      * in next_attempt_at, never in sleep().
      */
     public function run() {
+        // The auto-generate toggle pauses the queue outright: jobs stay
+        // pending until it is re-enabled, instead of being churned into
+        // per-job failures against a deliberately disabled setting.
+        if (!get_option('auto_alt_text_auto_generate', true)) {
+            return;
+        }
+
+        global $wpdb;
+        // Idle fast-path: an empty table needs no maintenance writes.
+        if (!$wpdb->get_var('SELECT id FROM ' . self::get_table_name() . ' LIMIT 1')) {
+            return;
+        }
+
         $this->recover_stuck_jobs();
         $this->prune();
 
@@ -171,7 +184,18 @@ class Auto_Alt_Text_Queue {
         }
 
         $processor = $this->processor ?: [$this, 'default_processor'];
-        $result = call_user_func($processor, $attachment_id, $job->generation_type);
+        try {
+            $result = call_user_func($processor, $attachment_id, $job->generation_type);
+        } catch (Throwable $e) {
+            // A fatal inside the processor (e.g. missing AVIF support in GD)
+            // must never kill the cron tick or strand the job in 'processing'
+            // with a frozen attempt counter; route it through normal backoff.
+            Auto_Alt_Text_Logger::log('Queue processor crashed', 'error', [
+                'attachment_id' => $attachment_id,
+                'error'         => $e->getMessage(),
+            ]);
+            $result = ['status' => 'retry', 'error' => $e->getMessage()];
+        }
         $status = is_array($result) ? ($result['status'] ?? 'failed') : 'failed';
         $error  = is_array($result) ? ($result['error'] ?? null) : null;
 

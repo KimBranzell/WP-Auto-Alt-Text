@@ -6,6 +6,7 @@ class Auto_Alt_Text_Quota_Monitor_Test extends WP_UnitTestCase {
     public function setUp(): void {
         parent::setUp();
         delete_option(Auto_Alt_Text_Quota_Monitor::OPTION);
+        delete_option(Auto_Alt_Text_Quota_Monitor::LAST_EMAIL_OPTION);
         $this->sent_emails = [];
         add_filter('pre_wp_mail', function ($null, $atts) {
             $this->sent_emails[] = $atts;
@@ -37,11 +38,23 @@ class Auto_Alt_Text_Quota_Monitor_Test extends WP_UnitTestCase {
         $this->assertFalse(Auto_Alt_Text_Quota_Monitor::is_active());
     }
 
-    public function test_new_incident_after_clear_sends_new_email() {
+    public function test_new_incident_after_clear_sends_new_email_after_24h_floor() {
+        Auto_Alt_Text_Quota_Monitor::record_failure('quota');
+        Auto_Alt_Text_Quota_Monitor::record_success();
+        // Age the cross-incident email floor past 24 h.
+        update_option(Auto_Alt_Text_Quota_Monitor::LAST_EMAIL_OPTION, time() - DAY_IN_SECONDS - 60, false);
+        Auto_Alt_Text_Quota_Monitor::record_failure('quota again');
+        $this->assertCount(2, $this->sent_emails);
+    }
+
+    public function test_flapping_quota_within_24h_sends_only_one_email() {
         Auto_Alt_Text_Quota_Monitor::record_failure('quota');
         Auto_Alt_Text_Quota_Monitor::record_success();
         Auto_Alt_Text_Quota_Monitor::record_failure('quota again');
-        $this->assertCount(2, $this->sent_emails);
+        Auto_Alt_Text_Quota_Monitor::record_success();
+        Auto_Alt_Text_Quota_Monitor::record_failure('and again');
+        $this->assertCount(1, $this->sent_emails, 'Flapping quota must not re-arm the email guard within 24 h');
+        $this->assertTrue(get_option(Auto_Alt_Text_Quota_Monitor::OPTION)['email_sent']);
     }
 
     public function test_should_probe_gates_to_fifteen_minutes() {

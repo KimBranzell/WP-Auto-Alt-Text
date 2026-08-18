@@ -66,6 +66,25 @@ class Auto_Alt_Text_OpenAI_Errors_Test extends WP_UnitTestCase {
         $this->assertSame(2, $this->request_count, 'Sync path retries once (2 attempts total)');
     }
 
+    public function test_malformed_200_is_transient_and_retried() {
+        add_filter('pre_http_request', function ($pre, $args, $url) {
+            if (strpos($url, 'openai.com') === false) {
+                return $pre;
+            }
+            $this->request_count++;
+            return [
+                'headers'  => [],
+                'body'     => '', // 200 with empty body: proxy/transport artifact
+                'response' => ['code' => 200, 'message' => 'OK'],
+                'cookies'  => [],
+            ];
+        }, 10, 3);
+        [$result] = $this->generate();
+        $this->assertNull($result);
+        $this->assertSame('transient', $this->openai->get_last_error_class(), 'A malformed 200 must not be classified permanent');
+        $this->assertSame(2, $this->request_count, 'Sync path retries a malformed 200 once');
+    }
+
     public function test_max_attempts_one_makes_single_request() {
         $this->mock_api_response(500, ['error' => ['message' => 'server error', 'type' => 'server_error']]);
         $this->openai->set_max_api_attempts(1);

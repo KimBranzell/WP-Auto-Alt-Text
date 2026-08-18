@@ -147,7 +147,7 @@ For large libraries, use WP-CLI to generate alt text without browser timeouts:
 - `wp auto-alt-text queue` — Inspect the background processing queue.
 - `wp auto-alt-text queue --status=failed` — Show failed queue jobs with their error messages.
 - `wp auto-alt-text queue --retry-failed` — Re-queue all failed jobs for processing.
-- `wp auto-alt-text queue --limit=50` — Show up to 50 queue entries (default: all).
+- `wp auto-alt-text queue --limit=100` — Show up to 100 queue entries (default: 50).
 
 ## Background Processing
 

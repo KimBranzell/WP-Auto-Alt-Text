@@ -849,6 +849,12 @@ class Auto_Alt_Text_OpenAI  {
             return 'transient';
         }
 
+        if (200 === $http_code) {
+            // A 200 only reaches classification when the body was empty or
+            // unparseable — a proxy/transport artifact, not an API verdict.
+            return 'transient';
+        }
+
         return 'permanent';
     }
 

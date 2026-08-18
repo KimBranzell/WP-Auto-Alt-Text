@@ -126,7 +126,7 @@ class Auto_Alt_Text_Activator {
                 attachment_id bigint(20) unsigned NOT NULL,
                 generation_type varchar(32) NOT NULL DEFAULT 'upload',
                 status varchar(16) NOT NULL DEFAULT 'pending',
-                attempts tinyint unsigned NOT NULL DEFAULT 0,
+                attempts tinyint(3) unsigned NOT NULL DEFAULT 0,
                 next_attempt_at datetime NOT NULL,
                 last_error text DEFAULT NULL,
                 created_at datetime NOT NULL,
