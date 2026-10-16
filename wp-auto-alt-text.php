@@ -170,7 +170,9 @@ class WP_Auto_Alt_Text_Plugin {
 		add_filter('cron_schedules', function ($schedules) {
 			$schedules['aat_minutely'] = [
 				'interval' => MINUTE_IN_SECONDS,
-				'display'  => __('Every minute (WP Auto Alt Text queue)', 'WP-Auto-Alt-Text'),
+				// Plain string: cron_schedules can run before init (e.g. WooCommerce
+				// scheduling its crons), and translating here loads the text domain too early.
+				'display'  => 'Every minute (WP Auto Alt Text queue)',
 			];
 			return $schedules;
 		});
