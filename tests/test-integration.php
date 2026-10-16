@@ -121,5 +121,38 @@ class LanguageManagerWpmlTest extends WP_UnitTestCase {
           return $result;
       });
   }
+
+  public function test_translated_alt_text_is_recorded_as_ai() {
+      $english_attachment = wp_insert_attachment([
+          'post_title' => 'English attachment',
+          'post_type' => 'attachment',
+          'post_mime_type' => 'image/jpeg',
+      ]);
+      $swedish_attachment = wp_insert_attachment([
+          'post_title' => 'Swedish attachment',
+          'post_type' => 'attachment',
+          'post_mime_type' => 'image/jpeg',
+      ]);
+      $this->translations = ['en' => $english_attachment, 'sv' => $swedish_attachment];
+      $this->languages = [$english_attachment => 'en', $swedish_attachment => 'sv'];
+      update_post_meta($english_attachment, '_wp_attachment_image_alt', 'English alt text');
+      (new Auto_Alt_Text_OpenAI())->save_api_key('sk-test-not-real');
+      add_filter('pre_http_request', function ($pre, $args, $url) {
+          if (strpos($url, 'openai.com') === false) {
+              return $pre;
+          }
+          return [
+              'headers' => [],
+              'body' => wp_json_encode(['output_text' => 'Svensk alt-text']),
+              'response' => ['code' => 200, 'message' => 'OK'],
+              'cookies' => [],
+          ];
+      }, 10, 3);
+
+      (new Auto_Alt_Text_Language_Manager())->generate_multilingual_alt_text($english_attachment, 'English alt text');
+
+      Assert::assertSame('Svensk alt-text', get_post_meta($swedish_attachment, '_wp_attachment_image_alt', true));
+      Assert::assertSame('ai', Auto_Alt_Text_Provenance::classify($swedish_attachment));
+  }
 }
 

@@ -168,6 +168,14 @@ class Auto_Alt_Text_Ajax_Handler {
                 throw new Exception('Failed to update alt text');
             }
 
+            // Provenance (design D1): applying the generated text unchanged keeps
+            // it AI-written; any edit makes it the editor's own text.
+            if ($is_edited || $alt_text !== $original_text) {
+                Auto_Alt_Text_Provenance::forget($attachment_id);
+            } else {
+                Auto_Alt_Text_Provenance::record($attachment_id, 'manual');
+            }
+
             // Update the existing statistics record
             global $wpdb;
             $table_name = $wpdb->prefix . 'auto_alt_text_stats';

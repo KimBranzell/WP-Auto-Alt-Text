@@ -428,7 +428,10 @@ class Auto_Alt_Text_Language_Manager {
                 continue;
             }
 
-            $this->store_language_specific_alt_text($attachment_id, $language, $translated_alt);
+            $written_id = $this->store_language_specific_alt_text($attachment_id, $language, $translated_alt);
+            if ($written_id) {
+                Auto_Alt_Text_Provenance::record($written_id, 'translate');
+            }
             $translated_alts[$language] = $translated_alt;
         }
 
@@ -509,10 +512,11 @@ class Auto_Alt_Text_Language_Manager {
      * @param int    $attachment_id The ID of the attachment.
      * @param string $language      The language code for the alt text.
      * @param string $alt_text      The alternative text to be stored.
+     * @return int The attachment ID that was written, or 0.
      */
     private function store_language_specific_alt_text($attachment_id, $language, $alt_text) {
         if (empty($alt_text)) {
-            return;
+            return 0;
         }
 
         $translated_id = $this->get_translated_attachment_id($attachment_id, $language);
@@ -522,6 +526,8 @@ class Auto_Alt_Text_Language_Manager {
         }
 
         update_post_meta($translated_id, '_wp_attachment_image_alt', $alt_text);
+
+        return (int) $translated_id;
     }
 
     /**
