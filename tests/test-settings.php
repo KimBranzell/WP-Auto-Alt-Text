@@ -16,6 +16,11 @@ class Auto_Alt_Text_Settings_Test extends WP_UnitTestCase {
         delete_option('auto_alt_text_api_key');
     }
 
+    public function tearDown(): void {
+        unset($_POST['option_page']);
+        parent::tearDown();
+    }
+
     public function test_first_save_of_api_key_stores_a_decryptable_key() {
         // First save goes update_option() -> add_option(): sanitized twice.
         update_option('auto_alt_text_api_key', $this->valid_key());
@@ -46,8 +51,25 @@ class Auto_Alt_Text_Settings_Test extends WP_UnitTestCase {
     }
 
     public function test_invalid_language_falls_back_to_english() {
+        $_POST['option_page'] = AUTO_ALT_TEXT_SETTINGS_GROUP;
         update_option('language', 'xx');
+        unset($_POST['option_page']);
         $this->assertSame('en', get_option('language'));
+    }
+
+    public function test_non_string_language_from_the_settings_form_falls_back_to_english() {
+        $_POST['option_page'] = AUTO_ALT_TEXT_SETTINGS_GROUP;
+        update_option('language', ['sv']);
+        unset($_POST['option_page']);
+        $this->assertSame('en', get_option('language'));
+    }
+
+    public function test_language_option_written_outside_the_settings_form_is_stored_unchanged() {
+        // 'language' is a generic option name other plugins also use.
+        update_option('language', 'sv_SE');
+        $this->assertSame('sv_SE', get_option('language'));
+        update_option('language', ['code' => 'sv']);
+        $this->assertSame(['code' => 'sv'], get_option('language'));
     }
 
     public function test_feedback_toggle_is_a_registered_setting() {

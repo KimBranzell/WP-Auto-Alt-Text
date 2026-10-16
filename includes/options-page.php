@@ -561,7 +561,12 @@ function auto_alt_text_sanitize($input) {
         //     return sanitize_textarea_field($input);
 
         case 'sanitize_option_' . AUTO_ALT_TEXT_LANGUAGE_OPTION:
-            if (!array_key_exists($input, auto_alt_text_get_supported_languages())) {
+            // 'language' is a generic option name: only validate values coming
+            // from this plugin's settings form and leave other writers alone.
+            if (!isset($_POST['option_page']) || AUTO_ALT_TEXT_SETTINGS_GROUP !== $_POST['option_page']) {
+                return $input;
+            }
+            if (!is_string($input) || !array_key_exists($input, auto_alt_text_get_supported_languages())) {
                 return 'en'; // Default to English if invalid
             }
             break;
