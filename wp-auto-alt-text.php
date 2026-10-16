@@ -38,6 +38,7 @@ if (!defined('AUTO_ALT_TEXT_DEBUG')) {
 class WP_Auto_Alt_Text_Plugin {
 	private static $instance = null;
 	private $components = [];
+	private $initialized = false;
 
 	/**
   * Returns the singleton instance of the WP_Auto_Alt_Text_Plugin class.
@@ -55,6 +56,13 @@ class WP_Auto_Alt_Text_Plugin {
 	}
 
 	/**
+	 * Returns a core component (e.g. 'image_processor', 'openai'), or null.
+	 */
+	public function get_component($key) {
+		return $this->components[$key] ?? null;
+	}
+
+	/**
   * Initializes the WP Auto Alt Text plugin.
   * This method performs the following tasks:
   * - Loads the plugin dependencies
@@ -63,6 +71,11 @@ class WP_Auto_Alt_Text_Plugin {
   * - Adds a WP-CLI command for the plugin if WP-CLI is defined and active
   */
 	public function init() {
+		if ($this->initialized) {
+			return;
+		}
+		$this->initialized = true;
+
 		$this->load_dependencies();
 		$this->initialize_core_components();
 		$this->register_hooks();
@@ -224,7 +237,10 @@ class WP_Auto_Alt_Text_Plugin {
 	}
 }
 
-WP_Auto_Alt_Text_Plugin::get_instance()->init();
+// Initialise once every plugin is loaded. This folder name sorts before
+// polylang/ and sitepress-multilingual-cms/ in active_plugins, so their
+// version constants don't exist yet when this file is included.
+add_action('plugins_loaded', [WP_Auto_Alt_Text_Plugin::get_instance(), 'init'], 0);
 
 register_deactivation_hook(__FILE__, function () {
 	wp_clear_scheduled_hook('aat_queue_tick');
