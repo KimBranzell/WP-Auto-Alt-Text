@@ -884,7 +884,7 @@ function announceBatchSkipped(count) {
     }
 
     // Plain text only: set after insertion so the status region announces it.
-    notice.querySelector('p').textContent = `${count} image(s) skipped: their existing alt text is kept by the "Overwrite existing alt text" setting.`;
+    notice.querySelector('p').textContent = `${count} image(s) skipped: their existing alt text is kept by the overwrite setting on the Auto Alt Text settings page.`;
 }
 
 /**

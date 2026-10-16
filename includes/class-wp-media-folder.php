@@ -128,7 +128,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                                 $('.aat-wpmf-progress-container').remove();
                                 let message = '<?php echo esc_js( __( 'Alt text generation complete!', 'WP-Auto-Alt-Text' ) ); ?>';
                                 if (skipped > 0) {
-                                    message += '\n\n' + <?php /* translators: %d: number of images skipped */ echo wp_json_encode( __( '%d image(s) skipped: their existing alt text is kept by the "Overwrite existing alt text" setting.', 'WP-Auto-Alt-Text' ) ); ?>.replace('%d', skipped);
+                                    message += '\n\n' + <?php /* translators: %d: number of images skipped */ echo wp_json_encode( __( '%d image(s) skipped: their existing alt text is kept by the overwrite setting on the Auto Alt Text settings page.', 'WP-Auto-Alt-Text' ) ); ?>.replace('%d', skipped);
                                 }
                                 alert(message);
                             }, 1000);
