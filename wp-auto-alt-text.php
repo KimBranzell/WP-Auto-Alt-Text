@@ -115,7 +115,6 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-ajax-handler.php';
 		require_once __DIR__ . '/includes/class-image-process.php';
 		require_once __DIR__ . '/includes/class-dashboard-widget.php';
-		require_once __DIR__ . '/includes/class-page-builders.php';
 		require_once __DIR__ . '/includes/class-woocommerce.php';
 		require_once __DIR__ . '/includes/class-cli.php';
 		require_once __DIR__ . '/includes/class-rest-api.php';
@@ -215,12 +214,10 @@ class WP_Auto_Alt_Text_Plugin {
 	/**
   * Initializes the various features of the Auto Alt Text plugin.
   * This method creates instances of the following classes:
-  * - Auto_Alt_Text_Page_Builders: Handles integration with page builder plugins
   * - Auto_Alt_Text_Logger: Provides logging functionality for the plugin
   * - Auto_Alt_Text_REST_API: Implements the plugin's REST API endpoints
   */
 	public function initialize_features() {
-		new Auto_Alt_Text_Page_Builders();
 		new Auto_Alt_Text_Logger();
 		new Auto_Alt_Text_REST_API();
 		new Auto_Alt_Text_WP_Media_Folder();
