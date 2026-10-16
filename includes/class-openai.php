@@ -121,7 +121,10 @@ class Auto_Alt_Text_OpenAI  {
         $this->max_api_attempts = max(1, (int) $attempts);
     }
 
-    /** The post that queued this generation (e.g. the saved product); used to resolve context. */
+    /**
+     * The post that queued the next generation (e.g. the saved product); used
+     * to resolve context. Applies to the next generate_alt_text() call only.
+     */
     public function set_context_post_id($post_id) {
         $this->context_post_id = $post_id ? (int) $post_id : null;
     }
@@ -272,6 +275,8 @@ class Auto_Alt_Text_OpenAI  {
         $image_path = get_attached_file($attachment_id);
         $target_language = $this->resolve_generation_language($attachment_id, $language_override);
         $context = Auto_Alt_Text_Context::for_attachment($attachment_id, $this->context_post_id);
+        // One hint per generation: a reused instance must not carry it to the next image.
+        $this->context_post_id = null;
         $instruction = $this->get_instruction($attachment_id, $target_language, $context);
         $cache_context = [
             'language' => $target_language,
@@ -562,6 +567,10 @@ class Auto_Alt_Text_OpenAI  {
      * avoiding phrases like "image of", using the user's language, and maintaining proper
      * grammar and syntax.
      *
+     * @param int         $attachment_id The attachment the alt text is for, or 0.
+     * @param string|null $language      Language code; defaults to the attachment's language.
+     * @param array|null  $context       Owning product or page from Auto_Alt_Text_Context::for_attachment(),
+     *                                   or null when the image has no single owner.
      * @return string The generated instruction for the OpenAI API call.
      */
     private function get_instruction($attachment_id = 0, $language = null, $context = null) {
