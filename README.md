@@ -165,6 +165,17 @@ For reliable background processing we strongly recommend real server cron instea
 
 Inspect the queue at any time with `wp auto-alt-text queue` (add `--status=failed` to see errors, `--retry-failed` to re-queue failed jobs), or in the plugin's statistics page in wp-admin.
 
+## Running tests
+
+Requirements: PHP 8.0+, Composer, WP-CLI, and a MySQL user that can create databases.
+
+1. `composer install`
+2. `wp core download --version=7.1.1 --path=.wp-core`
+3. Optional, enables the WooCommerce tests:
+   `curl -sSL https://downloads.wordpress.org/plugin/woocommerce.11.2.1.zip -o .wp-core/woocommerce.zip && unzip -q -o .wp-core/woocommerce.zip -d .wp-core/wp-content/plugins/ && rm .wp-core/woocommerce.zip`
+4. `cp tests/wp-tests-config.php.dist tests/wp-tests-config.php` and set the DB credentials. Use a dedicated database (default `wp_aat_tests`) — the suite drops its tables.
+5. `composer test`
+
 ## Contributing
 
 We welcome contributions to improve WP Auto Alt Text!
