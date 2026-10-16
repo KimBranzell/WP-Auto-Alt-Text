@@ -370,7 +370,10 @@ function handleSingleImageGeneration(event) {
             showError((data.data && data.data.message) || 'Alt text generation failed.');
         }
     })
-    .catch(error => console.error('Error:', error))
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Alt text generation failed.');
+    })
     .finally(() => {
         loader.style.display = 'none';
     });
