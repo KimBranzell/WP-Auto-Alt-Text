@@ -306,6 +306,22 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($bulk_id)->status);
     }
 
+    public function test_promote_pending_relabels_only_pending_jobs() {
+        $pending = self::factory()->attachment->create();
+        $processing = self::factory()->attachment->create();
+        $this->queue->enqueue($pending, 'upload');
+        $this->queue->enqueue($processing, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(),
+            ['status' => Auto_Alt_Text_Queue::STATUS_PROCESSING], ['attachment_id' => $processing]);
+
+        $this->assertTrue($this->queue->promote_pending($pending, 'woocommerce_bulk'));
+        $this->assertSame('woocommerce_bulk', $this->get_job($pending)->generation_type);
+        $this->assertFalse($this->queue->promote_pending($processing, 'woocommerce_bulk'));
+        $this->assertSame('upload', $this->get_job($processing)->generation_type);
+        $this->assertFalse($this->queue->promote_pending(self::factory()->attachment->create(), 'woocommerce_bulk'));
+    }
+
     public function test_run_without_api_key_claims_nothing() {
         if (defined('AUTO_ALT_TEXT_OPENAI_API_KEY')) {
             $this->markTestSkipped('AUTO_ALT_TEXT_OPENAI_API_KEY is defined in this environment');

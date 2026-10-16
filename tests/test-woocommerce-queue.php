@@ -134,6 +134,35 @@ class Auto_Alt_Text_WooCommerce_Queue_Test extends WP_UnitTestCase {
         )));
     }
 
+    public function test_bulk_action_promotes_a_paused_upload_job_so_it_runs() {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $product = $this->make_product_with_image($attachment_id);
+        $this->clear_queue();
+        // Uploaded while auto-generate was on, then the toggle was switched off:
+        // the 'upload' job is paused and would block a plain enqueue.
+        (new Auto_Alt_Text_Queue())->enqueue($attachment_id, 'upload');
+        update_option('auto_alt_text_auto_generate', true);
+        update_option('auto_alt_text_auto_generate', false);
+
+        $redirect = apply_filters(
+            'handle_bulk_actions-edit-product',
+            admin_url('edit.php?post_type=product'),
+            'generate_alt_texts',
+            [$product->get_id()]
+        );
+        update_option('auto_alt_text_auto_generate', true);
+
+        $this->assertStringContainsString('aat_wc_queued=1', $redirect);
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT generation_type, status FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d',
+            $attachment_id
+        ));
+        $this->assertCount(1, $rows);
+        $this->assertSame('woocommerce_bulk', $rows[0]->generation_type);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $rows[0]->status);
+    }
+
     public function test_unauthenticated_admin_post_bulk_endpoint_is_gone() {
         $this->assertFalse(has_action('admin_post_process_wc_product_images'));
     }

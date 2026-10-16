@@ -74,6 +74,32 @@ class Auto_Alt_Text_Queue {
         return (bool) $inserted;
     }
 
+    /**
+     * Re-labels an attachment's pending job, e.g. so an explicit bulk request
+     * for an image whose automatic job is paused runs anyway.
+     *
+     * @return bool Whether the attachment has a pending job, now of that type.
+     */
+    public function promote_pending($attachment_id, $generation_type) {
+        global $wpdb;
+        $table = self::get_table_name();
+        $generation_type = sanitize_key($generation_type);
+        $job = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, generation_type FROM {$table} WHERE attachment_id = %d AND status = %s LIMIT 1",
+            (int) $attachment_id, self::STATUS_PENDING
+        ));
+        if (!$job) {
+            return false;
+        }
+        if ($job->generation_type !== $generation_type) {
+            $wpdb->update($table, [
+                'generation_type' => $generation_type,
+                'updated_at'      => current_time('mysql', true),
+            ], ['id' => (int) $job->id, 'status' => self::STATUS_PENDING]);
+        }
+        return true;
+    }
+
     private const STUCK_MINUTES   = 15;
     private const PRUNE_DONE_DAYS = 7;
     private const PRUNE_FAIL_DAYS = 30;

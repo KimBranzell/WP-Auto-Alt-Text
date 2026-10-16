@@ -76,7 +76,10 @@ class Auto_Alt_Text_WooCommerce {
                 if (get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
                     continue;
                 }
-                if ($this->queue->enqueue($attachment_id, 'woocommerce_bulk')) {
+                // An existing pending job (e.g. an 'upload' job paused by the
+                // auto-generate toggle) is promoted so this request runs.
+                if ($this->queue->enqueue($attachment_id, 'woocommerce_bulk')
+                    || $this->queue->promote_pending($attachment_id, 'woocommerce_bulk')) {
                     $queued++;
                 }
             }
