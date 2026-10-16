@@ -10,7 +10,7 @@ class Auto_Alt_Text_Activator {
     private const CURRENT_DB_VERSION = '1.0';
     private const COLUMN_VERSION = 'db_version';
     /** Bump whenever a CREATE TABLE statement below changes. */
-    private const SCHEMA_VERSION = '1.1';
+    private const SCHEMA_VERSION = '1.2';
     public const DB_VERSION_OPTION = 'auto_alt_text_db_version';
 
     private const COLUMN_GENERATION_TYPE = 'generation_type';
@@ -141,6 +141,7 @@ class Auto_Alt_Text_Activator {
                 id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
                 attachment_id bigint(20) unsigned NOT NULL,
                 generation_type varchar(32) NOT NULL DEFAULT 'upload',
+                context_post_id bigint(20) unsigned DEFAULT NULL,
                 status varchar(16) NOT NULL DEFAULT 'pending',
                 attempts tinyint(3) unsigned NOT NULL DEFAULT 0,
                 next_attempt_at datetime NOT NULL,
@@ -160,6 +161,13 @@ class Auto_Alt_Text_Activator {
             // failed CREATE is retried by maybe_upgrade() on the next request.
             if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($queue_table)))) {
                 update_option(self::DB_VERSION_OPTION, self::SCHEMA_VERSION);
+            }
+
+            // One-time provenance backfill for alt text generated before 2.0
+            // (spec §3). Idempotent: already fingerprinted images are skipped.
+            // A string hook name, because this can run before other classes load.
+            if (!wp_next_scheduled('aat_provenance_backfill', [0])) {
+                wp_schedule_single_event(time() + MINUTE_IN_SECONDS, 'aat_provenance_backfill', [0]);
             }
 
 

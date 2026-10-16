@@ -23,6 +23,9 @@ class Auto_Alt_Text_Provenance {
     public const POLICY_ALL = 'all';
     public const POLICIES = [self::POLICY_MISSING, self::POLICY_AI, self::POLICY_ALL];
 
+    public const BACKFILL_HOOK = 'aat_provenance_backfill';
+    private const BACKFILL_BATCH = 200;
+
     /**
      * Fingerprints the attachment's current alt text as written by the plugin.
      * Reads the stored value, so slashing and sanitising can never cause a
@@ -78,6 +81,51 @@ class Auto_Alt_Text_Provenance {
 
     public static function sanitize_policy($policy) {
         return in_array($policy, self::POLICIES, true) ? $policy : self::POLICY_MISSING;
+    }
+
+    /**
+     * Cron callback: fingerprints one batch of pre-2.0 AI alt texts and
+     * schedules the next batch until every generated image has been checked.
+     */
+    public static function run_backfill($after_image_id = 0) {
+        $last = self::backfill_batch((int) $after_image_id, self::BACKFILL_BATCH);
+        if ($last > 0) {
+            wp_schedule_single_event(time() + 30, self::BACKFILL_HOOK, [$last]);
+        }
+    }
+
+    /**
+     * Fingerprints images whose current alt text equals their latest
+     * generation in the stats table. Images already fingerprinted are left
+     * alone; anything else stays "human", the safe default.
+     *
+     * @return int The last image ID examined, or 0 when there is nothing left.
+     */
+    public static function backfill_batch($after_image_id, $limit) {
+        global $wpdb;
+        $stats = $wpdb->prefix . 'auto_alt_text_stats';
+        $image_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT image_id FROM {$stats} WHERE image_id > %d ORDER BY image_id ASC LIMIT %d",
+            (int) $after_image_id,
+            max(1, (int) $limit)
+        ));
+
+        foreach ($image_ids as $image_id) {
+            $image_id = (int) $image_id;
+            if (metadata_exists('post', $image_id, self::META_KEY)) {
+                continue;
+            }
+            $latest = $wpdb->get_var($wpdb->prepare(
+                "SELECT generated_text FROM {$stats} WHERE image_id = %d ORDER BY generation_time DESC, id DESC LIMIT 1",
+                $image_id
+            ));
+            $alt = self::current_alt($image_id);
+            if ('' !== $alt && null !== $latest && trim((string) $latest) === $alt) {
+                self::record($image_id, 'backfill');
+            }
+        }
+
+        return empty($image_ids) ? 0 : (int) end($image_ids);
     }
 
     private static function current_alt($attachment_id) {

@@ -90,4 +90,68 @@ class Auto_Alt_Text_Provenance_Test extends WP_UnitTestCase {
         $this->assertSame('missing', Auto_Alt_Text_Provenance::sanitize_policy('everything'));
         $this->assertSame('all', Auto_Alt_Text_Provenance::sanitize_policy('all'));
     }
+
+    private function insert_generation($image_id, $text, $time) {
+        global $wpdb;
+        $wpdb->insert($wpdb->prefix . 'auto_alt_text_stats', [
+            'image_id'        => $image_id,
+            'user_id'         => 0,
+            'generated_text'  => $text,
+            'tokens_used'     => 0,
+            'generation_type' => 'upload',
+            'generation_time' => $time,
+        ]);
+    }
+
+    public function test_backfill_fingerprints_only_unchanged_latest_generations() {
+        Auto_Alt_Text_Activator::activate();
+        global $wpdb;
+        $wpdb->query("DELETE FROM {$wpdb->prefix}auto_alt_text_stats");
+        $unchanged = $this->image_with_alt('Latest AI text');
+        $edited = $this->image_with_alt('Editor rewrote it');
+        $superseded = $this->image_with_alt('First AI text');
+        $this->insert_generation($unchanged, 'Latest AI text', '2026-01-01 10:00:00');
+        $this->insert_generation($edited, 'Original AI text', '2026-01-01 10:00:00');
+        $this->insert_generation($superseded, 'First AI text', '2026-01-01 10:00:00');
+        $this->insert_generation($superseded, 'Second AI text', '2026-01-02 10:00:00');
+
+        Auto_Alt_Text_Provenance::backfill_batch(0, 200);
+
+        $this->assertSame('ai', Auto_Alt_Text_Provenance::classify($unchanged));
+        $this->assertSame('backfill', get_post_meta($unchanged, Auto_Alt_Text_Provenance::META_KEY, true)['source']);
+        $this->assertSame('human', Auto_Alt_Text_Provenance::classify($edited));
+        $this->assertSame('human', Auto_Alt_Text_Provenance::classify($superseded));
+    }
+
+    public function test_backfill_continues_in_batches() {
+        Auto_Alt_Text_Activator::activate();
+        global $wpdb;
+        $wpdb->query("DELETE FROM {$wpdb->prefix}auto_alt_text_stats");
+        $ids = [];
+        foreach (['One', 'Two', 'Three'] as $text) {
+            $id = $this->image_with_alt($text);
+            $this->insert_generation($id, $text, '2026-01-01 10:00:00');
+            $ids[] = $id;
+        }
+
+        $last = Auto_Alt_Text_Provenance::backfill_batch(0, 2);
+        $this->assertSame($ids[1], $last);
+        $this->assertSame('human', Auto_Alt_Text_Provenance::classify($ids[2]));
+
+        $last = Auto_Alt_Text_Provenance::backfill_batch($last, 2);
+        $this->assertSame($ids[2], $last);
+        $this->assertSame('ai', Auto_Alt_Text_Provenance::classify($ids[2]));
+
+        $this->assertSame(0, Auto_Alt_Text_Provenance::backfill_batch($last, 2));
+    }
+
+    public function test_activation_schedules_the_backfill_and_adds_the_context_column() {
+        wp_clear_scheduled_hook('aat_provenance_backfill', [0]);
+        Auto_Alt_Text_Activator::activate();
+
+        $this->assertNotFalse(wp_next_scheduled('aat_provenance_backfill', [0]));
+        global $wpdb;
+        $this->assertContains('context_post_id', $wpdb->get_col('SHOW COLUMNS FROM ' . Auto_Alt_Text_Queue::get_table_name()));
+        $this->assertNotFalse(has_action('aat_provenance_backfill', ['Auto_Alt_Text_Provenance', 'run_backfill']));
+    }
 }

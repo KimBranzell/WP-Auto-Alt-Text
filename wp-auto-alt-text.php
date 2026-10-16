@@ -185,6 +185,7 @@ class WP_Auto_Alt_Text_Plugin {
 		add_action('update_option_auto_alt_text_api_key', ['Auto_Alt_Text_Queue', 'clear_auth_pause']);
 		add_action('init', [$this, 'maybe_schedule_queue_cron']);
 		add_action('aat_daily_maintenance', ['Auto_Alt_Text_Logger', 'prune']);
+		add_action(Auto_Alt_Text_Provenance::BACKFILL_HOOK, ['Auto_Alt_Text_Provenance', 'run_backfill']);
 
 		Auto_Alt_Text_Privacy::register();
 	}
@@ -256,4 +257,5 @@ register_activation_hook(__FILE__, function () {
 register_deactivation_hook(__FILE__, function () {
 	wp_clear_scheduled_hook('aat_queue_tick');
 	wp_clear_scheduled_hook('aat_daily_maintenance');
+	wp_clear_scheduled_hook('aat_provenance_backfill');
 });
