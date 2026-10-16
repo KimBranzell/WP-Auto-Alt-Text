@@ -142,7 +142,11 @@ class Auto_Alt_Text_Statistics_Page {
 									<span class="status-badge edited">Edited</span>
 								<?php endif; ?>
 							</td>
-							<td><?php echo esc_html(get_user_by('id', $generation->user_id)->display_name); ?></td>
+							<td><?php
+								// Queue (cron) generations have no user; the user may also be deleted.
+								$generation_user = get_user_by('id', $generation->user_id);
+								echo $generation_user ? esc_html($generation_user->display_name) : esc_html__('System (queue)', 'WP-Auto-Alt-Text');
+							?></td>
 							<td><?php echo esc_html(human_time_diff(strtotime($generation->generation_time), current_time('timestamp')) . ' sedan'); ?></td>
 							<td><?php echo esc_html($generation->tokens_used); ?></td>
 						</tr>
