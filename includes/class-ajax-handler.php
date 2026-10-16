@@ -134,8 +134,9 @@ class Auto_Alt_Text_Ajax_Handler {
             }
 
             $attachment_id = intval($_POST['attachment_id']);
-            $alt_text = sanitize_text_field($_POST['alt_text']);
-            $original_text = sanitize_text_field($_POST['original_text']);
+            // $_POST is slashed (wp_magic_quotes); work with the real text.
+            $alt_text = sanitize_text_field(wp_unslash($_POST['alt_text'] ?? ''));
+            $original_text = sanitize_text_field(wp_unslash($_POST['original_text'] ?? ''));
             $is_edited = isset($_POST['is_edited']) && $_POST['is_edited'] === '1';
             $tokens_used = isset($_POST['tokens_used']) ? intval($_POST['tokens_used']) : 0;
 
@@ -147,7 +148,8 @@ class Auto_Alt_Text_Ajax_Handler {
                 throw new Exception('Permission denied');
             }
 
-            $result = update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+            // Metadata functions unslash their input, so slash it once here.
+            $result = update_post_meta($attachment_id, '_wp_attachment_image_alt', wp_slash($alt_text));
 
             // update_post_meta() also returns false when the value is unchanged.
             if (false === $result && get_post_meta($attachment_id, '_wp_attachment_image_alt', true) !== $alt_text) {
