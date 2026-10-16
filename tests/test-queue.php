@@ -464,4 +464,31 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
 
         $this->assertSame('77', $this->get_job($id)->context_post_id);
     }
+
+    public function test_enqueue_replaces_an_existing_hint_with_a_new_one() {
+        $id = self::factory()->attachment->create();
+        $this->queue->enqueue($id, 'upload', 77);
+
+        $this->assertFalse($this->queue->enqueue($id, 'woocommerce', 88));
+
+        $this->assertSame('88', $this->get_job($id)->context_post_id);
+    }
+
+    public function test_promote_pending_replaces_the_hint_with_a_new_one() {
+        $id = self::factory()->attachment->create();
+        $this->queue->enqueue($id, 'upload', 77);
+
+        $this->assertTrue($this->queue->promote_pending($id, 'woocommerce_bulk', 88));
+
+        $this->assertSame('88', $this->get_job($id)->context_post_id);
+    }
+
+    public function test_promote_pending_without_a_hint_keeps_the_existing_one() {
+        $id = self::factory()->attachment->create();
+        $this->queue->enqueue($id, 'upload', 77);
+
+        $this->assertTrue($this->queue->promote_pending($id, 'woocommerce_bulk'));
+
+        $this->assertSame('77', $this->get_job($id)->context_post_id);
+    }
 }

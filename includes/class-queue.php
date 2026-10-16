@@ -41,7 +41,8 @@ class Auto_Alt_Text_Queue {
     /**
      * Adds a job unless an active (pending/processing) job for the same
      * attachment already exists. A context hint (the post the image belongs
-     * to, e.g. the saved product) is added to an existing job that has none.
+     * to, e.g. the saved product) replaces an existing job's hint; without
+     * one the existing hint is kept.
      *
      * @return bool Whether a row was created.
      */
@@ -78,14 +79,14 @@ class Auto_Alt_Text_Queue {
         return (bool) $inserted;
     }
 
-    /** Sets a job's context hint when it has none yet. */
+    /** Sets a job's context hint when a new one is given; the newest hint wins. */
     private function add_context_hint($job_id, $context_post_id) {
         if (!$context_post_id) {
             return;
         }
         global $wpdb;
         $wpdb->query($wpdb->prepare(
-            'UPDATE ' . self::get_table_name() . ' SET context_post_id = %d WHERE id = %d AND context_post_id IS NULL',
+            'UPDATE ' . self::get_table_name() . ' SET context_post_id = %d WHERE id = %d',
             $context_post_id, $job_id
         ));
     }
