@@ -14,6 +14,9 @@ class Auto_Alt_Text_Queue {
 
     public const MAX_ATTEMPTS = 8;
 
+    /** Job types created by automatic triggers; paused while auto-generation is off. */
+    public const AUTO_GENERATION_TYPES = ['upload', 'woocommerce', 'woocommerce_variation'];
+
     /** @var callable|null */
     private $processor;
 
@@ -77,13 +80,6 @@ class Auto_Alt_Text_Queue {
      * in next_attempt_at, never in sleep().
      */
     public function run() {
-        // The auto-generate toggle pauses the queue outright: jobs stay
-        // pending until it is re-enabled, instead of being churned into
-        // per-job failures against a deliberately disabled setting.
-        if (!get_option('auto_alt_text_auto_generate', true)) {
-            return;
-        }
-
         global $wpdb;
         // Idle fast-path: an empty table needs no maintenance writes.
         if (!$wpdb->get_var('SELECT id FROM ' . self::get_table_name() . ' LIMIT 1')) {
@@ -103,7 +99,11 @@ class Auto_Alt_Text_Queue {
 
         $batch_size = $probing ? 1 : max(1, (int) apply_filters('aat_queue_batch_size', 5));
         $rate_limiter = new Auto_Alt_Text_Rate_Limiter();
-        $jobs = $this->claim_batch($batch_size);
+        // The auto-generate toggle pauses jobs created by automatic triggers:
+        // they stay pending until it is re-enabled. Explicit jobs (bulk
+        // actions) are user requests and always run.
+        $excluded_types = get_option('auto_alt_text_auto_generate', true) ? [] : self::AUTO_GENERATION_TYPES;
+        $jobs = $this->claim_batch($batch_size, $excluded_types);
 
         $unprocessed_ids = wp_list_pluck($jobs, 'id');
         foreach ($jobs as $job) {
@@ -131,15 +131,23 @@ class Auto_Alt_Text_Queue {
      *
      * @return array<object> Rows this call successfully claimed.
      */
-    private function claim_batch($batch_size) {
+    private function claim_batch($batch_size, array $excluded_types = []) {
         global $wpdb;
         $table = self::get_table_name();
         $now = current_time('mysql', true);
 
+        $type_clause = '';
+        $params = [self::STATUS_PENDING, $now];
+        if (!empty($excluded_types)) {
+            $type_clause = ' AND generation_type NOT IN (' . implode(',', array_fill(0, count($excluded_types), '%s')) . ')';
+            $params = array_merge($params, array_values($excluded_types));
+        }
+        $params[] = $batch_size;
+
         $candidate_ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT id FROM {$table} WHERE status = %s AND next_attempt_at <= %s
+            "SELECT id FROM {$table} WHERE status = %s AND next_attempt_at <= %s{$type_clause}
              ORDER BY next_attempt_at ASC, id ASC LIMIT %d",
-            self::STATUS_PENDING, $now, $batch_size
+            $params
         ));
         if (empty($candidate_ids)) {
             return [];

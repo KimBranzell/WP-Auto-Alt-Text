@@ -325,12 +325,6 @@ class Auto_Alt_Text_OpenAI  {
             'preview' => $preview_mode
         ]);
 
-        if (!get_option('auto_alt_text_auto_generate', true)) {
-            $this->last_error = __('OpenAI returned an empty response. Please try again.', 'WP-Auto-Alt-Text');
-            $this->last_error_class = 'permanent';
-            return null;
-        }
-
         // Get file path from attachment ID
         $image_path = get_attached_file($attachment_id);
         $target_language = $this->resolve_generation_language($attachment_id, $language_override);

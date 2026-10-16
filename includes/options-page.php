@@ -113,7 +113,7 @@ function auto_alt_text_options() {
                     <tr>
                         <th scope="row">
                             <label for="auto_generate">
-                                <?php esc_html_e('Aktivera generering av alt-texter', 'WP-Auto-Alt-Text'); ?>
+                                <?php esc_html_e('Generera alt-texter automatiskt', 'WP-Auto-Alt-Text'); ?>
                             </label>
                         </th>
                         <td>
@@ -126,7 +126,7 @@ function auto_alt_text_options() {
                                 <span class="slider round"></span>
                             </label>
                                 <p class="description">
-                                <?php esc_html_e('När detta alternativ är aktiverat kommer de alternativa texterna att automatiskt genereras.', 'WP-Auto-Alt-Text'); ?>
+                                <?php esc_html_e('Köar nya bilder och produktbilder som saknar alt-text. Manuell generering (knappen i mediebiblioteket, massåtgärder, WP-CLI och REST) fungerar alltid.', 'WP-Auto-Alt-Text'); ?>
                             </p>
                         </td>
                     </tr>

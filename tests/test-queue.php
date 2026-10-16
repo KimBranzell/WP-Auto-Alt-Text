@@ -262,4 +262,21 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($id)->status, 'Backlog must survive the toggle being off');
         update_option('auto_alt_text_auto_generate', true);
     }
+
+    public function test_explicit_jobs_run_while_auto_generate_disabled() {
+        update_option('auto_alt_text_auto_generate', true);
+        update_option('auto_alt_text_auto_generate', false);
+        $auto_id = self::factory()->attachment->create();
+        $bulk_id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($auto_id, 'upload');
+        $queue->enqueue($bulk_id, 'woocommerce_bulk');
+
+        $queue->run();
+        update_option('auto_alt_text_auto_generate', true);
+
+        $this->assertSame([$bulk_id], $calls, 'Only the explicit job may run while auto-generate is off');
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($auto_id)->status);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($bulk_id)->status);
+    }
 }
