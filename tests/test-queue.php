@@ -145,17 +145,41 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertSame([], $calls);
     }
 
-    public function test_stuck_processing_jobs_are_recovered() {
+    public function test_stuck_processing_job_is_recovered_with_an_attempt_and_backoff() {
         $id = self::factory()->attachment->create();
         $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
         $queue->enqueue($id, 'upload');
         global $wpdb;
         $wpdb->update(Auto_Alt_Text_Queue::get_table_name(), [
             'status'     => Auto_Alt_Text_Queue::STATUS_PROCESSING,
-            'updated_at' => gmdate('Y-m-d H:i:s', time() - 16 * MINUTE_IN_SECONDS),
+            'attempts'   => 2,
+            'updated_at' => gmdate('Y-m-d H:i:s', time() - 20 * MINUTE_IN_SECONDS),
         ], ['attachment_id' => $id]);
         $queue->run();
-        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $job->status);
+        $this->assertSame('3', $job->attempts, 'A crashed run must consume an attempt');
+        // attempts=3 -> delay 2^3 * 60 = 480 s; a poison job must not be retried first every tick.
+        $this->assertGreaterThan(time() + 7 * MINUTE_IN_SECONDS, strtotime($job->next_attempt_at . ' UTC'));
+        $this->assertSame([], $calls, 'The recovered job waits for its backoff');
+    }
+
+    public function test_stuck_processing_job_at_last_attempt_is_failed() {
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        global $wpdb;
+        $wpdb->update(Auto_Alt_Text_Queue::get_table_name(), [
+            'status'     => Auto_Alt_Text_Queue::STATUS_PROCESSING,
+            'attempts'   => Auto_Alt_Text_Queue::MAX_ATTEMPTS - 1,
+            'updated_at' => gmdate('Y-m-d H:i:s', time() - 20 * MINUTE_IN_SECONDS),
+        ], ['attachment_id' => $id]);
+        $queue->run();
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_FAILED, $job->status);
+        $this->assertSame((string) Auto_Alt_Text_Queue::MAX_ATTEMPTS, $job->attempts);
+        $this->assertSame('Processing timed out (recovered stuck job)', $job->last_error);
+        $this->assertSame([], $calls);
     }
 
     public function test_deleted_attachment_marks_job_done() {

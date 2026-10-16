@@ -240,12 +240,11 @@ class Auto_Alt_Text_Queue {
                 if ($attempts >= self::MAX_ATTEMPTS) {
                     $this->finish($job, self::STATUS_FAILED, $error);
                 } else {
-                    $delay = min((int) pow(2, $attempts) * MINUTE_IN_SECONDS, 6 * HOUR_IN_SECONDS);
                     $this->update_job($job->id, [
                         'status'          => self::STATUS_PENDING,
                         'attempts'        => $attempts,
                         'last_error'      => (string) $error,
-                        'next_attempt_at' => gmdate('Y-m-d H:i:s', time() + $delay),
+                        'next_attempt_at' => gmdate('Y-m-d H:i:s', time() + self::retry_delay($attempts)),
                     ]);
                 }
                 return true;
@@ -280,6 +279,11 @@ class Auto_Alt_Text_Queue {
             'status' => $map[$class] ?? 'retry',
             'error'  => $openai->get_last_error(),
         ];
+    }
+
+    /** Backoff after the given number of attempts: 2^n minutes, capped at 6 hours. */
+    private static function retry_delay($attempts) {
+        return min((int) pow(2, $attempts) * MINUTE_IN_SECONDS, 6 * HOUR_IN_SECONDS);
     }
 
     /** Lifts the 401 pause: hooked to API key changes, called on API success. */
@@ -329,15 +333,42 @@ class Auto_Alt_Text_Queue {
         ));
     }
 
-    /** Resets processing rows older than STUCK_MINUTES (crashed runner). */
+    /**
+     * Recovers processing rows older than STUCK_MINUTES (the runner died
+     * mid-job, e.g. a fatal or memory exhaustion). That counts as a used
+     * attempt with the normal backoff, so a job that kills the runner every
+     * time ends up failed instead of being retried first on every tick.
+     */
     private function recover_stuck_jobs() {
         global $wpdb;
         $table = self::get_table_name();
         $threshold = gmdate('Y-m-d H:i:s', time() - self::STUCK_MINUTES * MINUTE_IN_SECONDS);
-        $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET status = %s, updated_at = %s WHERE status = %s AND updated_at < %s",
-            self::STATUS_PENDING, current_time('mysql', true), self::STATUS_PROCESSING, $threshold
+        $stuck = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, attempts, updated_at FROM {$table} WHERE status = %s AND updated_at < %s",
+            self::STATUS_PROCESSING, $threshold
         ));
+
+        foreach ($stuck as $job) {
+            $attempts = (int) $job->attempts + 1;
+            $data = [
+                'attempts'   => $attempts,
+                'last_error' => 'Processing timed out (recovered stuck job)',
+                'updated_at' => current_time('mysql', true),
+            ];
+            if ($attempts >= self::MAX_ATTEMPTS) {
+                $data['status'] = self::STATUS_FAILED;
+            } else {
+                $data['status'] = self::STATUS_PENDING;
+                $data['next_attempt_at'] = gmdate('Y-m-d H:i:s', time() + self::retry_delay($attempts));
+            }
+            // Guarded on the row as read, so a concurrent runner recovering
+            // the same job cannot count the attempt twice.
+            $wpdb->update($table, $data, [
+                'id'         => (int) $job->id,
+                'status'     => self::STATUS_PROCESSING,
+                'updated_at' => $job->updated_at,
+            ]);
+        }
     }
 
     /** Prunes done rows older than 7 days and failed rows older than 30 days. */
