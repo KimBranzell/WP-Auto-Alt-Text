@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const ids = bulkIds.split(',');
         const totalImages = ids.length;
         let processed = 0;
+        let skipped = 0;
 
         updateProgressBar(0, {
             processed: 0,
@@ -93,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const batch = ids.splice(0, 5);
             if (batch.length === 0) {
                 updateProgressBar(100);
+                announceBatchSkipped(skipped);
                 return;
             }
 
@@ -110,6 +112,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 processed += batch.length;
+                skipped += countSkippedResults(data);
                 const progress = (processed / totalImages) * 100;
                 updateProgressBar(progress, {
                     processed,
@@ -456,11 +459,17 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     textarea.focus();
     textarea.setSelectionRange(0, textarea.value.length);
 
+    // Text regenerated with feedback is AI output too: it becomes the baseline
+    // that Apply compares against, so applying it unchanged keeps it AI-written.
+    const setBaseline = (regeneratedText) => {
+        altText = regeneratedText;
+    };
+
     // Add event listeners for feedback buttons
     dialog.querySelectorAll('.feedback-option').forEach(button => {
         button.addEventListener('click', () => {
             const improvementType = button.dataset.type;
-            regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, '', altText, dialog);
+            regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, '', altText, dialog, setBaseline);
         });
     });
 
@@ -468,7 +477,7 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     dialog.querySelector('.custom-feedback-submit').addEventListener('click', () => {
         const customFeedback = dialog.querySelector('.custom-feedback-text').value;
         if (customFeedback.trim()) {
-            regenerateAltTextWithFeedback(attachmentId, nonce, 'custom', customFeedback, altText, dialog);
+            regenerateAltTextWithFeedback(attachmentId, nonce, 'custom', customFeedback, altText, dialog, setBaseline);
         } else {
             alert('Please enter your feedback before submitting.');
         }
@@ -560,8 +569,9 @@ function showPreviewDialog(altText, attachmentId, isCached) {
  * @param {string} customFeedback - Any custom feedback provided by the user.
  * @param {string} originalAltText - The original alt text.
  * @param {Element} dialog - The dialog element containing the preview.
+ * @param {Function} [onRegenerated] - Called with the regenerated text on success.
  */
-function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, customFeedback, originalAltText, dialog) {
+function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, customFeedback, originalAltText, dialog, onRegenerated) {
     // Show loading state
     const textarea = dialog.querySelector('.preview-text');
     const originalText = textarea.value;
@@ -591,6 +601,9 @@ function regenerateAltTextWithFeedback(attachmentId, nonce, improvementType, cus
         if (data.success && data.data.alt_text) {
             // Update the preview with the new alt text
             textarea.value = data.data.alt_text;
+            if (onRegenerated) {
+                onRegenerated(data.data.alt_text);
+            }
 
             // Store the new generated text in session storage
             sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
@@ -692,6 +705,7 @@ function processBatchSelection(e, button) {
     const ids = [...selected];
     const totalImages = ids.length;
     let processed = 0;
+    let skipped = 0;
     const batchSize = 5;
 
     function processBatch() {
@@ -703,6 +717,7 @@ function processBatchSelection(e, button) {
                     total: totalImages,
                     label: 'Generating alt text for selected media',
                 });
+                announceBatchSkipped(skipped);
                 button.textContent = originalText;
                 button.disabled = false;
             }, 500);
@@ -723,6 +738,7 @@ function processBatchSelection(e, button) {
         .then(response => response.json())
         .then(data => {
             processed += batch.length;
+            skipped += countSkippedResults(data);
             const progress = Math.min((processed / totalImages) * 100, 99);
             updateProgressBar(progress, {
                 processed,
@@ -823,6 +839,52 @@ function announceBatchComplete() {
     notice.appendChild(text);
 
     host.prepend(notice);
+}
+
+/**
+ * Counts the images a process_image_batch response skipped because the
+ * overwrite setting keeps their existing alt text.
+ *
+ * @param {Object} data Parsed AJAX response.
+ * @returns {number}
+ */
+function countSkippedResults(data) {
+    if (!data || !data.success || !data.data || typeof data.data !== 'object') {
+        return 0;
+    }
+
+    return Object.values(data.data).filter((result) => result && result.skipped).length;
+}
+
+/**
+ * Tells the user how many selected images the batch left alone because the
+ * overwrite setting keeps their existing alt text.
+ *
+ * @param {number} count Number of skipped images.
+ */
+function announceBatchSkipped(count) {
+    const host = getBatchProgressHost();
+    if (!host || count < 1) {
+        return;
+    }
+
+    let notice = host.querySelector('.aat-batch-skipped');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.className = 'notice notice-warning inline aat-batch-skipped';
+        notice.setAttribute('role', 'status');
+        notice.appendChild(document.createElement('p'));
+
+        const complete = host.querySelector('.aat-batch-complete');
+        if (complete) {
+            complete.after(notice);
+        } else {
+            host.prepend(notice);
+        }
+    }
+
+    // Plain text only: set after insertion so the status region announces it.
+    notice.querySelector('p').textContent = `${count} image(s) skipped: their existing alt text is kept by the "Overwrite existing alt text" setting.`;
 }
 
 /**

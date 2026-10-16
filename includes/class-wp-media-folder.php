@@ -75,6 +75,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                 function processFolderImages(folderId) {
                     const button = $('.aat-wpmf-batch-btn');
                     const originalText = button.text();
+                    let skipped = 0;
                     button.text('<?php echo esc_js( __( 'Processing...', 'WP-Auto-Alt-Text' ) ); ?>');
                     button.prop('disabled', true);
 
@@ -125,7 +126,11 @@ class Auto_Alt_Text_WP_Media_Folder {
                                 button.text(originalText);
                                 button.prop('disabled', false);
                                 $('.aat-wpmf-progress-container').remove();
-                                alert('<?php echo esc_js( __( 'Alt text generation complete!', 'WP-Auto-Alt-Text' ) ); ?>');
+                                let message = '<?php echo esc_js( __( 'Alt text generation complete!', 'WP-Auto-Alt-Text' ) ); ?>';
+                                if (skipped > 0) {
+                                    message += '\n\n' + <?php /* translators: %d: number of images skipped */ echo wp_json_encode( __( '%d image(s) skipped: their existing alt text is kept by the "Overwrite existing alt text" setting.', 'WP-Auto-Alt-Text' ) ); ?>.replace('%d', skipped);
+                                }
+                                alert(message);
                             }, 1000);
 
                             return;
@@ -142,6 +147,9 @@ class Auto_Alt_Text_WP_Media_Folder {
                             },
                             success: function(response) {
                                 processed += currentBatch.length;
+                                if (response && response.success && response.data) {
+                                    skipped += parseInt(response.data.skipped, 10) || 0;
+                                }
                                 const percentage = Math.min(Math.round((processed / total) * 100), 99);
 
                                 // Update progress
@@ -221,12 +229,14 @@ class Auto_Alt_Text_WP_Media_Folder {
             }
 
             $results = [];
+            $skipped = 0;
 
             foreach ($ids as $id) {
                 if (!current_user_can('edit_post', (int) $id)) {
                     continue;
                 }
                 if (!Auto_Alt_Text_Provenance::allows_overwrite((int) $id, Auto_Alt_Text_Provenance::default_policy())) {
+                    $skipped++;
                     continue;
                 }
                 $image_url = wp_get_attachment_url($id);
@@ -238,7 +248,7 @@ class Auto_Alt_Text_WP_Media_Folder {
                 }
             }
 
-            wp_send_json_success(['results' => $results]);
+            wp_send_json_success(['results' => $results, 'skipped' => $skipped]);
         } else {
             wp_send_json_error(['message' => 'Invalid step parameter']);
         }

@@ -95,6 +95,7 @@ class Auto_Alt_Text_Overwrite_Policy_Ajax_Test extends WP_Ajax_UnitTestCase {
 
         $this->assertTrue($response['success'], $this->_last_response);
         $this->assertArrayNotHasKey($id, $response['data']['results']);
+        $this->assertSame(1, $response['data']['skipped'], 'The folder UI reports skipped images');
         $this->assertSame(0, $openai_calls);
         $this->assertSame('Written by an editor', get_post_meta($id, '_wp_attachment_image_alt', true));
     }
