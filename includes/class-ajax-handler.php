@@ -182,7 +182,7 @@ class Auto_Alt_Text_Ajax_Handler {
             if ($is_edited || $alt_text !== $original_text) {
                 Auto_Alt_Text_Provenance::forget($attachment_id);
             } else {
-                Auto_Alt_Text_Provenance::record($attachment_id, 'manual');
+                Auto_Alt_Text_Provenance::record($attachment_id, 'manual', wp_slash($alt_text));
             }
 
             // Update the existing statistics record

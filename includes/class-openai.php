@@ -288,7 +288,7 @@ class Auto_Alt_Text_OpenAI  {
 
                 if (!$preview_mode && !empty($cached_response)) {
                     update_post_meta($attachment_id, '_wp_attachment_image_alt', $cached_response);
-                    Auto_Alt_Text_Provenance::record($attachment_id, $generation_type);
+                    Auto_Alt_Text_Provenance::record($attachment_id, $generation_type, $cached_response);
                 }
 
                 return $cached_response;
@@ -339,7 +339,7 @@ class Auto_Alt_Text_OpenAI  {
                 // Only save alt text if not in preview mode
                 if (!$preview_mode) {
                     update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
-                    Auto_Alt_Text_Provenance::record($attachment_id, $generation_type);
+                    Auto_Alt_Text_Provenance::record($attachment_id, $generation_type, $generated_text);
                 }
 
                 if (!$preview_mode && $generated_text) {

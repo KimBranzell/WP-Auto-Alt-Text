@@ -45,6 +45,43 @@ class Auto_Alt_Text_Provenance_Test extends WP_UnitTestCase {
         $this->assertSame(Auto_Alt_Text_OpenAI::get_model_name(), $meta['model']);
     }
 
+    /** Short-circuits every alt text write, as a filter or a failed write would. */
+    private function block_alt_writes() {
+        add_filter('update_post_metadata', function ($check, $object_id, $meta_key) {
+            return Auto_Alt_Text_Provenance::ALT_META_KEY === $meta_key ? false : $check;
+        }, 10, 3);
+    }
+
+    public function test_record_keeps_human_text_when_the_write_did_not_happen() {
+        $id = $this->image_with_alt('Written by an editor');
+        $this->block_alt_writes();
+
+        update_post_meta($id, '_wp_attachment_image_alt', 'A red bicycle');
+        Auto_Alt_Text_Provenance::record($id, 'upload', 'A red bicycle');
+
+        $this->assertSame('human', Auto_Alt_Text_Provenance::classify($id));
+    }
+
+    public function test_record_drops_an_old_fingerprint_when_the_write_did_not_happen() {
+        $id = $this->image_with_alt('Old AI text');
+        Auto_Alt_Text_Provenance::record($id, 'upload');
+        $this->block_alt_writes();
+
+        update_post_meta($id, '_wp_attachment_image_alt', 'New AI text');
+        Auto_Alt_Text_Provenance::record($id, 'upload', 'New AI text');
+
+        $this->assertSame('', get_post_meta($id, Auto_Alt_Text_Provenance::META_KEY, true));
+    }
+
+    public function test_record_matches_an_unslashed_write_exactly() {
+        $id = $this->image_with_alt(null);
+        // The generation path passes raw text; update_post_meta() unslashes it.
+        update_post_meta($id, '_wp_attachment_image_alt', "It's in C:\\photos");
+        Auto_Alt_Text_Provenance::record($id, 'cli', "It's in C:\\photos");
+
+        $this->assertSame('ai', Auto_Alt_Text_Provenance::classify($id));
+    }
+
     public function test_record_ignores_images_without_alt_text() {
         $id = $this->image_with_alt(null);
         Auto_Alt_Text_Provenance::record($id, 'upload');
@@ -119,6 +156,7 @@ class Auto_Alt_Text_Provenance_Test extends WP_UnitTestCase {
 
         $this->assertSame('ai', Auto_Alt_Text_Provenance::classify($unchanged));
         $this->assertSame('backfill', get_post_meta($unchanged, Auto_Alt_Text_Provenance::META_KEY, true)['source']);
+        $this->assertSame('', get_post_meta($unchanged, Auto_Alt_Text_Provenance::META_KEY, true)['model'], 'The model that wrote pre-2.0 text is unknown');
         $this->assertSame('human', Auto_Alt_Text_Provenance::classify($edited));
         $this->assertSame('human', Auto_Alt_Text_Provenance::classify($superseded));
     }

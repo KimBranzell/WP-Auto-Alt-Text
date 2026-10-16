@@ -430,7 +430,7 @@ class Auto_Alt_Text_Language_Manager {
 
             $written_id = $this->store_language_specific_alt_text($attachment_id, $language, $translated_alt);
             if ($written_id) {
-                Auto_Alt_Text_Provenance::record($written_id, 'translate');
+                Auto_Alt_Text_Provenance::record($written_id, 'translate', $translated_alt);
             }
             $translated_alts[$language] = $translated_alt;
         }

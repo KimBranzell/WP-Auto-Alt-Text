@@ -40,6 +40,21 @@ class Auto_Alt_Text_Provenance_Recording_Test extends WP_UnitTestCase {
         $this->assertSame('cli', get_post_meta($id, Auto_Alt_Text_Provenance::META_KEY, true)['source']);
     }
 
+    public function test_generation_whose_write_was_blocked_keeps_human_text_human() {
+        $openai = $this->openai();
+        $this->mock_openai_text('Yellow canola field under a blue sky');
+        $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
+        update_post_meta($id, '_wp_attachment_image_alt', 'Written by an editor');
+        add_filter('update_post_metadata', function ($check, $object_id, $meta_key) {
+            return '_wp_attachment_image_alt' === $meta_key ? false : $check;
+        }, 10, 3);
+
+        $openai->generate_alt_text(wp_get_attachment_url($id), $id, 'batch');
+
+        $this->assertSame('Written by an editor', get_post_meta($id, '_wp_attachment_image_alt', true));
+        $this->assertSame('human', Auto_Alt_Text_Provenance::classify($id));
+    }
+
     public function test_preview_generation_records_nothing() {
         $openai = $this->openai();
         $this->mock_openai_text('Yellow canola field under a blue sky');

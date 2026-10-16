@@ -123,6 +123,7 @@ class Auto_Alt_Text_Ajax_Apply_Test extends WP_Ajax_UnitTestCase {
 
         $this->assertTrue($response['success'], wp_json_encode($response));
         $this->assertSame('ai', Auto_Alt_Text_Provenance::classify($id));
+        $this->assertSame('manual', get_post_meta($id, Auto_Alt_Text_Provenance::META_KEY, true)['source']);
     }
 
     public function test_applying_edited_text_makes_it_human() {

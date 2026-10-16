@@ -29,19 +29,27 @@ class Auto_Alt_Text_Provenance {
     /**
      * Fingerprints the attachment's current alt text as written by the plugin.
      * Reads the stored value, so slashing and sanitising can never cause a
-     * mismatch.
+     * mismatch. When the stored value is not the text the plugin wrote (the
+     * write was filtered out or failed), that text is not ours: any old
+     * fingerprint is dropped instead.
      *
-     * @param int    $attachment_id
-     * @param string $source Generation type of the write, e.g. 'upload', 'cli', 'manual'.
+     * @param int         $attachment_id
+     * @param string      $source  Generation type of the write, e.g. 'upload', 'cli', 'manual'.
+     * @param string|null $written The value the plugin passed to update_post_meta().
      */
-    public static function record($attachment_id, $source) {
+    public static function record($attachment_id, $source, $written = null) {
         $alt = self::current_alt($attachment_id);
+        if (null !== $written && trim(wp_unslash((string) $written)) !== $alt) {
+            self::forget($attachment_id);
+            return;
+        }
         if ('' === $alt) {
             return;
         }
         update_post_meta((int) $attachment_id, self::META_KEY, [
             'hash'   => sha1($alt),
-            'model'  => Auto_Alt_Text_OpenAI::get_model_name(),
+            // Pre-2.0 text came from whatever model was configured back then.
+            'model'  => 'backfill' === $source ? '' : Auto_Alt_Text_OpenAI::get_model_name(),
             'at'     => time(),
             'source' => sanitize_key($source),
         ]);
