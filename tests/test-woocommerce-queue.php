@@ -46,6 +46,16 @@ class Auto_Alt_Text_WooCommerce_Queue_Test extends WP_UnitTestCase {
         $this->assertSame(1, $this->pending_count());
     }
 
+    public function test_admin_product_save_queues_an_image_with_whitespace_only_alt_text() {
+        $product = $this->make_product_with_image($attachment_id);
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', '   ');
+        $this->clear_queue();
+
+        do_action('woocommerce_process_product_meta', $product->get_id(), get_post($product->get_id()));
+
+        $this->assertSame(1, $this->pending_count());
+    }
+
     public function test_product_update_skips_image_with_existing_alt_text() {
         $wc = new Auto_Alt_Text_WooCommerce();
         $product = $this->make_product_with_image($attachment_id);
@@ -236,5 +246,39 @@ class Auto_Alt_Text_WooCommerce_Queue_Test extends WP_UnitTestCase {
             'SELECT context_post_id FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d',
             $attachment_id
         )));
+    }
+
+    private function queued_context($attachment_id) {
+        global $wpdb;
+        return $wpdb->get_var($wpdb->prepare(
+            'SELECT context_post_id FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d',
+            $attachment_id
+        ));
+    }
+
+    public function test_variation_save_stores_the_variation_as_context() {
+        $attachment_id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
+        $parent = new WC_Product_Variable();
+        $parent->set_name('Variable product');
+        $parent->save();
+        $variation = new WC_Product_Variation();
+        $variation->set_parent_id($parent->get_id());
+        $variation->set_image_id($attachment_id);
+        $variation->save();
+        $this->clear_queue();
+
+        do_action('woocommerce_save_product_variation', $variation->get_id(), 0);
+
+        $this->assertSame((string) $variation->get_id(), $this->queued_context($attachment_id));
+    }
+
+    public function test_bulk_action_stores_the_product_as_context() {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $product = $this->make_product_with_image($attachment_id);
+        $this->clear_queue();
+
+        $this->run_bulk_action('generate_alt_texts', [$product->get_id()]);
+
+        $this->assertSame((string) $product->get_id(), $this->queued_context($attachment_id));
     }
 }

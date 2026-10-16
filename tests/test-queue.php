@@ -428,6 +428,23 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertSame([$id], $calls);
     }
 
+    public function test_claim_time_check_respects_an_edit_made_after_enqueue() {
+        update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'ai');
+        $id = self::factory()->attachment->create();
+        update_post_meta($id, '_wp_attachment_image_alt', 'Old AI text');
+        Auto_Alt_Text_Provenance::record($id, 'upload');
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'woocommerce_bulk');
+        update_post_meta($id, '_wp_attachment_image_alt', 'Editor fixed it'); // while the job waits
+
+        $queue->run();
+        delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+
+        $this->assertSame([], $calls);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+        $this->assertSame('Editor fixed it', get_post_meta($id, '_wp_attachment_image_alt', true));
+    }
+
     public function test_automatic_job_never_overwrites_even_when_policy_is_all() {
         $id = self::factory()->attachment->create();
         update_post_meta($id, '_wp_attachment_image_alt', 'Old AI text');

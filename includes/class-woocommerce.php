@@ -145,7 +145,7 @@ class Auto_Alt_Text_WooCommerce {
         if (!get_option('auto_alt_text_auto_generate', true)) {
             return;
         }
-        if (get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
+        if (Auto_Alt_Text_Provenance::STATE_MISSING !== Auto_Alt_Text_Provenance::classify($attachment_id)) {
             return;
         }
         $this->queue->enqueue($attachment_id, $generation_type, $context_post_id);
