@@ -1,144 +1,44 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * WooCommerce integration: queues product images that lack alt text when a
+ * product is saved in wp-admin, and adds a products-list bulk action.
+ *
+ * Rendering is left to WooCommerce and core, which already print the
+ * attachment's alt text and respect alt values passed by themes.
+ */
 class Auto_Alt_Text_WooCommerce {
+    public const BULK_ACTION = 'generate_alt_texts';
+    public const QUEUED_QUERY_ARG = 'aat_wc_queued';
+
     private $queue;
 
     public function __construct() {
         $this->queue = new Auto_Alt_Text_Queue();
 
-        // Product creation and updates
-        add_action('woocommerce_new_product', [$this, 'process_product_images']);
-        add_action('woocommerce_update_product', [$this, 'process_product_images']);
+        // Admin product edit screen only. woocommerce_update_product also fires on
+        // checkout stock reduction, REST, CSV import and variation sync, so it is
+        // deliberately not used. Priority 30 runs after WooCommerce saves the
+        // product data (10) and the gallery (20).
+        add_action('woocommerce_process_product_meta', [$this, 'process_product_images'], 30);
 
-        // Variation handling
+        // Variations saved from the variations panel (admin AJAX).
         add_action('woocommerce_save_product_variation', [$this, 'process_variation_image'], 10, 2);
 
-        // Bulk processing for existing products
-        add_action('admin_post_process_wc_product_images', [$this, 'bulk_process_products']);
-
-        // Add bulk action option
         add_filter('bulk_actions-edit-product', [$this, 'add_bulk_actions']);
-
-        // Main product image
-        add_filter('wp_get_attachment_image_attributes', [$this, 'enhance_image_attributes'], 10, 2);
-
-        // Product gallery
-        add_filter('woocommerce_product_get_image', [$this, 'enhance_product_image'], 10, 2);
-
-        // Variable products
-        add_filter('woocommerce_available_variation', [$this, 'enhance_variation_image'], 10, 3);
-
-        // Main product image
-        add_filter('woocommerce_single_product_image_html', [$this, 'enhance_main_product_image'], 10, 2);
+        add_filter('handle_bulk_actions-edit-product', [$this, 'handle_bulk_action'], 10, 3);
+        add_filter('removable_query_args', [$this, 'add_removable_query_args']);
+        add_action('admin_notices', [$this, 'render_bulk_notice']);
     }
 
     /**
-     * Enhances the image attributes by setting the alt text based on the attachment metadata.
+     * Enqueues the product's images that still lack alt text.
      *
-     * @param array $attr The image attributes.
-     * @param WP_Post $attachment The attachment object.
-     * @return array The updated image attributes.
-     */
-    public function enhance_image_attributes($attr, $attachment) {
-        $alt_text = get_post_meta($attachment->ID, '_wp_attachment_image_alt', true);
-
-        if ($alt_text) {
-            $attr['alt'] = $alt_text;
-        }
-
-        return $attr;
-    }
-
-    /**
-     * Enhances the main product image HTML by setting the alt text based on the attachment metadata.
-     *
-     * @param string $html The HTML for the main product image.
-     * @param int $product_id The ID of the product.
-     * @return string The updated HTML for the main product image.
-     */
-    public function enhance_main_product_image($html, $product_id) {
-        $product = wc_get_product($product_id);
-        $image_id = $product->get_image_id();
-        $alt_text = get_post_meta($image_id, '_wp_attachment_image_alt', true);
-
-        if ($alt_text) {
-            $html = str_replace('alt=""', sprintf('alt="%s"', esc_attr($alt_text)), $html);
-        }
-
-        return $html;
-    }
-
-    /**
-     * Enhances the product image HTML by setting the alt text based on the attachment metadata.
-     *
-     * @param string $image The HTML for the product image.
-     * @param WC_Product $product The product object.
-     * @return string The updated HTML for the product image.
-     */
-    public function enhance_product_image($image, $product) {
-        $attachment_id = $product->get_image_id();
-        $alt_text = get_post_meta($attachment_id, '_wp_attachment_image_alt', true);
-
-        if ($alt_text) {
-            $image = str_replace('alt=""', sprintf('alt="%s"', esc_attr($alt_text)), $image);
-        }
-
-        return $image;
-    }
-
-    /**
-     * Enhances the variation image data by setting the alt text based on the attachment metadata.
-     *
-     * @param array $variation_data The variation image data.
-     * @param WC_Product $product The product object.
-     * @param WC_Product_Variation $variation The variation object.
-     * @return array The updated variation image data.
-     */
-    public function enhance_variation_image($variation_data, $product, $variation) {
-        if (!empty($variation_data['image']['alt'])) {
-            return $variation_data;
-        }
-
-        $image_id = $variation->get_image_id();
-        $alt_text = get_post_meta($image_id, '_wp_attachment_image_alt', true);
-
-        if ($alt_text) {
-            $variation_data['image']['alt'] = $alt_text;
-        }
-
-        return $variation_data;
-    }
-
-    /**
-     * Collects the product's image attachments and enqueues the ones still
-     * missing alt text. No API calls happen in the product-update request —
-     * generation runs in the background queue (see Auto_Alt_Text_Queue).
+     * @param int $product_id
      */
     public function process_product_images($product_id) {
-        $product = wc_get_product($product_id);
-        if (!$product) {
-            return;
-        }
-
-        $image_ids = [];
-        $main_image_id = $product->get_image_id();
-        if ($main_image_id) {
-            $image_ids[] = $main_image_id;
-        }
-        $gallery_ids = $product->get_gallery_image_ids();
-        if (!empty($gallery_ids)) {
-            $image_ids = array_merge($image_ids, $gallery_ids);
-        }
-        if ($product->is_type('variable')) {
-            foreach ($product->get_children() as $variation_id) {
-                $variation = wc_get_product($variation_id);
-                if ($variation && $variation->get_image_id()) {
-                    $image_ids[] = $variation->get_image_id();
-                }
-            }
-        }
-
-        foreach (array_unique(array_filter($image_ids)) as $attachment_id) {
+        foreach ($this->get_product_image_ids($product_id) as $attachment_id) {
             $this->enqueue_if_missing_alt($attachment_id, 'woocommerce');
         }
     }
@@ -150,6 +50,87 @@ class Auto_Alt_Text_WooCommerce {
         }
     }
 
+    public function add_bulk_actions($bulk_actions) {
+        $bulk_actions[self::BULK_ACTION] = __('Generate Alt Texts', 'WP-Auto-Alt-Text');
+        return $bulk_actions;
+    }
+
+    /**
+     * Products-list bulk action. Core verifies the bulk-posts nonce and the
+     * edit_posts capability before applying this filter (wp-admin/edit.php).
+     * Explicit requests are queued even when automatic generation is off.
+     *
+     * @return string Redirect URL.
+     */
+    public function handle_bulk_action($redirect_to, $doaction, $post_ids) {
+        if (self::BULK_ACTION !== $doaction) {
+            return $redirect_to;
+        }
+
+        $queued = 0;
+        foreach ((array) $post_ids as $product_id) {
+            if (!current_user_can('edit_post', $product_id)) {
+                continue;
+            }
+            foreach ($this->get_product_image_ids($product_id) as $attachment_id) {
+                if (get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
+                    continue;
+                }
+                if ($this->queue->enqueue($attachment_id, 'woocommerce_bulk')) {
+                    $queued++;
+                }
+            }
+        }
+
+        return add_query_arg(self::QUEUED_QUERY_ARG, $queued, $redirect_to);
+    }
+
+    public function add_removable_query_args($args) {
+        $args[] = self::QUEUED_QUERY_ARG;
+        return $args;
+    }
+
+    public function render_bulk_notice() {
+        if (!isset($_GET[self::QUEUED_QUERY_ARG])) {
+            return;
+        }
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || 'edit-product' !== $screen->id) {
+            return;
+        }
+        $count = absint($_GET[self::QUEUED_QUERY_ARG]);
+        printf(
+            '<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+            esc_html(sprintf(
+                /* translators: %d: number of product images queued */
+                _n('%d product image queued for alt text generation.', '%d product images queued for alt text generation.', $count, 'WP-Auto-Alt-Text'),
+                $count
+            ))
+        );
+    }
+
+    /**
+     * @return int[] Unique attachment IDs: main image, gallery and variation images.
+     */
+    private function get_product_image_ids($product_id) {
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return [];
+        }
+
+        $image_ids = array_merge([$product->get_image_id()], $product->get_gallery_image_ids());
+        if ($product->is_type('variable')) {
+            foreach ($product->get_children() as $variation_id) {
+                $variation = wc_get_product($variation_id);
+                if ($variation) {
+                    $image_ids[] = $variation->get_image_id();
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', $image_ids))));
+    }
+
     private function enqueue_if_missing_alt($attachment_id, $generation_type) {
         if (!get_option('auto_alt_text_auto_generate', true)) {
             return;
@@ -158,41 +139,5 @@ class Auto_Alt_Text_WooCommerce {
             return;
         }
         $this->queue->enqueue($attachment_id, $generation_type);
-    }
-
-    /**
-     * Adds a new bulk action to the WooCommerce product list page.
-     *
-     * This method adds a new "Generate Alt Texts" bulk action to the WooCommerce product list page.
-     * The bulk action allows users to generate alt text for product images in bulk.
-     *
-     * @param array $bulk_actions The existing bulk actions.
-     * @return array The updated bulk actions array with the new "Generate Alt Texts" action.
-     */
-    public function add_bulk_actions($bulk_actions) {
-        $bulk_actions['generate_alt_texts'] = __('Generate Alt Texts', 'WP-Auto-Alt-Text');
-        return $bulk_actions;
-    }
-
-    /**
-     * Processes all published products and generates alt text for their images using the OpenAI API.
-     * This method is typically called as a bulk action from the WooCommerce product list page.
-     */
-    public function bulk_process_products() {
-        if (!current_user_can('manage_woocommerce')) {
-            return;
-        }
-
-        $products = wc_get_products([
-            'limit' => -1,
-            'status' => 'publish'
-        ]);
-
-        foreach ($products as $product) {
-            $this->process_product_images($product->get_id());
-        }
-
-        wp_redirect(admin_url('edit.php?post_type=product&alt_texts_generated=1'));
-        exit;
     }
 }

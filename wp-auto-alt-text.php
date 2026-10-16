@@ -8,6 +8,7 @@ Description:          Automatically generates alt text for images in the Media L
 Version:              1.2.0
 Requires at least:    6.0
 Requires PHP:         8.0
+WC tested up to:      11.2
 License:              Apache-2.0
 License URI:          https://www.apache.org/licenses/LICENSE-2.0
 Text Domain:          auto-alt-text-plugin
@@ -233,6 +234,15 @@ class WP_Auto_Alt_Text_Plugin {
 		}
 	}
 }
+
+// The plugin never reads or writes orders: declare HPOS and checkout-blocks
+// compatibility, otherwise WooCommerce treats it as incompatible with HPOS.
+add_action('before_woocommerce_init', function () {
+	if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
+	}
+});
 
 // Initialise once every plugin is loaded. This folder name sorts before
 // polylang/ and sitepress-multilingual-cms/ in active_plugins, so their
