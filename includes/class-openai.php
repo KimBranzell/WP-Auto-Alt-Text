@@ -7,7 +7,6 @@ class Auto_Alt_Text_OpenAI  {
     private const MAX_RETRY_DELAY_SECONDS = 5.0; // was hardcoded 15.0
     private const ESTIMATED_IMAGE_INPUT_TOKENS = 1200;
     private const ESTIMATED_CHARS_PER_TOKEN = 4;
-    private const AUTO_GENERATE_OPTION = 'auto_alt_text_auto_generate';
 
     private $api_key;
     private $last_error;
@@ -84,25 +83,6 @@ class Auto_Alt_Text_OpenAI  {
         $iv = str_pad(substr(AUTH_SALT, 0, 16), 16, "\0");
 
         return openssl_decrypt(base64_decode($encrypted_key), 'AES-256-CBC', AUTH_SALT, 0, $iv);
-    }
-
-    /**
-     * Registers a WordPress setting for the "auto_alt_text_auto_generate" option.
-     *
-     * This setting controls whether the plugin should automatically generate alt text for images.
-     * The setting is of type "boolean" and has a default value of "true".
-     * The "rest_sanitize_boolean" function is used to sanitize the input value.
-     */
-    public function register_settings() {
-        register_setting(
-            'auto_alt_text_settings',
-            self::AUTO_GENERATE_OPTION,
-            [
-                'type' => 'boolean',
-                'default' => true,
-                'sanitize_callback' => 'rest_sanitize_boolean'
-            ]
-        );
     }
 
     /**

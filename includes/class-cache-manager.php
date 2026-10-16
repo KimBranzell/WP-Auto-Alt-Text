@@ -4,35 +4,6 @@ class Auto_Alt_Text_Cache_Manager {
     private const CACHE_PREFIX = 'aat_img_';
     private const DEFAULT_EXPIRATION = DAY_IN_SECONDS * 30; // 30 days default
 
-    public static function init() {
-        add_action('wp_update_attachment_metadata', [self::class, 'handle_image_update'], 10, 2);
-        add_action('edit_attachment', [self::class, 'invalidate_cache']);
-        add_action('delete_attachment', [self::class, 'invalidate_cache']);
-
-        // When image is edited in WordPress editor
-        add_action('wp_ajax_image-editor', [self::class, 'handle_image_edit'], 9);
-
-        // When attachment alt text is directly modified
-        add_action('update_post_meta', [self::class, 'handle_meta_update'], 10, 4);
-
-        // When image is replaced via various plugins
-        add_action('enable_media_replace_upload_done', [self::class, 'invalidate_cache']);
-
-    }
-
-    public static function handle_meta_update($meta_id, $post_id, $meta_key, $meta_value) {
-        if ($meta_key === '_wp_attachment_image_alt') {
-            self::invalidate_cache($post_id);
-        }
-    }
-
-    public static function handle_image_edit() {
-        if (isset($_POST['postid'])) {
-            $attachment_id = intval($_POST['postid']);
-            self::invalidate_cache($attachment_id);
-        }
-    }
-
     public static function get_cache_key($image_path, $context = []) {
         $cache_prefix = self::get_image_cache_prefix($image_path);
 
