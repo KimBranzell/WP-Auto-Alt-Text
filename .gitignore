@@ -6,4 +6,5 @@ phpunit.xml
 tests/wp-tests-config.php
 *.md
 !README.md
+!CHANGELOG.md
 .*/

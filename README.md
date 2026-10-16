@@ -4,7 +4,7 @@ Contributors: kimbranzell
 Tags: accessibility, alt-text, openai, images, seo
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.2.0
+Stable tag: 2.0.0
 License: Apache-2.0
 License URI: https://www.apache.org/licenses/LICENSE-2.0
 
@@ -205,7 +205,7 @@ This project is licensed under the Apache License v2.0 or later - see the LICENS
 
 ## Changelog
 
-Yet to come...
+See [CHANGELOG.md](CHANGELOG.md) for the full list of changes in each version.
 
 ## Credits
 
