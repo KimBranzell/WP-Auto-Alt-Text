@@ -3,18 +3,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const cleanupForm = document.querySelector('form[name="cleanup_stats"]');
     const bulkIds = urlParams.get('bulk_ids');
 
-    /**
-     * Listens for click events on the document and calls `handleSingleImageGeneration` if the clicked
-     * element has the 'generate-alt-text-button' class.
-     *
-     * @param {Event} event - The click event object.
-     */
     // The multi-select batch button belongs to the Media Library only. Media
     // frames inside editors (block editor, WooCommerce product gallery) are
     // left alone: finishing a batch there used to reload the page and discard
     // unsaved edits.
     const isMediaLibraryScreen = document.body.classList.contains('upload-php');
 
+    /**
+     * Listens for click events on the document and calls `handleSingleImageGeneration` if the clicked
+     * element has the 'generate-alt-text-button' class.
+     *
+     * @param {Event} event - The click event object.
+     */
     document.addEventListener('click', function(event) {
         if (event.target && event.target.classList.contains('generate-alt-text-button')) {
             handleSingleImageGeneration(event);

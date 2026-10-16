@@ -179,19 +179,20 @@ class Auto_Alt_Text_Ajax_Handler {
                 $attachment_id
             ));
 
-            wp_send_json_success([
-                'message' => 'Alt text updated successfully',
-                'alt_text' => $alt_text,
-                'attachment_id' => $attachment_id
-            ]);
-
         } catch (Exception $e) {
             error_log('[Auto Alt Text Error] ' . $e->getMessage());
             wp_send_json_error([
                 'message' => $e->getMessage(),
                 'code' => $e->getCode()
             ]);
+            return;
         }
+
+        wp_send_json_success([
+            'message' => 'Alt text updated successfully',
+            'alt_text' => $alt_text,
+            'attachment_id' => $attachment_id
+        ]);
     }
 
     /**

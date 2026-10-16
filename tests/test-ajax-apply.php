@@ -12,27 +12,19 @@ class Auto_Alt_Text_Ajax_Apply_Test extends WP_Ajax_UnitTestCase {
             'is_edited'     => '0',
         ];
 
-        $ob_level = ob_get_level();
+        global $wpdb;
+        // WooCommerce's HPOS sync check on admin_init prints a temporary-table
+        // DB error into the AJAX buffer in the test harness; keep the JSON clean.
+        $suppress = $wpdb->suppress_errors(true);
         try {
             $this->_handleAjax('apply_alt_text');
         } catch (WPAjaxDieContinueException $e) {
             // wp_send_json_* ends the request.
+        } finally {
+            $wpdb->suppress_errors($suppress);
         }
 
-        // The swallowed die-exception makes the harness unwind one buffer too
-        // many (or too few); restore PHPUnit's own buffer level.
-        while (ob_get_level() > $ob_level) {
-            ob_end_clean();
-        }
-        while (ob_get_level() < $ob_level) {
-            ob_start();
-        }
-
-        // apply_alt_text() wraps wp_send_json_* in try/catch(Exception); under the
-        // test harness the die-exception is caught and a second JSON payload is
-        // appended. Assert on the first one, which is the real response.
-        $this->assertSame(1, preg_match('/\{"success":.*?\}\}/', $this->_last_response, $m), $this->_last_response);
-        $response = json_decode($m[0], true);
+        $response = json_decode($this->_last_response, true);
         $this->assertTrue($response['success'], $this->_last_response);
     }
 }
