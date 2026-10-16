@@ -4,22 +4,6 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 require_once plugin_dir_path(__FILE__) . 'config.php';
 require_once plugin_dir_path(__FILE__) . 'class-format-checker.php';
 
-if (!@include_once(plugin_dir_path(__FILE__) . 'config.php')) {
-    // Fallback definitions if config file fails to load
-    if (!defined('SETTINGS_GROUP')) {
-        define('SETTINGS_GROUP', 'auto-alt-text-settings-group');
-    }
-    if (!defined('AUTO_ALT_TEXT_API_KEY_OPTION')) {
-        define('AUTO_ALT_TEXT_API_KEY_OPTION', 'auto_alt_text_api_key');
-    }
-    if (!defined('AUTO_ALT_TEXT_LANGUAGE_OPTION')) {
-        define('AUTO_ALT_TEXT_LANGUAGE_OPTION', 'language');
-    }
-    if (!defined('AUTO_ALT_TEXT_AUTO_GENERATE_OPTION')) {
-        define('AUTO_ALT_TEXT_AUTO_GENERATE_OPTION', 'auto_alt_text_auto_generate');
-    }
-}
-
 add_action('admin_menu', 'auto_alt_text_menu');
 add_action('admin_init', 'auto_alt_text_register_settings');
 
@@ -68,7 +52,7 @@ function auto_alt_text_menu() {
         'Status',                // Menu title
         'manage_options',        // Capability
         'auto-alt-text-status',  // Menu slug
-        'add_format_compatibility_section'  // Function
+        'auto_alt_text_render_status_page'  // Function
     );
 }
 
@@ -79,7 +63,7 @@ function auto_alt_text_menu() {
  *
  * @return array An associative array of supported languages.
  */
-function get_supported_languages() {
+function auto_alt_text_get_supported_languages() {
     return AUTO_ALT_TEXT_LANGUAGES;
 }
 
@@ -103,7 +87,7 @@ function auto_alt_text_options() {
         <form method="post" action="options.php">
             <?php
             wp_nonce_field('auto_alt_text_nonce_action', 'auto_alt_text_nonce');
-            settings_fields(SETTINGS_GROUP);
+            settings_fields(AUTO_ALT_TEXT_SETTINGS_GROUP);
             do_settings_sections('auto-alt-text');
             settings_errors();
             ?>
@@ -170,9 +154,8 @@ function auto_alt_text_options() {
             <div class="card">
                 <h2><?php esc_html_e('API', 'WP-Auto-Alt-Text'); ?></h2>
                 <?php
-                $encrypted_key = get_option('auto_alt_text_api_key');
-                $openai = new Auto_Alt_Text_OpenAI();
-                $decrypted_key = $encrypted_key ? $openai->decrypt_api_key($encrypted_key) : '';
+                $key_from_constant = defined('AUTO_ALT_TEXT_OPENAI_API_KEY') && AUTO_ALT_TEXT_OPENAI_API_KEY;
+                $has_saved_key = !empty(get_option('auto_alt_text_api_key'));
                 ?>
                 <table class="form-table">
                     <tr>
@@ -182,11 +165,18 @@ function auto_alt_text_options() {
                             </label>
                         </th>
                         <td>
-                            <input type="text"
+                            <input type="password"
+                                id="api_key"
                                 name="auto_alt_text_api_key"
                                 class="regular-text"
-                                value="<?php echo esc_attr($decrypted_key); ?>"
+                                value=""
+                                autocomplete="off"
+                                placeholder="<?php echo esc_attr($has_saved_key ? __('Sparad nyckel – lämna tomt för att behålla', 'WP-Auto-Alt-Text') : 'sk-…'); ?>"
+                                <?php disabled($key_from_constant); ?>
                             />
+                            <?php if ($key_from_constant) : ?>
+                                <p class="description"><?php esc_html_e('Nyckeln är definierad i wp-config.php (AUTO_ALT_TEXT_OPENAI_API_KEY).', 'WP-Auto-Alt-Text'); ?></p>
+                            <?php endif; ?>
                             <p class="description">
                                 <?php
                                 printf(
@@ -209,7 +199,7 @@ function auto_alt_text_options() {
                             <select name="<?php echo esc_attr( AUTO_ALT_TEXT_LANGUAGE_OPTION ); ?>" class="regular-text">
                                 <?php
                                 $current_language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
-                                foreach (get_supported_languages() as $code => $name) {
+                                foreach (auto_alt_text_get_supported_languages() as $code => $name) {
                                     printf(
                                         '<option value="%s" %s>%s</option>',
                                         esc_attr($code),
@@ -337,7 +327,7 @@ function auto_alt_text_options() {
 
 }
 
-function add_format_compatibility_section() {
+function auto_alt_text_render_status_page() {
     ?>
     <div class="card">
         <h2><?php esc_html_e('Image Format Support', 'WP-Auto-Alt-Text'); ?></h2>
@@ -415,47 +405,47 @@ function add_format_compatibility_section() {
  */
 function auto_alt_text_register_settings() {
     register_setting(
-        SETTINGS_GROUP,                 // Option group
+        AUTO_ALT_TEXT_SETTINGS_GROUP,                 // Option group
         'auto_alt_text_api_key',        // Option name
         'auto_alt_text_sanitize'        // Sanitization callback
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'language',
         'auto_alt_text_sanitize'
     );
     // register_setting(
-    //     SETTINGS_GROUP,
+    //     AUTO_ALT_TEXT_SETTINGS_GROUP,
     //     'alt_text_prompt_template',     // New setting for prompt template
     //     'auto_alt_text_sanitize'
     // );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'aat_brand_name',
         'auto_alt_text_sanitize'
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'wp_auto_alt_text_enable_brand_tonality',
         'auto_alt_text_sanitize'
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'aat_brand_position',
         'auto_alt_text_sanitize'
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'aat_product_keywords',
         'auto_alt_text_sanitize'
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'aat_brand_description',
         'auto_alt_text_sanitize'
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'aat_cache_expiration',
         [
             'type' => 'integer',
@@ -467,7 +457,7 @@ function auto_alt_text_register_settings() {
         ]
     );
     register_setting(
-        SETTINGS_GROUP,
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
         'auto_alt_text_auto_generate',
         [
             'type' => 'boolean',
@@ -475,6 +465,22 @@ function auto_alt_text_register_settings() {
             'sanitize_callback' => 'rest_sanitize_boolean'
         ]
     );
+    register_setting(
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
+        'auto_alt_text_enable_feedback',
+        [
+            'type' => 'boolean',
+            'default' => true,
+            'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
+}
+
+/**
+ * Whether a string looks like an OpenAI secret key.
+ */
+function auto_alt_text_is_valid_api_key_format($key) {
+    return (bool) preg_match('/^sk-(proj-)?[A-Za-z0-9_-]{80,}$/', (string) $key);
 }
 
 /**
@@ -501,20 +507,32 @@ function auto_alt_text_sanitize($input) {
 
     switch($option_name) {
         case 'sanitize_option_auto_alt_text_api_key':
-            $trimmed_input = trim($input);
-            $matches = preg_match('/^sk-(proj-)?[A-Za-z0-9_-]{80,}$/', $trimmed_input);
+            $trimmed_input = trim((string) $input);
+            $current = get_option('auto_alt_text_api_key');
 
-            if (!$matches) {
+            // The field never echoes the key back, so empty means "keep it".
+            if ('' === $trimmed_input) {
+                return $current;
+            }
+
+            $openai = new Auto_Alt_Text_OpenAI();
+
+            // On the first save update_option() falls through to add_option(),
+            // which sanitizes again: the value is then already encrypted.
+            if (auto_alt_text_is_valid_api_key_format($openai->decrypt_api_key($trimmed_input))) {
+                return $trimmed_input;
+            }
+
+            if (!auto_alt_text_is_valid_api_key_format($trimmed_input)) {
                 add_settings_error(
                     'auto_alt_text_api_key',
                     'invalid_api_key',
                     esc_html__('Invalid OpenAI API key format. The key must start with "sk-" or "sk-proj-" followed by at least 80 characters.', 'WP-Auto-Alt-Text')
                 );
-                return get_option('auto_alt_text_api_key');
+                return $current;
             }
-            $openai = new Auto_Alt_Text_OpenAI();
-            $encrypted = $openai->encrypt_api_key($trimmed_input);
-            return $encrypted;
+
+            return $openai->encrypt_api_key($trimmed_input);
 
         // case 'sanitize_option_alt_text_prompt_template':
         //     $min_length = 50;
@@ -542,8 +560,8 @@ function auto_alt_text_sanitize($input) {
         //     }
         //     return sanitize_textarea_field($input);
 
-        case AUTO_ALT_TEXT_LANGUAGE_OPTION:
-            if (!array_key_exists($input, get_supported_languages())) {
+        case 'sanitize_option_' . AUTO_ALT_TEXT_LANGUAGE_OPTION:
+            if (!array_key_exists($input, auto_alt_text_get_supported_languages())) {
                 return 'en'; // Default to English if invalid
             }
             break;

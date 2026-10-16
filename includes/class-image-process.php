@@ -53,14 +53,14 @@ class Auto_Alt_Text_Image_Process {
     $api_key = get_option('auto_alt_text_api_key');
 
     // If no API key is set, show a notice instead of the button
-    if (empty($api_key)) {
+    if (empty($api_key) && !defined('AUTO_ALT_TEXT_OPENAI_API_KEY')) {
         $form_fields['generate_alt_text'] = array(
             'label' => __('Generate Alt Text', 'WP-Auto-Alt-Text'),
             'input' => 'html',
             'html' => '<div class="notice notice-warning inline"><p>' .
-                    __('Please configure your OpenAI API key in the Auto Alt Text settings to enable AI generation.', 'WP-Auto-Alt-Text') .
-                    ' <a href="' . admin_url('options-general.php?page=auto-alt-text') . '">' .
-                    __('Configure Now', 'WP-Auto-Alt-Text') . '</a></p></div>'
+                    esc_html__('Please configure your OpenAI API key in the Auto Alt Text settings to enable AI generation.', 'WP-Auto-Alt-Text') .
+                    ' <a href="' . esc_url(admin_url('admin.php?page=auto-alt-text')) . '">' .
+                    esc_html__('Configure Now', 'WP-Auto-Alt-Text') . '</a></p></div>'
         );
         return $form_fields;
     }

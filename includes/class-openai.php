@@ -18,8 +18,12 @@ class Auto_Alt_Text_OpenAI  {
     private $last_error_class = null;
 
     public function __construct(?Auto_Alt_Text_Language_Manager $language_manager = null) {
-        $encrypted_key = get_option('auto_alt_text_api_key');
-        $this->api_key = $encrypted_key ? $this->decrypt_api_key($encrypted_key) : '';
+        if (defined('AUTO_ALT_TEXT_OPENAI_API_KEY') && AUTO_ALT_TEXT_OPENAI_API_KEY) {
+            $this->api_key = (string) AUTO_ALT_TEXT_OPENAI_API_KEY;
+        } else {
+            $encrypted_key = get_option('auto_alt_text_api_key');
+            $this->api_key = $encrypted_key ? (string) $this->decrypt_api_key($encrypted_key) : '';
+        }
         $this->rate_limiter = new Auto_Alt_Text_Rate_Limiter();
         $this->statistics = new Auto_Alt_Text_Statistics();
         $this->language_manager = $language_manager ?? new Auto_Alt_Text_Language_Manager();

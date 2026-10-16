@@ -4,8 +4,8 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  * Defines the settings group for the Auto Alt Text plugin.
  * This constant is used to group the plugin's settings in the WordPress admin.
  */
-if (!defined('SETTINGS_GROUP')) {
-  define('SETTINGS_GROUP', 'auto-alt-text-settings-group');
+if (!defined('AUTO_ALT_TEXT_SETTINGS_GROUP')) {
+  define('AUTO_ALT_TEXT_SETTINGS_GROUP', 'auto-alt-text-settings-group');
 }
 
 /**
