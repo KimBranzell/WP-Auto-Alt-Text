@@ -114,6 +114,24 @@ function auto_alt_text_options() {
                             </p>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="overwrite_policy">
+                                <?php esc_html_e('Skriv över befintliga alt-texter vid massgenerering', 'WP-Auto-Alt-Text'); ?>
+                            </label>
+                        </th>
+                        <td>
+                            <?php $overwrite_policy = Auto_Alt_Text_Provenance::default_policy(); ?>
+                            <select id="overwrite_policy" name="<?php echo esc_attr(Auto_Alt_Text_Provenance::POLICY_OPTION); ?>">
+                                <option value="missing" <?php selected($overwrite_policy, 'missing'); ?>><?php esc_html_e('Nej – fyll bara i saknade alt-texter', 'WP-Auto-Alt-Text'); ?></option>
+                                <option value="ai" <?php selected($overwrite_policy, 'ai'); ?>><?php esc_html_e('Ja, men bara oredigerade AI-texter', 'WP-Auto-Alt-Text'); ?></option>
+                                <option value="all" <?php selected($overwrite_policy, 'all'); ?>><?php esc_html_e('Ja, alla – även texter skrivna av en redaktör', 'WP-Auto-Alt-Text'); ?></option>
+                            </select>
+                            <p class="description">
+                                <?php esc_html_e('Gäller massåtgärder, REST /batch och WP-CLI (som kan välja med --overwrite). Generera-knappen för en enskild bild skriver alltid över.', 'WP-Auto-Alt-Text'); ?>
+                            </p>
+                        </td>
+                    </tr>
                 </table>
             </div>
 
@@ -472,6 +490,15 @@ function auto_alt_text_register_settings() {
             'type' => 'boolean',
             'default' => true,
             'sanitize_callback' => 'rest_sanitize_boolean'
+        ]
+    );
+    register_setting(
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
+        Auto_Alt_Text_Provenance::POLICY_OPTION,
+        [
+            'type' => 'string',
+            'default' => Auto_Alt_Text_Provenance::POLICY_MISSING,
+            'sanitize_callback' => ['Auto_Alt_Text_Provenance', 'sanitize_policy'],
         ]
     );
 }

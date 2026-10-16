@@ -221,8 +221,19 @@ class Auto_Alt_Text_Queue {
     private function process_job($job) {
         $attachment_id = (int) $job->attachment_id;
 
-        // Attachment gone or already described → nothing to do.
-        if (!get_post($attachment_id) || get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
+        // Attachment gone → nothing to do.
+        if (!get_post($attachment_id)) {
+            $this->finish($job, self::STATUS_DONE);
+            return true;
+        }
+
+        // Automatic jobs only fill missing alt text; explicit jobs (bulk
+        // actions) follow the overwrite setting. Checked at claim time, so an
+        // edit or a setting change made while the job waited is respected.
+        $policy = in_array($job->generation_type, self::AUTO_GENERATION_TYPES, true)
+            ? Auto_Alt_Text_Provenance::POLICY_MISSING
+            : Auto_Alt_Text_Provenance::default_policy();
+        if (!Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $policy)) {
             $this->finish($job, self::STATUS_DONE);
             return true;
         }

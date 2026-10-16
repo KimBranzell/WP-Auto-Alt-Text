@@ -125,6 +125,15 @@ class Auto_Alt_Text_REST_API {
                 continue;
             }
 
+            if (!Auto_Alt_Text_Provenance::allows_overwrite($id, Auto_Alt_Text_Provenance::default_policy())) {
+                $results[$id] = [
+                    'success' => false,
+                    'skipped' => true,
+                    'message' => __('Skipped: the existing alt text is kept by the overwrite setting.', 'WP-Auto-Alt-Text'),
+                ];
+                continue;
+            }
+
             $image_url = wp_get_attachment_url($id);
             $alt_text = $this->openai()->generate_alt_text($image_url, $id, 'api_batch');
 

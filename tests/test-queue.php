@@ -400,4 +400,45 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertFalse(Auto_Alt_Text_Quota_Monitor::is_active());
         $this->assertSame(0, $mails, 'Auth errors must not send the quota email');
     }
+
+    public function test_explicit_job_keeps_human_alt_text_under_default_policy() {
+        delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+        $id = self::factory()->attachment->create();
+        update_post_meta($id, '_wp_attachment_image_alt', 'Written by an editor');
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'woocommerce_bulk');
+
+        $queue->run();
+
+        $this->assertSame([], $calls);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($id)->status);
+    }
+
+    public function test_explicit_job_rewrites_untouched_ai_alt_text_when_policy_is_ai() {
+        $id = self::factory()->attachment->create();
+        update_post_meta($id, '_wp_attachment_image_alt', 'Old AI text');
+        Auto_Alt_Text_Provenance::record($id, 'upload');
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'woocommerce_bulk');
+        update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'ai'); // changed after enqueue: read at claim time
+
+        $queue->run();
+        delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+
+        $this->assertSame([$id], $calls);
+    }
+
+    public function test_automatic_job_never_overwrites_even_when_policy_is_all() {
+        $id = self::factory()->attachment->create();
+        update_post_meta($id, '_wp_attachment_image_alt', 'Old AI text');
+        Auto_Alt_Text_Provenance::record($id, 'upload');
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'all');
+
+        $queue->run();
+        delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+
+        $this->assertSame([], $calls);
+    }
 }

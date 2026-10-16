@@ -210,4 +210,18 @@ class Auto_Alt_Text_WooCommerce_Queue_Test extends WP_UnitTestCase {
     public function test_unauthenticated_admin_post_bulk_endpoint_is_gone() {
         $this->assertFalse(has_action('admin_post_process_wc_product_images'));
     }
+
+    public function test_bulk_action_queues_untouched_ai_alt_text_when_policy_is_ai() {
+        update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'ai');
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $product = $this->make_product_with_image($attachment_id);
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', 'Old AI text');
+        Auto_Alt_Text_Provenance::record($attachment_id, 'upload');
+        $this->clear_queue();
+
+        $redirect = apply_filters('handle_bulk_actions-edit-product', admin_url('edit.php?post_type=product'), 'generate_alt_texts', [$product->get_id()]);
+        delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+
+        $this->assertStringContainsString('aat_wc_queued=1', $redirect);
+    }
 }

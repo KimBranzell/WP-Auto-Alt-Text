@@ -83,4 +83,27 @@ class Auto_Alt_Text_Settings_Test extends WP_UnitTestCase {
         $this->assertTrue(function_exists('auto_alt_text_get_supported_languages'));
         $this->assertSame('auto-alt-text-settings-group', AUTO_ALT_TEXT_SETTINGS_GROUP);
     }
+
+    public function test_overwrite_policy_setting_is_registered_and_sanitized() {
+        $this->assertArrayHasKey(Auto_Alt_Text_Provenance::POLICY_OPTION, get_registered_settings());
+
+        update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'everything');
+        $this->assertSame('missing', get_option(Auto_Alt_Text_Provenance::POLICY_OPTION));
+
+        update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'ai');
+        $this->assertSame('ai', get_option(Auto_Alt_Text_Provenance::POLICY_OPTION));
+    }
+
+    public function test_settings_page_offers_the_overwrite_policy() {
+        require_once ABSPATH . 'wp-admin/includes/template.php';
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $GLOBALS['title'] = 'Auto Alt Text';
+
+        ob_start();
+        auto_alt_text_options();
+        $html = ob_get_clean();
+
+        $this->assertStringContainsString('name="auto_alt_text_overwrite_policy"', $html);
+    }
 }

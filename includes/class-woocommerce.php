@@ -67,13 +67,14 @@ class Auto_Alt_Text_WooCommerce {
             return $redirect_to;
         }
 
+        $policy = Auto_Alt_Text_Provenance::default_policy();
         $queued = 0;
         foreach ((array) $post_ids as $product_id) {
             if (!current_user_can('edit_post', $product_id)) {
                 continue;
             }
             foreach ($this->get_product_image_ids($product_id) as $attachment_id) {
-                if (get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
+                if (!Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $policy)) {
                     continue;
                 }
                 // An existing pending job (e.g. an 'upload' job paused by the
