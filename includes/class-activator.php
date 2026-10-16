@@ -9,6 +9,9 @@ class Auto_Alt_Text_Activator {
 
     private const CURRENT_DB_VERSION = '1.0';
     private const COLUMN_VERSION = 'db_version';
+    /** Bump whenever a CREATE TABLE statement below changes. */
+    private const SCHEMA_VERSION = '1.1';
+    public const DB_VERSION_OPTION = 'auto_alt_text_db_version';
 
     private const COLUMN_GENERATION_TYPE = 'generation_type';
     private const COLUMN_IS_EDITED = 'is_edited';
@@ -75,6 +78,19 @@ class Auto_Alt_Text_Activator {
      */
 
     /**
+     * Cheap per-request check: runs dbDelta only when the schema version changed.
+     *
+     * @return bool Whether the schema was (re)applied.
+     */
+    public static function maybe_upgrade() {
+        if (get_option(self::DB_VERSION_OPTION) === self::SCHEMA_VERSION) {
+            return false;
+        }
+        self::activate();
+        return true;
+    }
+
+    /**
      * Activates the plugin by creating or updating the necessary database tables.
      *
      * This method performs the following tasks:
@@ -139,6 +155,7 @@ class Auto_Alt_Text_Activator {
             dbDelta($create_stats_sql);
             dbDelta($create_logs_sql);
             dbDelta($create_queue_sql);
+            update_option(self::DB_VERSION_OPTION, self::SCHEMA_VERSION);
 
 
         } catch (Exception $e) {

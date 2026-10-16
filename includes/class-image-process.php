@@ -39,43 +39,6 @@ class Auto_Alt_Text_Image_Process {
   }
 
   /**
-   * Handles the update of an attachment in the WordPress media library.
-   *
-   * This method is responsible for generating and updating the alternative text (alt text) for an
-   * image attachment when it is updated. It retrieves the current alt text, generates translations
-   * for all active languages, and updates the alt text metadata for the attachment.
-   *
-   * @param int $attachment_id The ID of the attachment being updated.
-   */
-  public function handle_attachment_update($attachment_id) {
-    if (!wp_attachment_is_image($attachment_id)) {
-        return;
-    }
-
-    Auto_Alt_Text_Logger::log("Processing attachment update", "info", [
-        'attachment_id' => $attachment_id
-    ]);
-
-    try {
-        $current_alt_text = get_post_meta($attachment_id, '_wp_attachment_image_alt', true);
-
-        if ($current_alt_text) {
-          $this->language_manager->sync_alt_text($attachment_id, $current_alt_text);
-
-          Auto_Alt_Text_Logger::log("Alt text synchronized for attachment language", "info", [
-                'attachment_id' => $attachment_id,
-            'language' => $this->language_manager->get_post_language($attachment_id)
-            ]);
-        }
-    } catch (Exception $e) {
-        Auto_Alt_Text_Logger::log("Attachment update error", "error", [
-            'attachment_id' => $attachment_id,
-            'error' => $e->getMessage()
-        ]);
-    }
-  }
-
-  /**
    * Adds a custom "Generate Alt Text" button to the WordPress media library attachment form.
    *
    * This method checks if the OpenAI API key is configured. If not, it displays a warning notice

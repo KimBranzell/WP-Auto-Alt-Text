@@ -282,18 +282,18 @@ class Auto_Alt_Text_Logger {
     }
 
     /**
-     * Cleans up old logs from the database table.
+     * Deletes log rows older than $days. Runs daily via aat_daily_maintenance;
+     * do_action() passes '' as the first argument, hence the fallback.
      *
-     * This method deletes log entries from the database table that are older than the specified number of days.
-     *
-     * @param int $days The number of days to keep logs for. Defaults to 30 days.
-     * @return int The number of rows deleted from the database table.
+     * @param int $days
+     * @return int|false Rows deleted.
      */
-    public function cleanup_old_logs($days = 30) {
+    public static function prune($days = 30) {
         global $wpdb;
+        $days = (int) $days > 0 ? (int) $days : 30;
         return $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$this->table_name} WHERE timestamp < DATE_SUB(NOW(), INTERVAL %d DAY)",
-            $days
+            "DELETE FROM {$wpdb->prefix}auto_alt_text_logs WHERE timestamp < %s",
+            wp_date('Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS)
         ));
     }
 
@@ -324,6 +324,10 @@ class Auto_Alt_Text_Logger {
      * @param array $context Additional context information to include with the log entry.
      */
     public static function log($message, $level = 'info', $context = []) {
+        if ('debug' === $level && !apply_filters('auto_alt_text_log_debug', self::is_debug_mode())) {
+            return;
+        }
+
         global $wpdb;
         $table_name = $wpdb->prefix . 'auto_alt_text_logs';
 

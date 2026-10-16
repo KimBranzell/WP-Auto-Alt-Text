@@ -1,12 +1,19 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 class Auto_Alt_Text_REST_API {
-    private $openai;
+    private $openai = null;
     private $namespace = 'wp-auto-alt-text/v1';
 
     public function __construct() {
-        $this->openai = new Auto_Alt_Text_OpenAI();
         add_action('rest_api_init', [$this, 'register_routes']);
+    }
+
+    /** Built on first use so ordinary requests never construct an API client. */
+    private function openai() {
+        if (null === $this->openai) {
+            $this->openai = new Auto_Alt_Text_OpenAI();
+        }
+        return $this->openai;
     }
 
     /**
@@ -66,7 +73,7 @@ class Auto_Alt_Text_REST_API {
         $attachment_id = $request->get_param('attachment_id');
         $image_url = wp_get_attachment_url($attachment_id);
 
-        $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'api');
+        $alt_text = $this->openai()->generate_alt_text($image_url, $attachment_id, 'api');
 
         if ($alt_text) {
             return new WP_REST_Response([
@@ -78,7 +85,7 @@ class Auto_Alt_Text_REST_API {
 
         return new WP_REST_Response([
             'success' => false,
-            'message' => $this->openai->get_last_error()
+            'message' => $this->openai()->get_last_error()
         ], 400);
     }
 
@@ -102,7 +109,7 @@ class Auto_Alt_Text_REST_API {
             }
 
             $image_url = wp_get_attachment_url($id);
-            $alt_text = $this->openai->generate_alt_text($image_url, $id, 'api_batch');
+            $alt_text = $this->openai()->generate_alt_text($image_url, $id, 'api_batch');
 
             if ($alt_text) {
                 $results[$id] = [
@@ -114,7 +121,7 @@ class Auto_Alt_Text_REST_API {
 
             $results[$id] = [
                 'success' => false,
-                'message' => $this->openai->get_last_error(),
+                'message' => $this->openai()->get_last_error(),
             ];
         }
 

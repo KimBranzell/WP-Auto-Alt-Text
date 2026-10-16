@@ -162,8 +162,6 @@ class WP_Auto_Alt_Text_Plugin {
 		add_action('admin_enqueue_scripts', [$this->components['admin'], 'enqueueAutoAltTextScript']);
 		add_action('wp_ajax_apply_alt_text', [$this->components['ajax_handler'], 'apply_alt_text']);
 
-    add_action('edit_attachment', [$this->components['image_processor'], 'handle_attachment_update']);
-
 		add_action('admin_notices', ['Auto_Alt_Text_Quota_Monitor', 'render_admin_notice']);
 		add_action('admin_post_aat_dismiss_quota_notice', ['Auto_Alt_Text_Quota_Monitor', 'handle_dismiss_request']);
 
@@ -178,6 +176,7 @@ class WP_Auto_Alt_Text_Plugin {
 			(new Auto_Alt_Text_Queue())->run();
 		});
 		add_action('init', [$this, 'maybe_schedule_queue_cron']);
+		add_action('aat_daily_maintenance', ['Auto_Alt_Text_Logger', 'prune']);
 
 		Auto_Alt_Text_Privacy::register();
 	}
@@ -191,7 +190,7 @@ class WP_Auto_Alt_Text_Plugin {
   */
 	public function handle_plugins_loaded() {
 		load_plugin_textdomain('WP-Auto-Alt-Text', false, basename(dirname(__FILE__)) . '/languages');
-		Auto_Alt_Text_Activator::activate();
+		Auto_Alt_Text_Activator::maybe_upgrade();
 
 		if (class_exists('WooCommerce')) {
 				new Auto_Alt_Text_WooCommerce();
@@ -207,16 +206,21 @@ class WP_Auto_Alt_Text_Plugin {
 	public function initialize_features() {
 		new Auto_Alt_Text_Logger();
 		new Auto_Alt_Text_REST_API();
-		new Auto_Alt_Text_WP_Media_Folder();
+		if (is_admin()) {
+			new Auto_Alt_Text_WP_Media_Folder();
+		}
 	}
 
 	/**
-	 * Ensures the queue tick is scheduled. Runs on init because the plugin
-	 * has no single activation entry point (activate() runs on plugins_loaded).
+	 * Ensures the plugin's cron events are scheduled. Runs on init because
+	 * scheduling must survive cron-array resets and migrations.
 	 */
 	public function maybe_schedule_queue_cron() {
 		if (!wp_next_scheduled('aat_queue_tick')) {
 			wp_schedule_event(time(), 'aat_minutely', 'aat_queue_tick');
+		}
+		if (!wp_next_scheduled('aat_daily_maintenance')) {
+			wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'aat_daily_maintenance');
 		}
 	}
 }
@@ -235,6 +239,13 @@ add_action('before_woocommerce_init', function () {
 // version constants don't exist yet when this file is included.
 add_action('plugins_loaded', [WP_Auto_Alt_Text_Plugin::get_instance(), 'init'], 0);
 
+register_activation_hook(__FILE__, function () {
+	// init() hasn't run in the activation request, so load the class directly.
+	require_once __DIR__ . '/includes/class-activator.php';
+	Auto_Alt_Text_Activator::activate();
+});
+
 register_deactivation_hook(__FILE__, function () {
 	wp_clear_scheduled_hook('aat_queue_tick');
+	wp_clear_scheduled_hook('aat_daily_maintenance');
 });

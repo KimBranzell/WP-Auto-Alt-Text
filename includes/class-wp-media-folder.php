@@ -2,18 +2,22 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 class Auto_Alt_Text_WP_Media_Folder {
-    private $openai;
-    private $batch_processor;
+    private $openai = null;
 
     public function __construct() {
-        $this->openai = new Auto_Alt_Text_OpenAI();
-        $this->batch_processor = new Auto_Alt_Text_Batch_Processor($this->openai, 10);
-
         // Add button to WP Media Folder toolbar
         add_action('admin_footer', [$this, 'add_batch_button_to_media_folder']);
 
         // Handle AJAX batch processing
         add_action('wp_ajax_wpmf_process_alt_text_batch', [$this, 'process_folder_images']);
+    }
+
+    /** Built on first use so ordinary requests never construct an API client. */
+    private function openai() {
+        if (null === $this->openai) {
+            $this->openai = new Auto_Alt_Text_OpenAI();
+        }
+        return $this->openai;
     }
 
     /**
@@ -221,7 +225,7 @@ class Auto_Alt_Text_WP_Media_Folder {
             foreach ($ids as $id) {
                 $image_url = wp_get_attachment_url($id);
                 if ($image_url) {
-                    $alt_text = $this->openai->generate_alt_text($image_url, $id, 'wpmf_folder');
+                    $alt_text = $this->openai()->generate_alt_text($image_url, $id, 'wpmf_folder');
                     if ($alt_text) {
                         $results[$id] = $alt_text;
                     }
