@@ -122,7 +122,7 @@ class Auto_Alt_Text_OpenAI  {
 
     /**
      * Error class of the last failed call:
-     * 'quota' | 'rate_limit' | 'transient' | 'permanent' | null.
+     * 'quota' | 'auth' | 'rate_limit' | 'transient' | 'permanent' | null.
      */
     public function get_last_error_class() {
         return $this->last_error_class;
@@ -717,6 +717,7 @@ class Auto_Alt_Text_OpenAI  {
             if (200 === $http_code && !empty($body) && is_array($response_data)) {
                 $this->last_error_class = null;
                 Auto_Alt_Text_Quota_Monitor::record_success();
+                Auto_Alt_Text_Queue::clear_auth_pause();
                 return $response_data;
             }
 
@@ -758,7 +759,7 @@ class Auto_Alt_Text_OpenAI  {
     /**
      * Classifies an API error response for retry policy.
      *
-     * @return string 'quota' | 'rate_limit' | 'transient' | 'permanent'
+     * @return string 'quota' | 'auth' | 'rate_limit' | 'transient' | 'permanent'
      */
     private function classify_api_error($response_data, $http_code) {
         $type = strtolower((string) ($response_data['error']['type'] ?? ''));
@@ -770,6 +771,11 @@ class Auto_Alt_Text_OpenAI  {
             || strpos($message, 'exceeded your current quota') !== false
             || strpos($message, 'billing hard limit') !== false) {
             return 'quota';
+        }
+
+        if (401 === $http_code) {
+            // Invalid or revoked key: the queue pauses instead of failing jobs.
+            return 'auth';
         }
 
         if (429 === $http_code) {

@@ -17,13 +17,17 @@ class Auto_Alt_Text_Queue {
     /** Job types created by automatic triggers; paused while auto-generation is off. */
     public const AUTO_GENERATION_TYPES = ['upload', 'woocommerce', 'woocommerce_variation'];
 
+    /** Set when OpenAI rejects the API key (HTTP 401); run() waits it out. */
+    public const AUTH_PAUSE_TRANSIENT = 'aat_queue_auth_pause';
+    private const AUTH_PAUSE_SECONDS = 15 * MINUTE_IN_SECONDS;
+
     /** @var callable|null */
     private $processor;
 
     /**
      * @param callable|null $processor Overridable job processor for testing.
      *                                 Signature: fn(int $attachment_id, string $generation_type): array
-     *                                 returning ['status' => 'success'|'retry'|'failed'|'quota', 'error' => ?string].
+     *                                 returning ['status' => 'success'|'retry'|'failed'|'quota'|'auth', 'error' => ?string].
      */
     public function __construct(?callable $processor = null) {
         $this->processor = $processor;
@@ -83,6 +87,12 @@ class Auto_Alt_Text_Queue {
         global $wpdb;
         // Idle fast-path: an empty table needs no maintenance writes.
         if (!$wpdb->get_var('SELECT id FROM ' . self::get_table_name() . ' LIMIT 1')) {
+            return;
+        }
+
+        // Without a working API key every job would burn its attempts and
+        // fail: leave the backlog pending until a key is set or the pause ends.
+        if (!self::has_api_key() || get_transient(self::AUTH_PAUSE_TRANSIENT)) {
             return;
         }
 
@@ -217,6 +227,14 @@ class Auto_Alt_Text_Queue {
                 $this->update_job($job->id, ['status' => self::STATUS_PENDING]);
                 return false;
 
+            case 'auth':
+                // API key rejected: every job would fail the same way. Pause the
+                // queue (a new key or any successful call lifts it early), leave
+                // the job untouched and stop the run.
+                set_transient(self::AUTH_PAUSE_TRANSIENT, 1, self::AUTH_PAUSE_SECONDS);
+                $this->update_job($job->id, ['status' => self::STATUS_PENDING]);
+                return false;
+
             case 'retry':
                 $attempts = (int) $job->attempts + 1;
                 if ($attempts >= self::MAX_ATTEMPTS) {
@@ -257,11 +275,23 @@ class Auto_Alt_Text_Queue {
         }
 
         $class = $openai->get_last_error_class();
-        $map = ['quota' => 'quota', 'permanent' => 'failed'];
+        $map = ['quota' => 'quota', 'auth' => 'auth', 'permanent' => 'failed'];
         return [
             'status' => $map[$class] ?? 'retry',
             'error'  => $openai->get_last_error(),
         ];
+    }
+
+    /** Lifts the 401 pause: hooked to API key changes, called on API success. */
+    public static function clear_auth_pause() {
+        delete_transient(self::AUTH_PAUSE_TRANSIENT);
+    }
+
+    private static function has_api_key() {
+        if (defined('AUTO_ALT_TEXT_OPENAI_API_KEY') && AUTO_ALT_TEXT_OPENAI_API_KEY) {
+            return true;
+        }
+        return '' !== (string) get_option('auto_alt_text_api_key', '');
     }
 
     private function finish($job, $status, $error = null) {

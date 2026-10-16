@@ -8,6 +8,8 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->queue = new Auto_Alt_Text_Queue();
         global $wpdb;
         $wpdb->query('TRUNCATE TABLE ' . Auto_Alt_Text_Queue::get_table_name());
+        // run() leaves the queue alone until an API key is configured.
+        (new Auto_Alt_Text_OpenAI())->save_api_key('sk-test-not-real');
     }
 
     public function test_queue_table_exists() {
@@ -278,5 +280,84 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertSame([$bulk_id], $calls, 'Only the explicit job may run while auto-generate is off');
         $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($auto_id)->status);
         $this->assertSame(Auto_Alt_Text_Queue::STATUS_DONE, $this->get_job($bulk_id)->status);
+    }
+
+    public function test_run_without_api_key_claims_nothing() {
+        if (defined('AUTO_ALT_TEXT_OPENAI_API_KEY')) {
+            $this->markTestSkipped('AUTO_ALT_TEXT_OPENAI_API_KEY is defined in this environment');
+        }
+        delete_option('auto_alt_text_api_key');
+        $id = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->enqueue($id, 'upload');
+        $queue->run();
+        $this->assertSame([], $calls, 'No job may be processed without an API key');
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $job->status);
+        $this->assertSame('0', $job->attempts);
+    }
+
+    public function test_auth_result_leaves_jobs_pending_and_stops_run() {
+        $id1 = self::factory()->attachment->create();
+        $id2 = self::factory()->attachment->create();
+        $queue = $this->queue_with_result(['status' => 'auth', 'error' => 'Authentication failed.'], $calls);
+        $queue->enqueue($id1, 'upload');
+        $queue->enqueue($id2, 'upload');
+        $queue->run();
+        $this->assertCount(1, $calls, 'An auth error must stop the run');
+        foreach ([$id1, $id2] as $id) {
+            $job = $this->get_job($id);
+            $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $job->status);
+            $this->assertSame('0', $job->attempts, 'An auth error must not consume an attempt');
+        }
+        $this->assertNotFalse(get_transient('aat_queue_auth_pause'));
+    }
+
+    public function test_auth_pause_blocks_the_next_run() {
+        $id = self::factory()->attachment->create();
+        $failing = $this->queue_with_result(['status' => 'auth', 'error' => 'Authentication failed.']);
+        $failing->enqueue($id, 'upload');
+        $failing->run();
+
+        $queue = $this->queue_with_result(['status' => 'success', 'error' => null], $calls);
+        $queue->run();
+        $this->assertSame([], $calls, 'Queue stays paused after an auth error');
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $this->get_job($id)->status);
+    }
+
+    public function test_saving_a_new_api_key_lifts_the_auth_pause() {
+        set_transient('aat_queue_auth_pause', 1, 15 * MINUTE_IN_SECONDS);
+        (new Auto_Alt_Text_OpenAI())->save_api_key('sk-test-replacement-key');
+        $this->assertFalse(get_transient('aat_queue_auth_pause'));
+    }
+
+    public function test_openai_401_pauses_queue_without_failing_the_job_or_emailing() {
+        $mails = 0;
+        add_filter('pre_wp_mail', function () use (&$mails) {
+            $mails++;
+            return true;
+        });
+        add_filter('pre_http_request', function ($pre, $args, $url) {
+            if (strpos($url, 'openai.com') === false) {
+                return $pre;
+            }
+            return [
+                'headers'  => [],
+                'body'     => wp_json_encode(['error' => ['message' => 'Incorrect API key provided', 'code' => 'invalid_api_key']]),
+                'response' => ['code' => 401, 'message' => 'Unauthorized'],
+                'cookies'  => [],
+            ];
+        }, 10, 3);
+        $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
+        $this->queue->enqueue($id, 'upload');
+
+        $this->queue->run();
+
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_PENDING, $job->status);
+        $this->assertSame('0', $job->attempts);
+        $this->assertNotFalse(get_transient('aat_queue_auth_pause'));
+        $this->assertFalse(Auto_Alt_Text_Quota_Monitor::is_active());
+        $this->assertSame(0, $mails, 'Auth errors must not send the quota email');
     }
 }

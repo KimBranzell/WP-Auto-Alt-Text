@@ -93,12 +93,24 @@ class Auto_Alt_Text_OpenAI_Errors_Test extends WP_UnitTestCase {
         $this->assertSame(1, $this->request_count);
     }
 
-    public function test_auth_error_is_permanent() {
+    public function test_auth_error_has_its_own_class_and_is_not_a_quota_incident() {
         $this->mock_api_response(401, ['error' => ['message' => 'Incorrect API key provided', 'code' => 'invalid_api_key']]);
         [$result] = $this->generate();
         $this->assertNull($result);
-        $this->assertSame('permanent', $this->openai->get_last_error_class());
+        $this->assertSame('auth', $this->openai->get_last_error_class());
         $this->assertSame(1, $this->request_count);
+        $this->assertFalse(Auto_Alt_Text_Quota_Monitor::is_active());
+    }
+
+    public function test_success_lifts_the_queue_auth_pause() {
+        set_transient('aat_queue_auth_pause', 1, 15 * MINUTE_IN_SECONDS);
+        $this->mock_api_response(200, [
+            'output' => [[ 'type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'A yellow canola field.']] ]],
+            'usage' => ['total_tokens' => 42],
+        ]);
+        [$result] = $this->generate();
+        $this->assertSame('A yellow canola field.', $result);
+        $this->assertFalse(get_transient('aat_queue_auth_pause'));
     }
 
     public function test_success_clears_quota_incident() {

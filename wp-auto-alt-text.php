@@ -177,6 +177,7 @@ class WP_Auto_Alt_Text_Plugin {
 		add_action('aat_queue_tick', function () {
 			(new Auto_Alt_Text_Queue())->run();
 		});
+		add_action('update_option_auto_alt_text_api_key', ['Auto_Alt_Text_Queue', 'clear_auth_pause']);
 		add_action('init', [$this, 'maybe_schedule_queue_cron']);
 		add_action('aat_daily_maintenance', ['Auto_Alt_Text_Logger', 'prune']);
 
