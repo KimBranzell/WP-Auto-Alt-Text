@@ -66,6 +66,10 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 3. Save the settings
 4. Generate alt text from the Media Library to confirm your API key works
 
+Alternatively, define the key in `wp-config.php`. It then takes precedence over the key saved in the settings and is never stored in the database:
+
+    define('AUTO_ALT_TEXT_OPENAI_API_KEY', 'sk-...');
+
 ## Usage
 
 ### Individual Images
@@ -87,6 +91,7 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 ### Available Settings
 
 - API Key management
+- Automatic generation toggle: controls only the automatic generation that runs when an image is uploaded or a WooCommerce product is saved. The Generate button in the media modal, bulk actions, WP-CLI and the REST API always work, whatever the toggle says.
 - Automatic throughput adaptation based on your OpenAI project limits
 - Default alt text prompt templates
 - Processing preferences
@@ -151,7 +156,7 @@ For large libraries, use WP-CLI to generate alt text without browser timeouts:
 
 ## Background Processing
 
-Automatic alt text generation (image uploads, WooCommerce product saves) does not call OpenAI during the triggering request. Images are added to a persistent queue and processed in the background by WP-Cron, a few at a time. Failed jobs are retried with increasing delays; if your OpenAI quota runs out, the queue pauses, a site admin is emailed once, and processing resumes automatically when the quota is restored.
+Automatic alt text generation (image uploads, WooCommerce product saves) does not call OpenAI during the triggering request. Images are added to a persistent queue and processed in the background by WP-Cron, a few at a time. Failed jobs are retried with increasing delays; if your OpenAI quota runs out, the queue pauses, a site admin is emailed once, and processing resumes automatically when the quota is restored. Without an API key, or while OpenAI rejects the key (HTTP 401), queued images wait instead of failing. After a rejected key the queue pauses for 15 minutes; saving a new key in the settings resumes it immediately.
 
 For reliable background processing we strongly recommend real server cron instead of WordPress' visitor-triggered cron:
 
@@ -164,6 +169,10 @@ For reliable background processing we strongly recommend real server cron instea
     * * * * * cd /path/to/site && wp cron event run --due-now >/dev/null 2>&1
 
 Inspect the queue at any time with `wp auto-alt-text queue` (add `--status=failed` to see errors, `--retry-failed` to re-queue failed jobs), or in the plugin's statistics page in wp-admin.
+
+## WooCommerce
+
+Product images without alt text are queued in two ways only: when a product (or a variation) is saved in wp-admin, and from the Products list with the bulk action "Generate Alt Texts" (which runs even when automatic generation is turned off). Nothing is queued at checkout, on stock updates or from front-end requests, and no OpenAI call is made while a shop page renders.
 
 ## Running tests
 
