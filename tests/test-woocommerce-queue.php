@@ -134,6 +134,50 @@ class Auto_Alt_Text_WooCommerce_Queue_Test extends WP_UnitTestCase {
         )));
     }
 
+    private function run_bulk_action($doaction, array $post_ids) {
+        return apply_filters(
+            'handle_bulk_actions-edit-product',
+            admin_url('edit.php?post_type=product'),
+            $doaction,
+            $post_ids
+        );
+    }
+
+    public function test_other_bulk_actions_return_the_redirect_unchanged() {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $product = $this->make_product_with_image($attachment_id);
+        $this->clear_queue();
+
+        $redirect = $this->run_bulk_action('trash', [$product->get_id()]);
+
+        $this->assertSame(admin_url('edit.php?post_type=product'), $redirect);
+        $this->assertSame(0, $this->pending_count());
+    }
+
+    public function test_bulk_action_skips_images_that_already_have_alt_text() {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $product = $this->make_product_with_image($attachment_id);
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', 'Existing alt');
+        $this->clear_queue();
+
+        $redirect = $this->run_bulk_action('generate_alt_texts', [$product->get_id()]);
+
+        $this->assertStringContainsString('aat_wc_queued=0', $redirect);
+        $this->assertSame(0, $this->pending_count());
+    }
+
+    public function test_bulk_action_queues_nothing_for_a_user_who_cannot_edit_the_product() {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $product = $this->make_product_with_image($attachment_id);
+        $this->clear_queue();
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+
+        $redirect = $this->run_bulk_action('generate_alt_texts', [$product->get_id()]);
+
+        $this->assertStringContainsString('aat_wc_queued=0', $redirect);
+        $this->assertSame(0, $this->pending_count());
+    }
+
     public function test_bulk_action_promotes_a_paused_upload_job_so_it_runs() {
         wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
         $product = $this->make_product_with_image($attachment_id);
