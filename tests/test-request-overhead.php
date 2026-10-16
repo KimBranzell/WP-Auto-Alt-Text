@@ -15,6 +15,24 @@ class Auto_Alt_Text_Request_Overhead_Test extends WP_UnitTestCase {
         $this->assertFalse(Auto_Alt_Text_Activator::maybe_upgrade());
     }
 
+    public function test_schema_version_is_not_recorded_when_the_queue_table_is_missing() {
+        global $wpdb;
+        delete_option(Auto_Alt_Text_Activator::DB_VERSION_OPTION);
+        // Simulate a failed CREATE TABLE: point the plugin at tables that do
+        // not exist and let dbDelta() run nothing.
+        $prefix = $wpdb->prefix;
+        $wpdb->prefix = 'aat_missing_';
+        add_filter('dbdelta_queries', '__return_empty_array');
+        try {
+            Auto_Alt_Text_Activator::activate();
+        } finally {
+            $wpdb->prefix = $prefix;
+            remove_filter('dbdelta_queries', '__return_empty_array');
+        }
+
+        $this->assertFalse(get_option(Auto_Alt_Text_Activator::DB_VERSION_OPTION), 'A failed schema install must be retried on the next request');
+    }
+
     public function test_rest_api_does_not_build_an_openai_client_until_a_route_runs() {
         update_option('auto_alt_text_api_key', 'not-a-real-encrypted-key');
         $reads = 0;

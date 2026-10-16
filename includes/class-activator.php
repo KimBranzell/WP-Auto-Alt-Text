@@ -155,7 +155,12 @@ class Auto_Alt_Text_Activator {
             dbDelta($create_stats_sql);
             dbDelta($create_logs_sql);
             dbDelta($create_queue_sql);
-            update_option(self::DB_VERSION_OPTION, self::SCHEMA_VERSION);
+
+            // Record the version only once the queue table really exists, so a
+            // failed CREATE is retried by maybe_upgrade() on the next request.
+            if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($queue_table)))) {
+                update_option(self::DB_VERSION_OPTION, self::SCHEMA_VERSION);
+            }
 
 
         } catch (Exception $e) {
