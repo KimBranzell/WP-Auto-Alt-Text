@@ -102,53 +102,6 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Retrieves the privacy policy content for the WP Auto Alt Text plugin.
-     *
-     * The returned array contains the title and content of the privacy policy.
-     * The title is localized using the `__()` function, and the content is also localized.
-     *
-     * @return array An array containing the privacy policy title and content.
-     */
-    public static function get_privacy_policy_content() {
-        return array(
-            'title' => __('WP Auto Alt Text Privacy Notice', 'WP-Auto-Alt-Text'),
-            'content' => __('This plugin processes images through OpenAI\'s API to generate alt text. Image URLs are temporarily shared with OpenAI for processing. No personal data is permanently stored by the service. Generated alt texts are stored in your WordPress database. You can delete this data at any time through the Media Library.', 'WP-Auto-Alt-Text')
-        );
-    }
-
-    /**
-     * Exports the generated alt text data for the given user.
-     *
-     * This function retrieves all the attachments (images) uploaded by the specified user,
-     * and then extracts the generated alt text for each attachment. The generated alt text
-     * is returned as an array of associative arrays, where each inner array has a 'name'
-     * and 'value' key.
-     *
-     * @param int $user_id The ID of the user whose alt text data should be exported.
-     * @return array An array of associative arrays, where each inner array contains the
-     *               'name' and 'value' of the generated alt text for a user's attachment.
-     */
-    public function export_user_data($user_id) {
-        $attachments = get_posts(array(
-            'post_type' => 'attachment',
-            'author' => $user_id,
-            'posts_per_page' => -1
-        ));
-
-        $data = array();
-        foreach ($attachments as $attachment) {
-            $alt_text = get_post_meta($attachment->ID, '_wp_attachment_image_alt', true);
-            if ($alt_text) {
-                $data[] = array(
-                    'name' => __('Generated Alt Text', 'WP-Auto-Alt-Text') . " (Attachment ID: {$attachment->ID})",
-                    'value' => $alt_text
-                );
-            }
-        }
-        return $data;
-    }
-
-    /**
      * Saves the provided API key after encrypting it.
      *
      * This method is used to securely store the OpenAI API key in the WordPress options table.

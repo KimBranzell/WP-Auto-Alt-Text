@@ -120,6 +120,7 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-cli.php';
 		require_once __DIR__ . '/includes/class-rest-api.php';
 		require_once __DIR__ . '/includes/class-logger.php';
+		require_once __DIR__ . '/includes/class-privacy.php';
 		require_once __DIR__ . '/includes/class-wp-media-folder.php';
 		require_once __DIR__ . '/admin/class-admin.php';
 	}
@@ -178,22 +179,7 @@ class WP_Auto_Alt_Text_Plugin {
 		});
 		add_action('init', [$this, 'maybe_schedule_queue_cron']);
 
-		add_action('admin_init', function() {
-			if (function_exists('wp_add_privacy_policy_content')) {
-					wp_add_privacy_policy_content(
-							'WP Auto Alt Text',
-							Auto_Alt_Text_OpenAI::get_privacy_policy_content()['content']
-					);
-			}
-		});
-
-		add_filter('wp_privacy_personal_data_exporters', function($exporters) {
-			$exporters['WP-Auto-Alt-Text'] = array(
-					'exporter_friendly_name' => __('WP Auto Alt Text Generated Content', 'WP-Auto-Alt-Text'),
-					'callback' => array(new Auto_Alt_Text_OpenAI(), 'export_user_data'),
-			);
-			return $exporters;
-		});
+		Auto_Alt_Text_Privacy::register();
 	}
 
 	/**
