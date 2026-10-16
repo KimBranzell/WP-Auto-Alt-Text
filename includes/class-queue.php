@@ -26,7 +26,7 @@ class Auto_Alt_Text_Queue {
 
     /**
      * @param callable|null $processor Overridable job processor for testing.
-     *                                 Signature: fn(int $attachment_id, string $generation_type): array
+     *                                 Signature: fn(int $attachment_id, string $generation_type, ?int $context_post_id): array
      *                                 returning ['status' => 'success'|'retry'|'failed'|'quota'|'auth', 'error' => ?string].
      */
     public function __construct(?callable $processor = null) {
@@ -40,16 +40,18 @@ class Auto_Alt_Text_Queue {
 
     /**
      * Adds a job unless an active (pending/processing) job for the same
-     * attachment already exists.
+     * attachment already exists. A context hint (the post the image belongs
+     * to, e.g. the saved product) is added to an existing job that has none.
      *
      * @return bool Whether a row was created.
      */
-    public function enqueue($attachment_id, $generation_type) {
+    public function enqueue($attachment_id, $generation_type, $context_post_id = null) {
         global $wpdb;
         $attachment_id = (int) $attachment_id;
         if ($attachment_id <= 0) {
             return false;
         }
+        $context_post_id = $context_post_id ? (int) $context_post_id : null;
 
         $table = self::get_table_name();
         $active = $wpdb->get_var($wpdb->prepare(
@@ -57,6 +59,7 @@ class Auto_Alt_Text_Queue {
             $attachment_id, self::STATUS_PENDING, self::STATUS_PROCESSING
         ));
         if ($active) {
+            $this->add_context_hint((int) $active, $context_post_id);
             return false;
         }
 
@@ -64,14 +67,27 @@ class Auto_Alt_Text_Queue {
         $inserted = $wpdb->insert($table, [
             'attachment_id'   => $attachment_id,
             'generation_type' => sanitize_key($generation_type),
+            'context_post_id' => $context_post_id,
             'status'          => self::STATUS_PENDING,
             'attempts'        => 0,
             'next_attempt_at' => $now,
             'created_at'      => $now,
             'updated_at'      => $now,
-        ], ['%d', '%s', '%s', '%d', '%s', '%s', '%s']);
+        ], ['%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s']);
 
         return (bool) $inserted;
+    }
+
+    /** Sets a job's context hint when it has none yet. */
+    private function add_context_hint($job_id, $context_post_id) {
+        if (!$context_post_id) {
+            return;
+        }
+        global $wpdb;
+        $wpdb->query($wpdb->prepare(
+            'UPDATE ' . self::get_table_name() . ' SET context_post_id = %d WHERE id = %d AND context_post_id IS NULL',
+            $context_post_id, $job_id
+        ));
     }
 
     /**
@@ -80,7 +96,7 @@ class Auto_Alt_Text_Queue {
      *
      * @return bool Whether the attachment has a pending job, now of that type.
      */
-    public function promote_pending($attachment_id, $generation_type) {
+    public function promote_pending($attachment_id, $generation_type, $context_post_id = null) {
         global $wpdb;
         $table = self::get_table_name();
         $generation_type = sanitize_key($generation_type);
@@ -97,6 +113,7 @@ class Auto_Alt_Text_Queue {
                 'updated_at'      => current_time('mysql', true),
             ], ['id' => (int) $job->id, 'status' => self::STATUS_PENDING]);
         }
+        $this->add_context_hint((int) $job->id, $context_post_id ? (int) $context_post_id : null);
         return true;
     }
 
@@ -240,7 +257,8 @@ class Auto_Alt_Text_Queue {
 
         $processor = $this->processor ?: [$this, 'default_processor'];
         try {
-            $result = call_user_func($processor, $attachment_id, $job->generation_type);
+            $context_post_id = isset($job->context_post_id) ? (int) $job->context_post_id : 0;
+            $result = call_user_func($processor, $attachment_id, $job->generation_type, $context_post_id ?: null);
         } catch (Throwable $e) {
             // A fatal inside the processor (e.g. missing AVIF support in GD)
             // must never kill the cron tick or strand the job in 'processing'
@@ -297,9 +315,10 @@ class Auto_Alt_Text_Queue {
      * Default processor: one real OpenAI attempt. Wired fully in Task 5
      * (quota monitor + rate limiter integration).
      */
-    private function default_processor($attachment_id, $generation_type) {
+    private function default_processor($attachment_id, $generation_type, $context_post_id = null) {
         $openai = new Auto_Alt_Text_OpenAI();
         $openai->set_max_api_attempts(1);
+        $openai->set_context_post_id($context_post_id);
         $alt_text = $openai->generate_alt_text(
             wp_get_attachment_url($attachment_id),
             $attachment_id,

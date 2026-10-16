@@ -224,4 +224,17 @@ class Auto_Alt_Text_WooCommerce_Queue_Test extends WP_UnitTestCase {
 
         $this->assertStringContainsString('aat_wc_queued=1', $redirect);
     }
+
+    public function test_admin_product_save_stores_the_product_as_context() {
+        $product = $this->make_product_with_image($attachment_id);
+        $this->clear_queue();
+
+        do_action('woocommerce_process_product_meta', $product->get_id(), get_post($product->get_id()));
+
+        global $wpdb;
+        $this->assertSame((string) $product->get_id(), $wpdb->get_var($wpdb->prepare(
+            'SELECT context_post_id FROM ' . Auto_Alt_Text_Queue::get_table_name() . ' WHERE attachment_id = %d',
+            $attachment_id
+        )));
+    }
 }

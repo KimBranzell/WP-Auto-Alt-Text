@@ -38,15 +38,15 @@ class Auto_Alt_Text_WooCommerce {
      * @param int $product_id
      */
     public function process_product_images($product_id) {
-        foreach ($this->get_product_image_ids($product_id) as $attachment_id) {
-            $this->enqueue_if_missing_alt($attachment_id, 'woocommerce');
+        foreach ($this->get_product_images($product_id) as $attachment_id => $context_post_id) {
+            $this->enqueue_if_missing_alt($attachment_id, 'woocommerce', $context_post_id);
         }
     }
 
     public function process_variation_image($variation_id, $loop) {
         $variation = wc_get_product($variation_id);
         if ($variation && $variation->get_image_id()) {
-            $this->enqueue_if_missing_alt($variation->get_image_id(), 'woocommerce_variation');
+            $this->enqueue_if_missing_alt($variation->get_image_id(), 'woocommerce_variation', (int) $variation_id);
         }
     }
 
@@ -73,14 +73,14 @@ class Auto_Alt_Text_WooCommerce {
             if (!current_user_can('edit_post', $product_id)) {
                 continue;
             }
-            foreach ($this->get_product_image_ids($product_id) as $attachment_id) {
+            foreach ($this->get_product_images($product_id) as $attachment_id => $context_post_id) {
                 if (!Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $policy)) {
                     continue;
                 }
                 // An existing pending job (e.g. an 'upload' job paused by the
                 // auto-generate toggle) is promoted so this request runs.
-                if ($this->queue->enqueue($attachment_id, 'woocommerce_bulk')
-                    || $this->queue->promote_pending($attachment_id, 'woocommerce_bulk')) {
+                if ($this->queue->enqueue($attachment_id, 'woocommerce_bulk', $context_post_id)
+                    || $this->queue->promote_pending($attachment_id, 'woocommerce_bulk', $context_post_id)) {
                     $queued++;
                 }
             }
@@ -114,34 +114,40 @@ class Auto_Alt_Text_WooCommerce {
     }
 
     /**
-     * @return int[] Unique attachment IDs: main image, gallery and variation images.
+     * @return array<int,int> Attachment ID => the product or variation it belongs to.
      */
-    private function get_product_image_ids($product_id) {
+    private function get_product_images($product_id) {
         $product = wc_get_product($product_id);
         if (!$product) {
             return [];
         }
 
-        $image_ids = array_merge([$product->get_image_id()], $product->get_gallery_image_ids());
+        $images = [];
+        foreach (array_merge([$product->get_image_id()], $product->get_gallery_image_ids()) as $image_id) {
+            if ((int) $image_id > 0) {
+                $images[(int) $image_id] = (int) $product->get_id();
+            }
+        }
         if ($product->is_type('variable')) {
             foreach ($product->get_children() as $variation_id) {
                 $variation = wc_get_product($variation_id);
-                if ($variation) {
-                    $image_ids[] = $variation->get_image_id();
+                $image_id = $variation ? (int) $variation->get_image_id() : 0;
+                if ($image_id > 0 && !isset($images[$image_id])) {
+                    $images[$image_id] = (int) $variation_id;
                 }
             }
         }
 
-        return array_values(array_unique(array_filter(array_map('intval', $image_ids))));
+        return $images;
     }
 
-    private function enqueue_if_missing_alt($attachment_id, $generation_type) {
+    private function enqueue_if_missing_alt($attachment_id, $generation_type, $context_post_id = null) {
         if (!get_option('auto_alt_text_auto_generate', true)) {
             return;
         }
         if (get_post_meta($attachment_id, '_wp_attachment_image_alt', true)) {
             return;
         }
-        $this->queue->enqueue($attachment_id, $generation_type);
+        $this->queue->enqueue($attachment_id, $generation_type, $context_post_id);
     }
 }

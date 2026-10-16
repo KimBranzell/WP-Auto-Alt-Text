@@ -15,6 +15,7 @@ class Auto_Alt_Text_OpenAI  {
     private $language_manager;
     private $max_api_attempts;
     private $last_error_class = null;
+    private $context_post_id = null;
 
     public function __construct(?Auto_Alt_Text_Language_Manager $language_manager = null) {
         if (defined('AUTO_ALT_TEXT_OPENAI_API_KEY') && AUTO_ALT_TEXT_OPENAI_API_KEY) {
@@ -118,6 +119,11 @@ class Auto_Alt_Text_OpenAI  {
      */
     public function set_max_api_attempts($attempts) {
         $this->max_api_attempts = max(1, (int) $attempts);
+    }
+
+    /** The post that queued this generation (e.g. the saved product); used to resolve context. */
+    public function set_context_post_id($post_id) {
+        $this->context_post_id = $post_id ? (int) $post_id : null;
     }
 
     /**
@@ -265,7 +271,8 @@ class Auto_Alt_Text_OpenAI  {
         // Get file path from attachment ID
         $image_path = get_attached_file($attachment_id);
         $target_language = $this->resolve_generation_language($attachment_id, $language_override);
-        $instruction = $this->get_instruction($attachment_id, $target_language);
+        $context = Auto_Alt_Text_Context::for_attachment($attachment_id, $this->context_post_id);
+        $instruction = $this->get_instruction($attachment_id, $target_language, $context);
         $cache_context = [
             'language' => $target_language,
             'instruction' => $instruction,
@@ -557,7 +564,7 @@ class Auto_Alt_Text_OpenAI  {
      *
      * @return string The generated instruction for the OpenAI API call.
      */
-    private function get_instruction($attachment_id = 0, $language = null) {
+    private function get_instruction($attachment_id = 0, $language = null, $context = null) {
         if (empty($language)) {
             $language = $this->language_manager->get_post_language($attachment_id);
         }
@@ -618,6 +625,19 @@ class Auto_Alt_Text_OpenAI  {
                 } else {
                     $prompt .= "Consider any relevant contextual information this might suggest, but prioritize describing what's actually visible in the image.\n";
                 }
+            }
+        }
+
+        // Product or page the image belongs to (design D2): always given as
+        // context; brand tonality additionally asks for the name in the text.
+        if (!empty($context['title'])) {
+            $labels = ['product' => 'product', 'variation' => 'product variant', 'page' => 'page', 'post' => 'post'];
+            $label = $labels[$context['type']] ?? 'page';
+            $prompt .= sprintf("- This image belongs to the %s \"%s\". ", $label, $context['title']);
+            if ($enable_brand_tonality) {
+                $prompt .= sprintf("Include \"%s\" naturally in the alt text.\n", $context['title']);
+            } else {
+                $prompt .= "Use this name only to identify what is shown; describe what is visible.\n";
             }
         }
 
