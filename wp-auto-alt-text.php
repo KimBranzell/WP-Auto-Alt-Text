@@ -114,6 +114,7 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/class-cache-manager.php';
 		require_once __DIR__ . '/includes/class-queue.php';
 		require_once __DIR__ . '/includes/class-quota-monitor.php';
+		require_once __DIR__ . '/includes/class-connector-status.php';
 		require_once __DIR__ . '/includes/class-statistics.php';
 		require_once __DIR__ . '/includes/class-statistics-page.php';
 		require_once __DIR__ . '/includes/class-ajax-handler.php';
@@ -165,6 +166,7 @@ class WP_Auto_Alt_Text_Plugin {
 		add_action('wp_ajax_apply_alt_text', [$this->components['ajax_handler'], 'apply_alt_text']);
 
 		add_action('admin_notices', ['Auto_Alt_Text_Quota_Monitor', 'render_admin_notice']);
+		add_action('admin_notices', ['Auto_Alt_Text_Connector_Status', 'render_admin_notice']);
 		add_action('admin_post_aat_dismiss_quota_notice', ['Auto_Alt_Text_Quota_Monitor', 'handle_dismiss_request']);
 
 		add_filter('cron_schedules', function ($schedules) {

@@ -697,11 +697,27 @@ class Auto_Alt_Text_OpenAI  {
             $response = wp_remote_post(self::API_URL, $args);
 
             if (is_wp_error($response)) {
+                // WordPress's AI plugin (Connector Approval) blocks provider calls
+                // from plugins an admin hasn't approved. Retrying cannot help.
+                if (Auto_Alt_Text_Connector_Status::ERROR_CODE === $response->get_error_code()) {
+                    $this->last_error_class = 'auth';
+                    Auto_Alt_Text_Connector_Status::mark_blocked($response->get_error_message());
+                    Auto_Alt_Text_Logger::log('OpenAI request blocked by WordPress AI connector approval', 'error', [
+                        'wp_error' => $response->get_error_message(),
+                    ]);
+                    throw new Exception( esc_html__( 'WordPress AI has blocked the OpenAI connection for WP Auto Alt Text. An administrator needs to approve it under Tools → AI connector approval.', 'WP-Auto-Alt-Text' ) );
+                }
+
                 if ($attempt < $max_attempts && $this->should_retry_transport_error($response)) {
                     usleep((int) ceil($this->calculate_retry_delay([], $attempt) * 1000000));
                     continue;
                 }
 
+                Auto_Alt_Text_Logger::log('OpenAI request failed before reaching the API', 'error', [
+                    'wp_error_code' => $response->get_error_code(),
+                    'wp_error'      => $response->get_error_message(),
+                    'attempt'       => $attempt,
+                ]);
                 $this->last_error_class = 'transient';
                 $friendly_error = $this->map_api_error_message($response->get_error_message(), 0);
                 throw new Exception( esc_html( $friendly_error ) );
@@ -718,6 +734,7 @@ class Auto_Alt_Text_OpenAI  {
                 $this->last_error_class = null;
                 Auto_Alt_Text_Quota_Monitor::record_success();
                 Auto_Alt_Text_Queue::clear_auth_pause();
+                Auto_Alt_Text_Connector_Status::clear();
                 return $response_data;
             }
 
