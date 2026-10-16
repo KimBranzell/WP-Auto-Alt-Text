@@ -223,6 +223,9 @@ class Auto_Alt_Text_WP_Media_Folder {
             $results = [];
 
             foreach ($ids as $id) {
+                if (!current_user_can('edit_post', (int) $id)) {
+                    continue;
+                }
                 $image_url = wp_get_attachment_url($id);
                 if ($image_url) {
                     $alt_text = $this->openai()->generate_alt_text($image_url, $id, 'wpmf_folder');

@@ -23,7 +23,8 @@ class Auto_Alt_Text_REST_API {
      * - '/generate': Generates alt text for a single image attachment.
      * - '/batch': Generates alt text for a batch of image attachments.
      *
-     * Both routes require the 'upload_files' capability to access.
+     * Both routes require the 'upload_files' capability to access, and the
+     * user must be able to edit each attachment they generate for.
      */
     public function register_routes() {
         register_rest_route($this->namespace, '/generate', [
@@ -67,10 +68,18 @@ class Auto_Alt_Text_REST_API {
      * Generates alt text for a single image attachment using the OpenAI API.
      *
      * @param WP_REST_Request $request The REST API request object, containing the 'attachment_id' parameter.
-     * @return WP_REST_Response A response object with the generated alt text or an error message.
+     * @return WP_REST_Response|WP_Error A response object with the generated alt text or an error message;
+     *                                   a 403 error when the user cannot edit the attachment.
      */
     public function generate_alt_text($request) {
         $attachment_id = $request->get_param('attachment_id');
+        if (!current_user_can('edit_post', $attachment_id)) {
+            return new WP_Error(
+                'rest_forbidden',
+                __('Sorry, you are not allowed to edit this attachment.', 'WP-Auto-Alt-Text'),
+                ['status' => 403]
+            );
+        }
         $image_url = wp_get_attachment_url($attachment_id);
 
         $alt_text = $this->openai()->generate_alt_text($image_url, $attachment_id, 'api');
@@ -104,6 +113,14 @@ class Auto_Alt_Text_REST_API {
                 $results[$id] = [
                     'success' => false,
                     'message' => __('Invalid attachment ID.', 'WP-Auto-Alt-Text')
+                ];
+                continue;
+            }
+
+            if (!current_user_can('edit_post', $id)) {
+                $results[$id] = [
+                    'success' => false,
+                    'message' => __('Permission denied', 'WP-Auto-Alt-Text'),
                 ];
                 continue;
             }

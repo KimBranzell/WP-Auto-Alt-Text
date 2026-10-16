@@ -105,7 +105,7 @@ The developers of this plugin are not responsible for any misuse of the OpenAI A
 
 ## REST API
 
-The plugin exposes REST endpoints for integration and scripting. All routes require the requesting user to have the `upload_files` capability (e.g. logged-in editor or administrator).
+The plugin exposes REST endpoints for integration and scripting. All routes require the requesting user to have the `upload_files` capability (e.g. logged-in editor or administrator) and to be allowed to edit each attachment: `/generate` returns 403 for an attachment the user cannot edit, and `/batch` reports `Permission denied` for such IDs.
 
 **Namespace:** `wp-auto-alt-text/v1`
 

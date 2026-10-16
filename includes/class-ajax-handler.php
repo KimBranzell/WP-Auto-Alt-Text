@@ -45,6 +45,10 @@ class Auto_Alt_Text_Ajax_Handler {
         check_ajax_referer(self::NONCE_ACTION, 'nonce');
 
         $attachment_id = intval($_POST['attachment_id']);
+        if (!current_user_can('edit_post', $attachment_id)) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
         $preview_mode = isset($_POST['preview']) && $_POST['preview'] === 'true';
         $image_url = wp_get_attachment_url($attachment_id);
 
@@ -94,6 +98,14 @@ class Auto_Alt_Text_Ajax_Handler {
                 $results[$id] = [
                     'success' => false,
                     'message' => self::ERROR_INVALID_ATTACHMENT,
+                ];
+                continue;
+            }
+
+            if (!current_user_can('edit_post', $id)) {
+                $results[$id] = [
+                    'success' => false,
+                    'message' => self::ERROR_INSUFFICIENT_PERMISSIONS,
                 ];
                 continue;
             }
@@ -217,6 +229,10 @@ class Auto_Alt_Text_Ajax_Handler {
         }
 
         $attachment_id = intval($_POST['attachment_id']);
+        if (!current_user_can('edit_post', $attachment_id)) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
         $improvement_type = sanitize_text_field($_POST['improvement_type']);
         $custom_feedback = isset($_POST['custom_feedback']) ? sanitize_textarea_field($_POST['custom_feedback']) : '';
         $original_alt_text = isset($_POST['original_alt_text']) ? sanitize_textarea_field($_POST['original_alt_text']) : '';
