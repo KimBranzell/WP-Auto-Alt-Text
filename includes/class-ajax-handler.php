@@ -149,7 +149,8 @@ class Auto_Alt_Text_Ajax_Handler {
 
             $result = update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
 
-            if ($result === false) {
+            // update_post_meta() also returns false when the value is unchanged.
+            if (false === $result && get_post_meta($attachment_id, '_wp_attachment_image_alt', true) !== $alt_text) {
                 throw new Exception('Failed to update alt text');
             }
 

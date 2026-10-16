@@ -9,17 +9,27 @@ document.addEventListener('DOMContentLoaded', function() {
      *
      * @param {Event} event - The click event object.
      */
+    // The multi-select batch button belongs to the Media Library only. Media
+    // frames inside editors (block editor, WooCommerce product gallery) are
+    // left alone: finishing a batch there used to reload the page and discard
+    // unsaved edits.
+    const isMediaLibraryScreen = document.body.classList.contains('upload-php');
+
     document.addEventListener('click', function(event) {
         if (event.target && event.target.classList.contains('generate-alt-text-button')) {
             handleSingleImageGeneration(event);
         }
 
-        scheduleBatchProcessingRefresh();
+        if (isMediaLibraryScreen) {
+            scheduleBatchProcessingRefresh();
+        }
     });
 
-    document.addEventListener('keyup', function() {
-        scheduleBatchProcessingRefresh();
-    });
+    if (isMediaLibraryScreen) {
+        document.addEventListener('keyup', function() {
+            scheduleBatchProcessingRefresh();
+        });
+    }
 
     /**
      * Observes the document body for mutations and calls the `handleBatchProcessing` function
@@ -47,16 +57,22 @@ document.addEventListener('DOMContentLoaded', function() {
      * Observes the document body for mutations and calls the `handleBatchProcessing` function
      * when mutations occur.
      */
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'style', 'aria-selected']
-    });
+    if (isMediaLibraryScreen) {
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'aria-selected']
+        });
 
-    handleBatchProcessing(observer);
+        handleBatchProcessing(observer);
+    }
 
     if (bulkIds) {
+        // Drop the bulk parameters so reloading can never restart the batch.
+        const cleanUrl = new URL(window.location.href);
+        ['bulk_generate_alt_text', 'bulk_ids', 'processed', 'failed'].forEach((key) => cleanUrl.searchParams.delete(key));
+        window.history.replaceState(null, '', cleanUrl.toString());
         const ids = bulkIds.split(',');
         const totalImages = ids.length;
         let processed = 0;
@@ -350,6 +366,8 @@ function handleSingleImageGeneration(event) {
             // Store the generated text in session storage
             sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
             showPreviewDialog(data.data.alt_text, attachmentId, false);
+        } else {
+            showError((data.data && data.data.message) || 'Alt text generation failed.');
         }
     })
     .catch(error => console.error('Error:', error))
@@ -366,8 +384,12 @@ function handleSingleImageGeneration(event) {
 function showError(message) {
     const notice = document.createElement('div');
     notice.className = 'notice notice-error is-dismissible';
-    notice.innerHTML = `<p>${message}</p>`;
-    document.querySelector('.wrap').insertBefore(notice, document.querySelector('.wrap').firstChild);
+    const paragraph = document.createElement('p');
+    paragraph.textContent = message;
+    notice.appendChild(paragraph);
+
+    const host = document.querySelector('.wrap') || document.body;
+    host.insertBefore(notice, host.firstChild);
 }
 
 /**
@@ -394,7 +416,7 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
             <h3>Förhandsgranska alternativ text ${isCached ? '<span class="cached-badge">Cachead</span>' : ''}</h3>
-            <textarea class="preview-text">${altText}</textarea>
+            <textarea class="preview-text" aria-label="Alt text"></textarea>
 
             <div class="feedback-section">
                 <div class="feedback-header">
@@ -426,6 +448,8 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     document.body.appendChild(dialog);
 
     const textarea = dialog.querySelector('.preview-text');
+    // AI output is untrusted text: assign it, never interpolate it into HTML.
+    textarea.value = altText;
     textarea.focus();
     textarea.setSelectionRange(0, textarea.value.length);
 
@@ -481,13 +505,16 @@ function showPreviewDialog(altText, attachmentId, isCached) {
         })
         .then(data => {
             if (data.success) {
-                const altTextFields = document.querySelectorAll('#attachment-details-two-column-alt-text, #attachment-details-alt-text');
+                const altTextFields = document.querySelectorAll('#attachment-details-two-column-alt-text, #attachment-details-alt-text, #attachment_alt');
                 altTextFields.forEach(field => {
                     field.value = finalText;
+                    // wp.media views sync their model on change; without this the
+                    // model keeps the old alt and "Update"/"Insert" writes it back.
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
                 });
                 sessionStorage.setItem(`alt_text_${attachmentId}`, finalText);
             } else {
-                throw new Error(data.message || 'Failed to update alt text');
+                throw new Error((data.data && data.data.message) || 'Failed to update alt text');
             }
         })
         .catch(error => {
@@ -770,10 +797,29 @@ function updateProgressBar(progress, details = {}) {
     bar.style.width = `${progress}%`;
 
     if (progress >= 100) {
-        setTimeout(() => {
-            window.location.reload();
-        }, 1000);
+        announceBatchComplete();
     }
+}
+
+/**
+ * Tells the user the batch finished. Never reloads: a reload discards unsaved
+ * edits in the surrounding screen.
+ */
+function announceBatchComplete() {
+    const host = getBatchProgressHost();
+    if (!host || host.querySelector('.aat-batch-complete')) {
+        return;
+    }
+
+    const notice = document.createElement('div');
+    notice.className = 'notice notice-success inline aat-batch-complete';
+    notice.setAttribute('role', 'status');
+
+    const text = document.createElement('p');
+    text.textContent = 'Alt text generation finished. Reload the page to see the updated alt texts.';
+    notice.appendChild(text);
+
+    host.prepend(notice);
 }
 
 /**
