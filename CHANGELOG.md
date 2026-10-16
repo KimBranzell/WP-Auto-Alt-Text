@@ -16,6 +16,8 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
 - **API-nyckeln kan ligga i wp-config.php.** Du kan ange OpenAI-nyckeln med `define('AUTO_ALT_TEXT_OPENAI_API_KEY', 'sk-…');` i stället för att spara den i inställningarna.
 - **Tydligt besked när WordPress AI blockerar pluginet.** Om WordPress AI-plugin inte har godkänt pluginets anslutning till OpenAI visas en förklaring och en länk för att godkänna den (Verktyg → AI connector approval), i stället för ett otydligt felmeddelande. Genereringen pausas tills anslutningen är godkänd.
 - **Automatisk rensning av loggen.** Loggposter äldre än 30 dagar raderas en gång per dag.
+- **Skilj på AI-text och text skriven av en redaktör.** Pluginet märker de alt-texter det skriver. Ändrar en redaktör texten räknas den som redaktörens egen, var ändringen än görs. En ny inställning, "Skriv över befintliga alt-texter vid massgenerering", bestämmer vad massåtgärder, REST och WP-CLI får skriva över: bara saknade alt-texter (standard), även oredigerade AI-texter, eller allt. Befintliga AI-texter från tidigare versioner märks automatiskt i bakgrunden efter uppdateringen.
+- **Produkt- och sidnamn som sammanhang.** När en bild hör till en produkt (även en variant, till exempel "Nordic Mug – Blå"), en sida eller ett inlägg får AI:n veta det, även om filnamnet är obegripligt. Med varumärkestonalitet påslagen tas produktnamnet med i alt-texten. Används bilden på flera produkter skickas inget namn, eftersom ett felaktigt produktnamn är värre än inget.
 
 ### Ändrat
 
@@ -27,6 +29,7 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
 - **Flerspråkiga webbplatser (WPML/Polylang).** Pluginet känner nu pålitligt av WPML och Polylang och låter dem bestämma vilket språk uppladdade bilder får.
 - **Mindre databasarbete vid varje sidvisning.** Pluginet kontrollerar sina databastabeller bara efter en uppdatering, inte vid varje anrop.
 - **Loggning.** Felsökningsmeddelanden sparas bara när felsökningsläget är påslaget. Nätverksfel loggas nu med sin verkliga orsak.
+- **WP-CLI skriver inte längre över befintliga alt-texter som standard.** `wp auto-alt-text generate` fyller bara i saknade alt-texter, om du inte väljer något annat med `--overwrite=ai`, `--overwrite=all` eller inställningen. `--skip-existing` fungerar som förut.
 
 ### Åtgärdat
 
@@ -80,3 +83,6 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
   - `auto_alt_text_connector_approval_url`: länk till godkännandesidan.
 - Nya WP-Cron-händelser: `aat_queue_tick` (varje minut) och `aat_daily_maintenance` (dagligen). Båda tas bort när pluginet inaktiveras.
 - REST: `POST /wp-auto-alt-text/v1/generate` svarar `403` för bilder som användaren inte får redigera, och `/batch` rapporterar "Permission denied" för de bilderna.
+- Ny inställning `auto_alt_text_overwrite_policy` (`missing` | `ai` | `all`) och dold metadata `_aat_alt_provenance` på bilder.
+- Kön har en ny kolumn, `context_post_id`, och processorer får produkten eller inlägget som tredje argument. `Auto_Alt_Text_Queue::enqueue()` och `promote_pending()` tar emot det som ett valfritt tredje argument.
+- Ny WP-Cron-händelse `aat_provenance_backfill`, som körs i omgångar efter uppdateringen och tas bort när pluginet inaktiveras.

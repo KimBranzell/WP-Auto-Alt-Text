@@ -141,9 +141,10 @@ Use WordPress application passwords or cookie authentication in production.
 
 For large libraries, use WP-CLI to generate alt text without browser timeouts:
 
-- `wp auto-alt-text generate` — Process all images ordered by newest attachment ID first.
+- `wp auto-alt-text generate` — Process all images that are missing alt text, newest first.
 - `wp auto-alt-text generate --limit=500` — Process up to 500 newest matching images.
-- `wp auto-alt-text generate --limit=100 --skip-existing` — Process the 100 newest images that still need alt text. Re-running the same command continues with the next missing batch.
+- `wp auto-alt-text generate --limit=100` — Fill in missing alt text for the 100 newest images that lack it. Existing alt text is never overwritten unless you ask for it. Re-running continues with the next batch.
+- `wp auto-alt-text generate --overwrite=ai` — Also rewrite alt text the plugin generated earlier, as long as nobody has edited it. `--overwrite=all` rewrites everything, including text written by a person. Without `--overwrite`, the plugin's "overwrite" setting decides (default: only missing). `--skip-existing` still works as an alias for `--overwrite=missing`.
 - `wp auto-alt-text generate --limit=100 --offset=100` — Skip the first 100 matching images and process the next 100.
 - `wp auto-alt-text generate --limit=100 --resume` — Continue from the previous batch position for the same CLI filters.
 - `wp auto-alt-text translate --all` — Translate existing source alt texts across WPML media translations.
