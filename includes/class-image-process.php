@@ -8,18 +8,16 @@ class Auto_Alt_Text_Image_Process {
       $this->openai = $openai;
       $this->language_manager = $language_manager;
 
-      add_action('add_attachment', array($this, 'handle_new_attachment'));
+      // Priority 20: WPML and Polylang assign the attachment language at 10.
+      add_action('add_attachment', array($this, 'handle_new_attachment'), 20);
       add_filter('attachment_fields_to_edit', array($this, 'add_custom_generate_alt_text_button'), 10, 2);
   }
 
   /**
-   * Handles the processing of a newly uploaded attachment.
+   * Queues a newly uploaded image for background alt text generation.
    *
-   * This method is called when a new attachment is uploaded to the WordPress media library.
-   * It checks if the attachment is an image, generates alternative text for the image using the OpenAI API,
-   * and updates the `_wp_attachment_image_alt` post meta with the generated alt text.
-   * If the alt text generation is successful, a success notice is displayed in the WordPress admin.
-   * If there is an error, an error notice is displayed instead.
+   * The attachment's language belongs to WPML/Polylang; generation reads it
+   * when the job runs. No API call happens in the upload request.
    *
    * @param int $attachment_id The ID of the newly uploaded attachment.
    */
@@ -32,38 +30,12 @@ class Auto_Alt_Text_Image_Process {
         return;
     }
 
-    $upload_language = $this->language_manager->get_current_language();
-    $source_language = $this->language_manager->get_default_language();
+    $queued = (new Auto_Alt_Text_Queue())->enqueue($attachment_id, 'upload');
 
-    $this->set_attachment_language($attachment_id, $upload_language);
-
-    $attachment_language = $this->language_manager->get_post_language($attachment_id);
-
-    if (empty($attachment_language)) {
-        $attachment_language = $upload_language ?: $source_language;
-    }
-
-    // If no language is set, this is likely the source image
-    $is_source = empty($attachment_language) && $upload_language === $source_language;
-
-    Auto_Alt_Text_Logger::log("Processing new image upload", "info", [
-      'attachment_id' => $attachment_id,
-      'upload_language' => $upload_language,
-      'attachment_language' => $attachment_language,
-      'source_language' => $source_language,
-      'is_source' => $is_source
+    Auto_Alt_Text_Logger::log("Attachment queued for alt text generation", "info", [
+        'attachment_id' => $attachment_id,
+        'queued' => $queued,
     ]);
-
-    if ($upload_language === $attachment_language) {
-        $queue = new Auto_Alt_Text_Queue();
-        $queued = $queue->enqueue($attachment_id, 'upload');
-
-        Auto_Alt_Text_Logger::log("Attachment queued for alt text generation", "info", [
-            'attachment_id' => $attachment_id,
-            'queued' => $queued,
-            'language' => $attachment_language,
-        ]);
-    }
   }
 
   /**
@@ -293,36 +265,6 @@ class Auto_Alt_Text_Image_Process {
       'results' => $results,
       'total_processed' => count($results),
       'batch_completed_at' => current_time('mysql')
-    ]);
-  }
-
-  /**
-   * Assigns the current language to a newly uploaded attachment when possible.
-   *
-   * @param int    $attachment_id The attachment ID.
-   * @param string $language      The current language code.
-   * @return void
-   */
-  private function set_attachment_language($attachment_id, $language) {
-    if (empty($language)) {
-      return;
-    }
-
-    if (function_exists('pll_set_post_language')) {
-      call_user_func('pll_set_post_language', $attachment_id, $language);
-      return;
-    }
-
-    if ('wpml' !== $this->language_manager->get_active_plugin_name()) {
-      return;
-    }
-
-    do_action('wpml_set_element_language_details', [
-      'element_id' => $attachment_id,
-      'element_type' => 'post_attachment',
-      'trid' => false,
-      'language_code' => $language,
-      'source_language_code' => null,
     ]);
   }
 }

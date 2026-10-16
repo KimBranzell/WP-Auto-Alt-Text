@@ -262,7 +262,10 @@ class Auto_Alt_Text_Language_Manager {
      */
     private function get_wpml_language($post_id) {
         $language_details = apply_filters('wpml_post_language_details', null, $post_id);
-        $language = $language_details['language_code'] ?? $this->default_language;
+        // WPML returns WP_Error for missing posts and may return a null language_code.
+        $language = (is_array($language_details) && !empty($language_details['language_code']))
+            ? $language_details['language_code']
+            : $this->default_language;
 
         Auto_Alt_Text_Logger::log("WPML language detected", "debug", [
             'post_id' => $post_id,
