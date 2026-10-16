@@ -256,7 +256,7 @@ namespace {
                 $attachment_ids[0],
             ], array_column($this->openai->calls, 'attachment_id'));
 
-            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], false, false, null]);
+            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], 'missing', false, null]);
             $resume_option_name = $this->invoke_private_method($cli, 'get_resume_state_option_name', [$resume_context]);
 
             Assert::assertFalse(get_option($resume_option_name, false));
@@ -436,6 +436,58 @@ namespace {
                 $this->statistics,
                 $language_manager ?? new Auto_Alt_Text_CLI_Test_Language_Manager()
             );
+        }
+
+        private function create_mixed_attachments() {
+            [$missing, $ai, $human] = $this->create_attachments(3);
+            update_post_meta($ai, '_wp_attachment_image_alt', 'AI text');
+            Auto_Alt_Text_Provenance::record($ai, 'upload');
+            update_post_meta($human, '_wp_attachment_image_alt', 'Editor text');
+            return [$missing, $ai, $human];
+        }
+
+        public function test_generate_default_policy_only_fills_missing_alt_text() {
+            delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+            [$missing] = $this->create_mixed_attachments();
+
+            $this->create_cli()->generate([], []);
+
+            Assert::assertSame([$missing], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_overwrite_ai_also_rewrites_untouched_ai_alt_text() {
+            [$missing, $ai] = $this->create_mixed_attachments();
+
+            $this->create_cli()->generate([], ['overwrite' => 'ai']);
+
+            Assert::assertSame([$ai, $missing], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_overwrite_all_rewrites_everything() {
+            [$missing, $ai, $human] = $this->create_mixed_attachments();
+
+            $this->create_cli()->generate([], ['overwrite' => 'all']);
+
+            Assert::assertSame([$human, $ai, $missing], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_skip_existing_is_an_alias_for_missing() {
+            update_option(Auto_Alt_Text_Provenance::POLICY_OPTION, 'all');
+            [$missing] = $this->create_mixed_attachments();
+
+            $this->create_cli()->generate([], ['skip-existing' => true]);
+            delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
+
+            Assert::assertSame([$missing], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_rejects_unknown_overwrite_value() {
+            try {
+                $this->create_cli()->generate([], ['overwrite' => 'everything']);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertStringContainsString('Invalid --overwrite value', $exception->getMessage());
+            }
         }
 
         private function create_attachments($count) {

@@ -7,7 +7,6 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     private const POST_TYPE = 'attachment';
     private const POST_MIME_TYPE = 'image';
     private const POST_STATUS = 'any';
-    private const ALT_TEXT_META_KEY = '_wp_attachment_image_alt';
     private const RESUME_OPTION_PREFIX = 'wp_auto_alt_text_cli_resume_';
 
     private $openai;
@@ -38,8 +37,11 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     * [--resume]
     * : Continue from the previous batch position for the same CLI filter set.
     *
+     * [--overwrite=<policy>]
+     * : Which existing alt texts may be rewritten: `missing` (only images without alt text), `ai` (also untouched AI-written alt text) or `all` (also text written by a person). Default: the plugin's overwrite setting (`missing` unless changed).
+     *
      * [--skip-existing]
-     * : Skip images that already have alt text
+     * : Alias for `--overwrite=missing`.
      *
      * [--language=<codes>]
      * : Restrict generation to specific language codes. Accepts a comma-separated list when WPML or Polylang is active. Without a multilingual plugin, only a single override language is allowed.
@@ -56,6 +58,8 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     *
      *     `wp auto-alt-text generate --skip-existing`
      *
+     *     `wp auto-alt-text generate --overwrite=ai`
+     *
      *     `wp auto-alt-text generate --language=sv`
      *
      *     `wp auto-alt-text generate --language=sv,fr`
@@ -66,7 +70,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
         $limit = $this->validateLimit($assoc_args['limit'] ?? self::QUERY_POSTS_PER_PAGE);
         $offset = $this->validate_offset($assoc_args['offset'] ?? 0);
         $resume = isset($assoc_args['resume']);
-        $skip_existing = isset($assoc_args['skip-existing']);
+        $overwrite_policy = $this->resolve_overwrite_policy($assoc_args);
         $brand_tonality = isset($assoc_args['brand-tonality']);
 
         $this->validate_generate_batch_arguments($assoc_args);
@@ -106,7 +110,9 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
                 WP_CLI::log(sprintf('Applying offset: skipping the first %d matching images.', $offset));
             }
 
-            $resume_context = $this->build_resume_context($requested_languages, $skip_existing, $brand_tonality, $active_plugin);
+            WP_CLI::log(sprintf('Overwrite policy: %s', $overwrite_policy));
+
+            $resume_context = $this->build_resume_context($requested_languages, $overwrite_policy, $brand_tonality, $active_plugin);
             $resume_after_id = 0;
 
             if ($resume) {
@@ -122,7 +128,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
 
             $matching_attachment_ids = $this->get_matching_attachment_ids(
                 $requested_languages,
-                $skip_existing,
+                $overwrite_policy,
                 $active_plugin,
                 $resume_after_id
             );
@@ -282,15 +288,36 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     }
 
     /**
+     * --overwrite decides which images may be rewritten and defaults to the
+     * plugin setting; --skip-existing is kept as an alias for "missing".
+     *
+     * @param array $assoc_args
+     * @return string missing|ai|all
+     */
+    private function resolve_overwrite_policy($assoc_args) {
+        if (isset($assoc_args['overwrite'])) {
+            $policy = (string) $assoc_args['overwrite'];
+            if (!in_array($policy, Auto_Alt_Text_Provenance::POLICIES, true)) {
+                WP_CLI::error(sprintf('Invalid --overwrite value "%s". Use missing, ai or all.', $policy));
+            }
+            return $policy;
+        }
+        if (isset($assoc_args['skip-existing'])) {
+            return Auto_Alt_Text_Provenance::POLICY_MISSING;
+        }
+        return Auto_Alt_Text_Provenance::default_policy();
+    }
+
+    /**
      * Builds the resume context used for persisted CLI batch state.
      *
      * @param string[]    $requested_languages Requested languages.
-     * @param bool        $skip_existing Whether skip-existing is enabled.
-     * @param bool        $brand_tonality Whether brand tonality is enabled.
-     * @param string|null $active_plugin Active multilingual plugin name.
+     * @param string      $overwrite_policy    missing|ai|all.
+     * @param bool        $brand_tonality      Whether brand tonality is enabled.
+     * @param string|null $active_plugin       Active multilingual plugin name.
      * @return array<string,mixed>
      */
-    private function build_resume_context($requested_languages, $skip_existing, $brand_tonality, $active_plugin) {
+    private function build_resume_context($requested_languages, $overwrite_policy, $brand_tonality, $active_plugin) {
         $languages = $requested_languages;
         sort($languages);
 
@@ -298,7 +325,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             'active_plugin' => !empty($active_plugin) ? $active_plugin : 'none',
             'brand_tonality' => (bool) $brand_tonality,
             'languages' => array_values($languages),
-            'skip_existing' => (bool) $skip_existing,
+            'overwrite' => (string) $overwrite_policy,
         ];
     }
 
@@ -356,12 +383,12 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      * Returns ordered attachment IDs after applying CLI filters.
      *
      * @param string[]    $requested_languages Requested languages.
-     * @param bool        $skip_existing Whether skip-existing is enabled.
+     * @param string      $overwrite_policy missing|ai|all.
      * @param string|null $active_plugin Active multilingual plugin name.
      * @param int         $resume_after_id Resume boundary attachment ID.
      * @return int[]
      */
-    private function get_matching_attachment_ids($requested_languages, $skip_existing, $active_plugin, $resume_after_id = 0) {
+    private function get_matching_attachment_ids($requested_languages, $overwrite_policy, $active_plugin, $resume_after_id = 0) {
         $attachment_ids = $this->get_ordered_attachment_ids();
 
         if ($resume_after_id > 0) {
@@ -370,11 +397,9 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             }));
         }
 
-        if ($skip_existing) {
-            $attachment_ids = array_values(array_filter($attachment_ids, function($attachment_id) {
-                return !$this->has_existing_alt_text($attachment_id);
-            }));
-        }
+        $attachment_ids = array_values(array_filter($attachment_ids, function ($attachment_id) use ($overwrite_policy) {
+            return Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $overwrite_policy);
+        }));
 
         if (!empty($requested_languages) && !empty($active_plugin)) {
             $attachment_ids = $this->filter_attachment_ids_by_languages($attachment_ids, $requested_languages);
@@ -419,22 +444,6 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
         }
 
         return array_values(array_slice($attachment_ids, $offset, $limit));
-    }
-
-    /**
-     * Determines whether the attachment already has usable alt text.
-     *
-     * @param int $attachment_id Attachment ID.
-     * @return bool
-     */
-    private function has_existing_alt_text($attachment_id) {
-        $existing_alt = get_post_meta($attachment_id, self::ALT_TEXT_META_KEY, true);
-
-        if (is_string($existing_alt)) {
-            return trim($existing_alt) !== '';
-        }
-
-        return !empty($existing_alt);
     }
 
     /**
