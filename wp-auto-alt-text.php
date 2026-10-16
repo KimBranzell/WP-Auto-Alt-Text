@@ -257,5 +257,5 @@ register_activation_hook(__FILE__, function () {
 register_deactivation_hook(__FILE__, function () {
 	wp_clear_scheduled_hook('aat_queue_tick');
 	wp_clear_scheduled_hook('aat_daily_maintenance');
-	wp_clear_scheduled_hook('aat_provenance_backfill');
+	wp_unschedule_hook('aat_provenance_backfill');
 });

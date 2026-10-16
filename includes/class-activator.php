@@ -123,7 +123,8 @@ class Auto_Alt_Text_Activator {
                 " . self::COLUMN_IS_EDITED . " tinyint(1) DEFAULT 0,
                 " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL,
                 " . self::COLUMN_VERSION . " varchar(10) NOT NULL DEFAULT '" . self::CURRENT_DB_VERSION . "',
-                PRIMARY KEY  (id)
+                PRIMARY KEY  (id),
+                KEY idx_image (image_id,generation_time)
             ) $charset_collate;";
 
             $logs_table = $wpdb->prefix . 'auto_alt_text_logs';

@@ -154,4 +154,17 @@ class Auto_Alt_Text_Provenance_Test extends WP_UnitTestCase {
         $this->assertContains('context_post_id', $wpdb->get_col('SHOW COLUMNS FROM ' . Auto_Alt_Text_Queue::get_table_name()));
         $this->assertNotFalse(has_action('aat_provenance_backfill', ['Auto_Alt_Text_Provenance', 'run_backfill']));
     }
+
+    public function test_stats_table_is_indexed_by_image_and_generation_time() {
+        Auto_Alt_Text_Activator::activate();
+        global $wpdb;
+        $this->assertNotEmpty($wpdb->get_results("SHOW INDEX FROM {$wpdb->prefix}auto_alt_text_stats WHERE Key_name = 'idx_image'"));
+    }
+
+    public function test_deactivation_clears_scheduled_backfill_events_with_arguments() {
+        wp_schedule_single_event(time() + 60, 'aat_provenance_backfill', [5]);
+        do_action('deactivate_' . plugin_basename(dirname(__DIR__) . '/wp-auto-alt-text.php'));
+
+        $this->assertFalse(wp_next_scheduled('aat_provenance_backfill', [5]));
+    }
 }
