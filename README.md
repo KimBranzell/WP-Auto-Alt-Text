@@ -30,6 +30,7 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - Statistics dashboard showing usage metrics and generation history
 - Visual diff view for edited alt text changes
 - Support for WooCommerce product images
+- Product and page context: the AI is told which product, variation or page an image belongs to, and no name is given when the image is shared by several
 - WPML-aware translation flow that translates one source alt text into translated media attachments
 - Automatic alt text generation on image upload (configurable)
 - Secure API key encryption
@@ -92,6 +93,7 @@ Alternatively, define the key in `wp-config.php`. It then takes precedence over 
 
 - API Key management
 - Automatic generation toggle: controls only the automatic generation that runs when an image is uploaded or a WooCommerce product is saved. The Generate button in the media modal, bulk actions, WP-CLI and the REST API always work, whatever the toggle says.
+- Overwrite existing alt text: decides what bulk actions, REST `/batch` and WP-CLI may rewrite: only missing alt text (default), also AI-written alt text nobody has edited, or everything, including text written by a person. The single-image Generate button always overwrites.
 - Automatic throughput adaptation based on your OpenAI project limits
 - Default alt text prompt templates
 - Processing preferences
@@ -117,7 +119,7 @@ The plugin exposes REST endpoints for integration and scripting. All routes requ
 | Method | Route | Description |
 |--------|--------|-------------|
 | POST | `/generate` | Generate alt text for a single attachment. Body: `attachment_id` (required), `context` (optional, e.g. post title for relevance). |
-| POST | `/batch` | Generate alt text for multiple attachments. Body: `attachment_ids` (array of attachment IDs). |
+| POST | `/batch` | Generate alt text for multiple attachments. Body: `attachment_ids` (array of attachment IDs). Follows the overwrite setting; images whose alt text it keeps are reported with `skipped: true`. |
 
 **Example (single image):**
 ```bash
@@ -173,7 +175,7 @@ Inspect the queue at any time with `wp auto-alt-text queue` (add `--status=faile
 
 ## WooCommerce
 
-Product images without alt text are queued in two ways only: when a product (or a variation) is saved in wp-admin, and from the Products list with the bulk action "Generate Alt Texts" (which runs even when automatic generation is turned off). Nothing is queued at checkout, on stock updates or from front-end requests, and no OpenAI call is made while a shop page renders.
+Product images are queued in two ways only: when a product (or a variation) is saved in wp-admin, which queues images without alt text, and from the Products list with the bulk action "Generate Alt Texts", which follows the overwrite setting and runs even when automatic generation is turned off. Nothing is queued at checkout, on stock updates or from front-end requests, and no OpenAI call is made while a shop page renders.
 
 ## Running tests
 
