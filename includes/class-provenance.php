@@ -67,8 +67,11 @@ class Auto_Alt_Text_Provenance {
 
     /** Whether a batch run under $policy may (re)generate this image's alt text. */
     public static function allows_overwrite($attachment_id, $policy) {
+        if (self::POLICY_ALL === $policy) {
+            return true;
+        }
         $state = self::classify($attachment_id);
-        if (self::STATE_MISSING === $state || self::POLICY_ALL === $policy) {
+        if (self::STATE_MISSING === $state) {
             return true;
         }
         return self::POLICY_AI === $policy && self::STATE_AI === $state;

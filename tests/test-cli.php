@@ -40,10 +40,15 @@ namespace {
 
     class Auto_Alt_Text_CLI_Test_OpenAI extends Auto_Alt_Text_OpenAI {
         public $calls = [];
+        /** @var callable|null Runs before each generation, e.g. to simulate an editor working during the run. */
+        public $on_generate = null;
 
         public function __construct() {}
 
         public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false, $language_override = null) {
+            if ($this->on_generate) {
+                call_user_func($this->on_generate, $attachment_id);
+            }
             $this->calls[] = [
                 'attachment_id' => $attachment_id,
                 'generation_type' => $generation_type,
@@ -488,6 +493,66 @@ namespace {
             } catch (InvalidArgumentException $exception) {
                 Assert::assertStringContainsString('Invalid --overwrite value', $exception->getMessage());
             }
+        }
+
+        public function test_generate_skips_an_image_edited_by_a_person_during_the_run() {
+            [$oldest, $edited_later, $first] = $this->create_attachments(3);
+            foreach ([$oldest, $edited_later, $first] as $id) {
+                update_post_meta($id, '_wp_attachment_image_alt', 'Old AI text');
+                Auto_Alt_Text_Provenance::record($id, 'upload');
+            }
+            // An editor fixes the next image while the first one is being generated.
+            $this->openai->on_generate = function ($attachment_id) use ($first, $edited_later) {
+                if ($attachment_id === $first) {
+                    update_post_meta($edited_later, '_wp_attachment_image_alt', 'Editor fixed it');
+                }
+            };
+            $cli = $this->create_cli();
+
+            $cli->generate([], ['overwrite' => 'ai', 'limit' => 2, 'resume' => true]);
+
+            Assert::assertSame([$first], array_column($this->openai->calls, 'attachment_id'));
+            Assert::assertSame('Editor fixed it', get_post_meta($edited_later, '_wp_attachment_image_alt', true));
+            Assert::assertContains(
+                sprintf('Skipped image %d: its alt text changed during the run and is kept by the overwrite policy.', $edited_later),
+                WP_CLI::$logs
+            );
+            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], 'ai', false, null]);
+            $resume_option_name = $this->invoke_private_method($cli, 'get_resume_state_option_name', [$resume_context]);
+            Assert::assertSame($edited_later, get_option($resume_option_name)['last_processed_id'], 'A skipped image still advances --resume');
+        }
+
+        public function test_generate_overwrite_all_processes_an_image_edited_during_the_run() {
+            [$edited_later, $first] = $this->create_attachments(2);
+            $this->openai->on_generate = function ($attachment_id) use ($first, $edited_later) {
+                if ($attachment_id === $first) {
+                    update_post_meta($edited_later, '_wp_attachment_image_alt', 'Editor text');
+                }
+            };
+
+            $this->create_cli()->generate([], ['overwrite' => 'all']);
+
+            Assert::assertSame([$first, $edited_later], array_column($this->openai->calls, 'attachment_id'));
+        }
+
+        public function test_generate_rejects_overwrite_without_a_value() {
+            try {
+                // WP-CLI passes a bare --overwrite flag as boolean true.
+                $this->create_cli()->generate([], ['overwrite' => true]);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertSame('--overwrite needs a value: missing, ai or all.', $exception->getMessage());
+            }
+        }
+
+        public function test_generate_rejects_overwrite_together_with_skip_existing() {
+            try {
+                $this->create_cli()->generate([], ['overwrite' => 'all', 'skip-existing' => true]);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertSame('Use either --overwrite or --skip-existing, not both.', $exception->getMessage());
+            }
+            Assert::assertSame([], $this->openai->calls);
         }
 
         private function create_attachments($count) {

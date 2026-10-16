@@ -8,6 +8,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     private const POST_MIME_TYPE = 'image';
     private const POST_STATUS = 'any';
     private const RESUME_OPTION_PREFIX = 'wp_auto_alt_text_cli_resume_';
+    private const CLASSIFY_CHUNK_SIZE = 500;
 
     private $openai;
     private $statistics;
@@ -166,6 +167,17 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             $progress = \WP_CLI\Utils\make_progress_bar('Generating alt text', $count);
 
             foreach ($attachment_ids as $attachment_id) {
+                // The list was built when the run started, which can be hours
+                // ago: alt text a person wrote since then must be kept.
+                if (!Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $overwrite_policy)) {
+                    WP_CLI::log(sprintf('Skipped image %d: its alt text changed during the run and is kept by the overwrite policy.', $attachment_id));
+                    if ($resume) {
+                        $this->persist_resume_state($resume_context, $attachment_id);
+                    }
+                    $progress->tick();
+                    continue;
+                }
+
                 $image_url = wp_get_attachment_url($attachment_id);
                 $alt_text = $this->openai->generate_alt_text($image_url, $attachment_id, 'cli', false, $language_override);
 
@@ -295,7 +307,14 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      * @return string missing|ai|all
      */
     private function resolve_overwrite_policy($assoc_args) {
+        if (isset($assoc_args['overwrite'], $assoc_args['skip-existing'])) {
+            WP_CLI::error('Use either --overwrite or --skip-existing, not both.');
+        }
         if (isset($assoc_args['overwrite'])) {
+            // A bare --overwrite flag arrives as boolean true.
+            if (true === $assoc_args['overwrite']) {
+                WP_CLI::error('--overwrite needs a value: missing, ai or all.');
+            }
             $policy = (string) $assoc_args['overwrite'];
             if (!in_array($policy, Auto_Alt_Text_Provenance::POLICIES, true)) {
                 WP_CLI::error(sprintf('Invalid --overwrite value "%s". Use missing, ai or all.', $policy));
@@ -397,15 +416,44 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
             }));
         }
 
-        $attachment_ids = array_values(array_filter($attachment_ids, function ($attachment_id) use ($overwrite_policy) {
-            return Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $overwrite_policy);
-        }));
+        if (Auto_Alt_Text_Provenance::POLICY_ALL !== $overwrite_policy) {
+            $attachment_ids = $this->filter_attachment_ids_by_policy($attachment_ids, $overwrite_policy);
+        }
 
         if (!empty($requested_languages) && !empty($active_plugin)) {
             $attachment_ids = $this->filter_attachment_ids_by_languages($attachment_ids, $requested_languages);
         }
 
         return $attachment_ids;
+    }
+
+    /**
+     * Keeps the attachments the overwrite policy allows. Classifies in chunks
+     * with one meta query per chunk, then drops those meta caches again so
+     * memory stays bounded on large libraries.
+     *
+     * @param int[]  $attachment_ids Ordered attachment IDs.
+     * @param string $overwrite_policy missing|ai.
+     * @return int[]
+     */
+    private function filter_attachment_ids_by_policy($attachment_ids, $overwrite_policy) {
+        $allowed = [];
+
+        foreach (array_chunk($attachment_ids, self::CLASSIFY_CHUNK_SIZE) as $chunk) {
+            update_meta_cache('post', $chunk);
+
+            foreach ($chunk as $attachment_id) {
+                if (Auto_Alt_Text_Provenance::allows_overwrite($attachment_id, $overwrite_policy)) {
+                    $allowed[] = $attachment_id;
+                }
+            }
+
+            foreach ($chunk as $attachment_id) {
+                wp_cache_delete($attachment_id, 'post_meta');
+            }
+        }
+
+        return $allowed;
     }
 
     /**
