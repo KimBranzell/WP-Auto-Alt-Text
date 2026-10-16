@@ -9,6 +9,9 @@ class Auto_Alt_Text_Admin_Assets_Test extends WP_UnitTestCase {
     public function tearDown(): void {
         wp_dequeue_script('auto-alt-text-admin-js');
         wp_dequeue_style('auto_alt_text_css');
+        // Localized data accumulates on the registered handle; start each test clean.
+        wp_deregister_script('auto-alt-text-admin-js');
+        wp_deregister_style('auto_alt_text_css');
         parent::tearDown();
     }
 
@@ -31,6 +34,31 @@ class Auto_Alt_Text_Admin_Assets_Test extends WP_UnitTestCase {
         do_action('admin_enqueue_scripts', 'upload.php');
         $this->assertTrue(wp_script_is('auto-alt-text-admin-js', 'enqueued'));
         $this->assertSame(AUTO_ALT_TEXT_VERSION, wp_scripts()->registered['auto-alt-text-admin-js']->ver);
+    }
+
+    public function test_media_modal_on_other_admin_screens_enqueues_assets() {
+        // attachment_fields_to_edit renders the Generate button in every wp.media
+        // modal, e.g. the site editor, widgets and customizer.
+        set_current_screen('site-editor');
+        do_action('wp_enqueue_media');
+        $this->assertTrue(wp_script_is('auto-alt-text-admin-js', 'enqueued'));
+        $this->assertTrue(wp_style_is('auto_alt_text_css', 'enqueued'));
+        $this->assertStringContainsString('autoAltTextData', (string) wp_scripts()->get_data('auto-alt-text-admin-js', 'data'));
+    }
+
+    public function test_media_modal_assets_are_localized_once_when_both_hooks_fire() {
+        // upload.php and the editors call wp_enqueue_media() and then fire admin_enqueue_scripts.
+        set_current_screen('upload');
+        do_action('wp_enqueue_media');
+        do_action('admin_enqueue_scripts', 'upload.php');
+        $this->assertSame(1, substr_count((string) wp_scripts()->get_data('auto-alt-text-admin-js', 'data'), 'var autoAltTextData'));
+    }
+
+    public function test_media_modal_outside_admin_enqueues_nothing() {
+        set_current_screen('front');
+        do_action('wp_enqueue_media');
+        $this->assertFalse(wp_script_is('auto-alt-text-admin-js', 'enqueued'));
+        $this->assertFalse(wp_style_is('auto_alt_text_css', 'enqueued'));
     }
 
     public function test_list_table_pagination_rule_is_scoped_to_the_stats_page() {

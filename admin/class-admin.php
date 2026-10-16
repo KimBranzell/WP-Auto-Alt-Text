@@ -25,7 +25,9 @@ class Auto_Alt_Text_Admin {
         add_action('bulk_actions-upload', [$this, 'add_bulk_actions']);
         add_filter('handle_bulk_actions-upload', [$this, 'handle_bulk_actions'], 10, 3);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAutoAltTextScript']);
-        add_action('admin_enqueue_scripts', [$this, 'enqueueStyles']);
+        // The Generate button is rendered in every wp.media modal (site editor,
+        // widgets, customizer, term screens...), not only on MEDIA_SCREENS.
+        add_action('wp_enqueue_media', [$this, 'enqueue_media_modal_assets']);
     }
 
     /**
@@ -66,37 +68,46 @@ class Auto_Alt_Text_Admin {
     }
 
     /**
-     * Enqueues the plugin's CSS styles for the admin area.
-     *
-     * This method is responsible for registering and enqueuing the plugin's CSS styles,
-     * which are used to style the admin interface. It sets the handle and the URL of the
-     * CSS file to be loaded.
+     * admin_enqueue_scripts callback: loads the plugin's admin script and
+     * styles on the media screens and the plugin's own pages.
      */
-    public function enqueueStyles($hook_suffix = ''): void {
+    public function enqueueAutoAltTextScript($hook_suffix = ''): void {
         if (!self::should_load_on($hook_suffix)) {
             return;
         }
+        $this->enqueue_assets();
+    }
+
+    /**
+     * wp_enqueue_media callback: any admin screen that opens a media modal
+     * gets the script that drives the modal's Generate button. The script's
+     * own body.upload-php check keeps the batch UI off those screens.
+     */
+    public function enqueue_media_modal_assets(): void {
+        if (!is_admin()) {
+            return;
+        }
+        $this->enqueue_assets();
+    }
+
+    /**
+     * Enqueues the admin stylesheet and the script (as a module), localized
+     * with the AJAX URL and nonces. Media screens reach this from both
+     * wp_enqueue_media and admin_enqueue_scripts; the guard keeps the
+     * localized data from being printed twice.
+     */
+    private function enqueue_assets(): void {
+        if (wp_script_is(self::SCRIPT_HANDLE, 'enqueued')) {
+            return;
+        }
+
         wp_enqueue_style(
             self::STYLE_HANDLE,
             plugin_dir_url(dirname(__FILE__)) . 'css/style.css',
             [],
             AUTO_ALT_TEXT_VERSION
         );
-    }
 
-    /**
-     * Enqueues the Auto Alt Text script for the admin area.
-     *
-     * This method is responsible for registering and enqueuing the plugin's JavaScript
-     * script, which is used for handling the batch processing of images for automatic
-     * alt text generation. It sets up the necessary script dependencies, version, and
-     * module type. It also localizes the script with AJAX-related data, such as the
-     * AJAX URL and a nonce for security.
-     */
-    public function enqueueAutoAltTextScript($hook_suffix = ''): void {
-        if (!self::should_load_on($hook_suffix)) {
-            return;
-        }
         $scriptUrl = plugin_dir_url(__FILE__) . self::SCRIPT_PATH;
         $dependencies = [];
 
