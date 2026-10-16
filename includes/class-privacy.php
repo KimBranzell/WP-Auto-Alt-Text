@@ -52,6 +52,7 @@ class Auto_Alt_Text_Privacy {
             'orderby'        => 'ID',
             'order'          => 'ASC',
             'no_found_rows'  => true,
+            'lang'           => '', // Polylang: every language, not just the current one.
         ]);
 
         $data = [];

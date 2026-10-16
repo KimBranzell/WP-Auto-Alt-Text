@@ -28,4 +28,20 @@ class Auto_Alt_Text_Privacy_Test extends WP_UnitTestCase {
         $this->assertSame('aat-attachment-' . $mine, $item['item_id']);
         $this->assertSame('My alt', $item['data'][1]['value']);
     }
+
+    public function test_export_query_opts_out_of_multilingual_language_filtering() {
+        // Polylang filters attachment queries by the current language in
+        // parse_query unless 'lang' is set to an empty string.
+        self::factory()->user->create(['user_email' => 'owner@example.org']);
+        $query_vars = null;
+        add_action('pre_get_posts', function ($query) use (&$query_vars) {
+            $query_vars = $query->query;
+        });
+
+        call_user_func($this->exporter(), 'owner@example.org', 1);
+
+        $this->assertIsArray($query_vars);
+        $this->assertArrayHasKey('lang', $query_vars);
+        $this->assertSame('', $query_vars['lang']);
+    }
 }
