@@ -5,6 +5,19 @@ class Auto_Alt_Text_Admin {
     private const SCRIPT_PATH = 'js/app.js';
     private const STYLE_HANDLE = 'auto_alt_text_css';
 
+    /** Core screens that host the media modal or the Media Library. */
+    private const MEDIA_SCREENS = ['upload.php', 'post.php', 'post-new.php'];
+
+    /**
+     * Whether the plugin's admin assets belong on this screen: the media
+     * screens above plus the plugin's own pages.
+     */
+    public static function should_load_on($hook_suffix) {
+        $hook_suffix = (string) $hook_suffix;
+        return in_array($hook_suffix, self::MEDIA_SCREENS, true)
+            || false !== strpos($hook_suffix, 'auto-alt-text');
+    }
+
     /**
      * Constructor for the admin class.
     */
@@ -44,8 +57,6 @@ class Auto_Alt_Text_Admin {
             return $redirect_to;
         }
 
-        $this->enqueueAutoAltTextScript();
-
         return add_query_arg([
             'bulk_generate_alt_text' => count($post_ids),
             'bulk_ids' => implode(',', $post_ids),
@@ -61,10 +72,15 @@ class Auto_Alt_Text_Admin {
      * which are used to style the admin interface. It sets the handle and the URL of the
      * CSS file to be loaded.
      */
-    public function enqueueStyles(): void {
+    public function enqueueStyles($hook_suffix = ''): void {
+        if (!self::should_load_on($hook_suffix)) {
+            return;
+        }
         wp_enqueue_style(
             self::STYLE_HANDLE,
-            plugin_dir_url(dirname(__FILE__)) . 'css/style.css'
+            plugin_dir_url(dirname(__FILE__)) . 'css/style.css',
+            [],
+            AUTO_ALT_TEXT_VERSION
         );
     }
 
@@ -77,7 +93,10 @@ class Auto_Alt_Text_Admin {
      * module type. It also localizes the script with AJAX-related data, such as the
      * AJAX URL and a nonce for security.
      */
-    public function enqueueAutoAltTextScript(): void {
+    public function enqueueAutoAltTextScript($hook_suffix = ''): void {
+        if (!self::should_load_on($hook_suffix)) {
+            return;
+        }
         $scriptUrl = plugin_dir_url(__FILE__) . self::SCRIPT_PATH;
         $dependencies = [];
 
@@ -94,7 +113,7 @@ class Auto_Alt_Text_Admin {
             self::SCRIPT_HANDLE,
             $scriptUrl,
             $dependencies,
-            '1.0.0',
+            AUTO_ALT_TEXT_VERSION,
             true
         );
 

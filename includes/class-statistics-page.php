@@ -64,7 +64,7 @@ class Auto_Alt_Text_Statistics_Page {
 		$total_items = $this->statistics->get_total_generations_count();
 		$total_pages = ceil($total_items / $per_page);
         ?>
-        <div class="wrap">
+        <div class="wrap aat-stats-page">
             <h1>Alternativ text-statistik</h1>
 
             <?php $this->render_queue_panel(); ?>

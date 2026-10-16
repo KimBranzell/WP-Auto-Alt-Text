@@ -26,14 +26,14 @@ add_action('admin_init', 'auto_alt_text_register_settings');
 add_action('admin_enqueue_scripts', 'auto_alt_text_admin_styles');
 
 function auto_alt_text_admin_styles($hook) {
-    if ($hook != 'settings_page_auto-alt-text') {
+    if ('toplevel_page_auto-alt-text' !== $hook) {
         return;
     }
     wp_enqueue_style(
         'auto-alt-text-admin',
         plugin_dir_url( dirname( __FILE__ ) ) . 'css/admin-style.css',
         [],
-        '1.0.0'
+        AUTO_ALT_TEXT_VERSION
     );
 }
 

@@ -521,7 +521,7 @@
 .brand-settings-section tr.disabled-field {
   opacity: 0.6;
 }
-.tablenav .tablenav-pages {
+.aat-stats-page .tablenav .tablenav-pages {
   display: flex;
   align-items: center;
   justify-content: space-between;

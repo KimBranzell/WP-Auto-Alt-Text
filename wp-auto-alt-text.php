@@ -31,6 +31,10 @@ if (!defined('AUTO_ALT_TEXT_DEBUG')) {
 	define('AUTO_ALT_TEXT_DEBUG', WP_DEBUG);
 }
 
+if (!defined('AUTO_ALT_TEXT_VERSION')) {
+	define('AUTO_ALT_TEXT_VERSION', '1.2.0');
+}
+
 /**
  * Represents the main class for the WP Auto Alt Text plugin.
  * This class is responsible for managing the plugin's initialization, loading dependencies,
@@ -159,7 +163,6 @@ class WP_Auto_Alt_Text_Plugin {
 	private function register_hooks() {
 		add_action('plugins_loaded', [$this, 'handle_plugins_loaded']);
 		add_action('init', [$this, 'initialize_features']);
-		add_action('admin_enqueue_scripts', [$this->components['admin'], 'enqueueAutoAltTextScript']);
 		add_action('wp_ajax_apply_alt_text', [$this->components['ajax_handler'], 'apply_alt_text']);
 
 		add_action('admin_notices', ['Auto_Alt_Text_Quota_Monitor', 'render_admin_notice']);
