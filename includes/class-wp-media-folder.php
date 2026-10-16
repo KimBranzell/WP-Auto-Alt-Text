@@ -226,6 +226,9 @@ class Auto_Alt_Text_WP_Media_Folder {
                 if (!current_user_can('edit_post', (int) $id)) {
                     continue;
                 }
+                if (!Auto_Alt_Text_Provenance::allows_overwrite((int) $id, Auto_Alt_Text_Provenance::default_policy())) {
+                    continue;
+                }
                 $image_url = wp_get_attachment_url($id);
                 if ($image_url) {
                     $alt_text = $this->openai()->generate_alt_text($image_url, $id, 'wpmf_folder');
