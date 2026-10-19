@@ -214,6 +214,47 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     }
 
     /**
+     * Shows which product, page or post an image's alt text is tied to.
+     *
+     * ## OPTIONS
+     *
+     * <attachment-id>
+     * : The image attachment ID.
+     *
+     * [--format=<format>]
+     * : table or json. Default: table.
+     *
+     * ## EXAMPLES
+     *
+     *     wp auto-alt-text context 164
+     *     wp auto-alt-text context 164 --format=json
+     */
+    public function context($args, $assoc_args) {
+        $attachment_id = isset($args[0]) ? (int) $args[0] : 0;
+        if ($attachment_id <= 0 || !wp_attachment_is_image($attachment_id)) {
+            WP_CLI::error('Give the ID of an image attachment.');
+        }
+
+        $explanation = Auto_Alt_Text_Context::explain($attachment_id);
+        $line = Auto_Alt_Text_Context::describe($explanation);
+
+        if ('json' === ($assoc_args['format'] ?? 'table')) {
+            WP_CLI::line(wp_json_encode(['line' => $line] + $explanation));
+            return;
+        }
+
+        WP_CLI::line($line);
+        WP_CLI::line(sprintf('reason: %s', $explanation['reason']));
+        WP_CLI::line(sprintf('source: %s', $explanation['source'] ?? '-'));
+        WP_CLI::line(sprintf('count: %d', $explanation['count']));
+        if ($explanation['context']) {
+            foreach (['post_id', 'type', 'title', 'product_name'] as $key) {
+                WP_CLI::line(sprintf('%s: %s', $key, $explanation['context'][$key] ?? '-'));
+            }
+        }
+    }
+
+    /**
      * Generates alt text translations for specified attachments
      *
      * ## OPTIONS

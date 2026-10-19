@@ -9,6 +9,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // unsaved edits.
     const isMediaLibraryScreen = document.body.classList.contains('upload-php');
 
+    // "Alt-textkontext" placeholders arrive empty in media modals; fill each once.
+    loadAltContextLines();
+    let contextLinesTimer = null;
+    new MutationObserver(() => {
+        clearTimeout(contextLinesTimer);
+        contextLinesTimer = setTimeout(loadAltContextLines, 100);
+    }).observe(document.body, { childList: true, subtree: true });
+
     /**
      * Listens for click events on the document and calls `handleSingleImageGeneration` if the clicked
      * element has the 'generate-alt-text-button' class.
@@ -159,6 +167,29 @@ async function sendAutoAltTextRequest(params) {
     }
 
     return data.data || data;
+}
+
+/**
+ * Fills "Alt-textkontext" placeholders (spec §4a). The server leaves them
+ * empty in media modal responses so the grid never pays for the lookup.
+ *
+ * @param {ParentNode} root Where to look for placeholders.
+ */
+function loadAltContextLines(root = document) {
+    root.querySelectorAll('.aat-alt-context[data-attachment-id]:not([data-loaded])').forEach((element) => {
+        element.dataset.loaded = '1';
+        sendAutoAltTextRequest({
+            action: 'aat_get_context',
+            attachment_id: element.dataset.attachmentId,
+            nonce: element.dataset.nonce,
+        })
+            .then((data) => {
+                element.textContent = data.text || '';
+            })
+            .catch(() => {
+                element.textContent = '';
+            });
+    });
 }
 
 /**
@@ -346,7 +377,7 @@ function handleSingleImageGeneration(event) {
     // Check for cached version in this session
     const cachedText = sessionStorage.getItem(`alt_text_${attachmentId}`);
     if (cachedText) {
-        showPreviewDialog(cachedText, attachmentId, true);
+        showPreviewDialog(cachedText, attachmentId, true, sessionStorage.getItem(`alt_context_${attachmentId}`) || '');
         return;
     }
 
@@ -368,7 +399,8 @@ function handleSingleImageGeneration(event) {
         if (data.success && data.data.alt_text) {
             // Store the generated text in session storage
             sessionStorage.setItem(`alt_text_${attachmentId}`, data.data.alt_text);
-            showPreviewDialog(data.data.alt_text, attachmentId, false);
+            sessionStorage.setItem(`alt_context_${attachmentId}`, data.data.context || '');
+            showPreviewDialog(data.data.alt_text, attachmentId, false, data.data.context || '');
         } else {
             showError((data.data && data.data.message) || 'Alt text generation failed.');
         }
@@ -404,10 +436,11 @@ function showError(message) {
  * @param {string} altText - The generated alt text to preview.
  * @param {string} attachmentId - The ID of the attachment.
  * @param {boolean} isCached - Indicates whether the alt text is from a cached version.
+ * @param {string} contextText - The "Alt-textkontext" line, if known.
  */
-function showPreviewDialog(altText, attachmentId, isCached) {
+function showPreviewDialog(altText, attachmentId, isCached, contextText = '') {
     const dialog = document.createElement('div');
-    const button = document.querySelector(`[data-attachment-id="${attachmentId}"]`);
+    const button = document.querySelector(`.generate-alt-text-button[data-attachment-id="${attachmentId}"]`);
     const nonce = button.dataset.nonce;
 
     dialog.className = 'alt-text-preview-dialog';
@@ -422,6 +455,7 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
             <h3>Förhandsgranska alternativ text ${isCached ? '<span class="cached-badge">Cachead</span>' : ''}</h3>
+            <p class="aat-preview-context"></p>
             <textarea class="preview-text" aria-label="Alt text"></textarea>
 
             <div class="feedback-section">
@@ -452,6 +486,14 @@ function showPreviewDialog(altText, attachmentId, isCached) {
     `;
 
     document.body.appendChild(dialog);
+
+    const contextLine = dialog.querySelector('.aat-preview-context');
+    if (contextText) {
+        // Server text: assign it, never interpolate it into HTML.
+        contextLine.textContent = `Alt-textkontext: ${contextText}`;
+    } else {
+        contextLine.remove();
+    }
 
     const textarea = dialog.querySelector('.preview-text');
     // AI output is untrusted text: assign it, never interpolate it into HTML.
@@ -543,7 +585,7 @@ function showPreviewDialog(altText, attachmentId, isCached) {
         dialog.querySelector('.regenerate-alt-text').addEventListener('click', () => {
             sessionStorage.removeItem(`alt_text_${attachmentId}`);
             dialog.remove();
-            document.querySelector(`[data-attachment-id="${attachmentId}"]`).click();
+            document.querySelector(`.generate-alt-text-button[data-attachment-id="${attachmentId}"]`).click();
         });
     }
 

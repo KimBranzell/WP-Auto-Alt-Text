@@ -11,6 +11,7 @@ class Auto_Alt_Text_Image_Process {
       // Priority 20: WPML and Polylang assign the attachment language at 10.
       add_action('add_attachment', array($this, 'handle_new_attachment'), 20);
       add_filter('attachment_fields_to_edit', array($this, 'add_custom_generate_alt_text_button'), 10, 2);
+      add_filter('attachment_fields_to_edit', array($this, 'add_context_field'), 11, 2);
   }
 
   /**
@@ -90,6 +91,40 @@ class Auto_Alt_Text_Image_Process {
 
     return $form_fields;
   }
-}
 
+  /**
+   * "Alt-textkontext" (generation-quality spec §4a): which product, page or
+   * post the alt text is tied to. Resolved here only on the attachment edit
+   * screen. Media modals receive these fields in AJAX grid responses for
+   * every attachment, so there a placeholder is rendered and app.js fills it.
+   */
+  public function add_context_field($form_fields, $post) {
+    if (!$post instanceof WP_Post || !wp_attachment_is_image($post->ID)) {
+        return $form_fields;
+    }
+
+    if (self::is_attachment_edit_screen()) {
+        $text = Auto_Alt_Text_Context::describe(Auto_Alt_Text_Context::explain($post->ID));
+        $html = '<span class="aat-alt-context" data-loaded="1">' . esc_html($text) . '</span>';
+    } else {
+        $html = '<span class="aat-alt-context" aria-live="polite" data-attachment-id="' . esc_attr($post->ID)
+            . '" data-nonce="' . esc_attr(wp_create_nonce('auto_alt_text_nonce')) . '"></span>';
+    }
+
+    $form_fields['aat_alt_context'] = array(
+        'label' => __('Alt-textkontext', 'WP-Auto-Alt-Text'),
+        'input' => 'html',
+        'html'  => $html,
+    );
+    return $form_fields;
+  }
+
+  private static function is_attachment_edit_screen() {
+    if (wp_doing_ajax() || !function_exists('get_current_screen')) {
+        return false;
+    }
+    $screen = get_current_screen();
+    return $screen && 'post' === $screen->base && 'attachment' === $screen->post_type;
+  }
+}
 ?>

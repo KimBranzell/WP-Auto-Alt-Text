@@ -419,6 +419,37 @@ namespace {
             remove_filter('pre_wp_mail', '__return_true');
         }
 
+        public function test_context_command_prints_the_explanation() {
+            $page = self::factory()->post->create(['post_type' => 'page', 'post_title' => 'Om oss']);
+            $image = self::factory()->attachment->create(['post_mime_type' => 'image/jpeg', 'post_parent' => $page, 'file' => 'cli-context.jpg']);
+
+            $this->create_cli()->context([(string) $image], []);
+
+            Assert::assertSame('Sida: Om oss (uppladdad till)', WP_CLI::$lines[0]);
+            Assert::assertContains('reason: found', WP_CLI::$lines);
+            Assert::assertContains('source: parent', WP_CLI::$lines);
+            Assert::assertContains('product_name: -', WP_CLI::$lines);
+        }
+
+        public function test_context_command_prints_json() {
+            $image = self::factory()->attachment->create(['post_mime_type' => 'image/jpeg', 'file' => 'cli-context.jpg']);
+
+            $this->create_cli()->context([(string) $image], ['format' => 'json']);
+
+            $data = json_decode(WP_CLI::$lines[0], true);
+            Assert::assertSame('none', $data['reason']);
+            Assert::assertSame('Ingen produkt eller sida hittades', $data['line']);
+        }
+
+        public function test_context_command_rejects_non_images() {
+            try {
+                $this->create_cli()->context(['999999'], []);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertSame('Give the ID of an image attachment.', $exception->getMessage());
+            }
+        }
+
         private function create_cli($language_manager = null) {
             return new Auto_Alt_Text_CLI(
                 $this->openai,

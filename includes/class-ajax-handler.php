@@ -13,6 +13,7 @@ class Auto_Alt_Text_Ajax_Handler {
      */
     public function __construct() {
         add_action('wp_ajax_generate_alt_text_for_attachment', [$this, 'generate_alt_text_for_attachment']);
+        add_action('wp_ajax_aat_get_context', [$this, 'get_context']);
         add_action('wp_ajax_process_image_batch', [$this, 'process_image_batch']);
         add_action('wp_ajax_regenerate_alt_text_with_feedback', [$this, 'regenerate_alt_text_with_feedback']);
     }
@@ -61,7 +62,10 @@ class Auto_Alt_Text_Ajax_Handler {
         $alt_text = $openai->generate_alt_text($image_url, $attachment_id, 'manual', $preview_mode);
 
         if ($alt_text) {
-            wp_send_json_success(['alt_text' => $alt_text]);
+            wp_send_json_success([
+                'alt_text' => $alt_text,
+                'context'  => Auto_Alt_Text_Context::describe(Auto_Alt_Text_Context::explain($attachment_id)),
+            ]);
         } else {
             wp_send_json_error(['message' => $openai->get_last_error()]);
         }
@@ -282,5 +286,24 @@ class Auto_Alt_Text_Ajax_Handler {
         } else {
             wp_send_json_error(['message' => $openai->get_last_error()]);
         }
+    }
+
+    /**
+     * The "Alt-textkontext" line for one image (generation-quality spec §4a).
+     */
+    public function get_context(): void {
+        check_ajax_referer(self::NONCE_ACTION, 'nonce');
+
+        $attachment_id = isset($_POST['attachment_id']) ? (int) $_POST['attachment_id'] : 0;
+        if ($attachment_id <= 0 || !current_user_can('edit_post', $attachment_id)) {
+            wp_send_json_error(['message' => self::ERROR_INSUFFICIENT_PERMISSIONS]);
+            return;
+        }
+
+        $explanation = Auto_Alt_Text_Context::explain($attachment_id);
+        wp_send_json_success([
+            'text'        => Auto_Alt_Text_Context::describe($explanation),
+            'explanation' => $explanation,
+        ]);
     }
 }
