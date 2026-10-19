@@ -116,8 +116,8 @@ Alternatively, define the key in `wp-config.php`. It then takes precedence over 
 
 ## Technical Requirements
 
-- WordPress 5.0 or higher
-- PHP 7.4 or higher
+- WordPress 6.0 or higher
+- PHP 8.0 or higher
 - Active OpenAI API key
 - Valid SSL certificate
 
