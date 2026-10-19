@@ -47,6 +47,15 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      * [--language=<codes>]
      * : Restrict generation to specific language codes. Accepts a comma-separated list when WPML or Polylang is active. Without a multilingual plugin, only a single override language is allowed.
      *
+     * [--naming=<level>]
+     * : Names in the alt text for this run: `visible` (only names readable in the image), `product` (always the product name) or `product_brand` (also the brand name). Default: the plugin setting.
+     *
+     * [--brand-tonality]
+     * : Alias for `--naming=product_brand`.
+     *
+     * [--model=<id>]
+     * : OpenAI model for this run, e.g. `gpt-6-luna`. Default: the plugin setting.
+     *
      * ### Examples
      *
      *     `wp auto-alt-text generate`
@@ -66,13 +75,18 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
      *     `wp auto-alt-text generate --language=sv,fr`
      *
      *     `wp auto-alt-text generate --brand-tonality`
+     *
+     *     `wp auto-alt-text generate --naming=product --model=gpt-6-luna`
      */
     public function generate($args, $assoc_args) {
         $limit = $this->validateLimit($assoc_args['limit'] ?? self::QUERY_POSTS_PER_PAGE);
         $offset = $this->validate_offset($assoc_args['offset'] ?? 0);
         $resume = isset($assoc_args['resume']);
         $overwrite_policy = $this->resolve_overwrite_policy($assoc_args);
-        $brand_tonality = isset($assoc_args['brand-tonality']);
+        $naming_override = $this->resolve_naming($assoc_args);
+        $model_override = $this->resolve_model($assoc_args);
+        $naming = Auto_Alt_Text_Prompt::naming($naming_override);
+        $model = $model_override ?? Auto_Alt_Text_Models::current_id();
 
         $this->validate_generate_batch_arguments($assoc_args);
 
@@ -86,16 +100,17 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
         $active_plugin = $language_context['active_plugin'];
         $language_override = $language_context['language_override'];
 
-        // Temporarily override the brand tonality setting for this CLI run
-        $original_setting = get_option('wp_auto_alt_text_enable_brand_tonality', false);
-        update_option('wp_auto_alt_text_enable_brand_tonality', $brand_tonality);
+        // Per-run choices reach the generator directly; no option is ever written.
+        $this->openai->set_run_overrides(array_filter(
+            ['naming' => $naming_override, 'model' => $model_override],
+            static function ($value) {
+                return null !== $value;
+            }
+        ));
 
         try {
-            if ($brand_tonality) {
-                WP_CLI::log('Brand tonality mode: Generating SEO-optimized alt text with brand elements');
-            } else {
-                WP_CLI::log('Accessibility mode: Generating accessible alt text');
-            }
+            WP_CLI::log(sprintf('Naming: %s', $naming));
+            WP_CLI::log(sprintf('Model: %s', $model));
 
             if (!empty($requested_languages)) {
                 $formatted_languages = implode(', ', $this->format_languages_for_log($requested_languages));
@@ -113,7 +128,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
 
             WP_CLI::log(sprintf('Overwrite policy: %s', $overwrite_policy));
 
-            $resume_context = $this->build_resume_context($requested_languages, $overwrite_policy, $brand_tonality, $active_plugin);
+            $resume_context = $this->build_resume_context($requested_languages, $overwrite_policy, $naming, $model, $active_plugin);
             $resume_after_id = 0;
 
             if ($resume) {
@@ -209,7 +224,7 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
 
             WP_CLI::success('Alt text generation completed!');
         } finally {
-            update_option('wp_auto_alt_text_enable_brand_tonality', $original_setting);
+            $this->openai->set_run_overrides([]);
         }
     }
 
@@ -369,22 +384,65 @@ class Auto_Alt_Text_CLI implements Auto_Alt_Text_CLI_Command {
     }
 
     /**
+     * --naming overrides the setting for this run; --brand-tonality is kept as
+     * an alias for product_brand (generation-quality spec §3).
+     *
+     * @return string|null Null to use the setting.
+     */
+    private function resolve_naming($assoc_args) {
+        $has_naming = isset($assoc_args['naming']);
+        if ($has_naming && isset($assoc_args['brand-tonality'])) {
+            WP_CLI::error('Use either --naming or --brand-tonality, not both.');
+        }
+        if (isset($assoc_args['brand-tonality'])) {
+            return Auto_Alt_Text_Prompt::NAMING_PRODUCT_BRAND;
+        }
+        if (!$has_naming) {
+            return null;
+        }
+        if (true === $assoc_args['naming']) {
+            WP_CLI::error('--naming needs a value: visible, product or product_brand.');
+        }
+        if (!in_array($assoc_args['naming'], Auto_Alt_Text_Prompt::NAMINGS, true)) {
+            WP_CLI::error(sprintf('Invalid --naming value "%s". Use visible, product or product_brand.', $assoc_args['naming']));
+        }
+        return $assoc_args['naming'];
+    }
+
+    /** @return string|null A registry model ID, or null to use the setting. */
+    private function resolve_model($assoc_args) {
+        if (!isset($assoc_args['model'])) {
+            return null;
+        }
+        if (true === $assoc_args['model'] || null === Auto_Alt_Text_Models::get((string) $assoc_args['model'])) {
+            WP_CLI::error(sprintf(
+                'Unknown --model "%s". Choose one of: %s.',
+                true === $assoc_args['model'] ? '' : $assoc_args['model'],
+                implode(', ', array_keys(Auto_Alt_Text_Models::all()))
+            ));
+        }
+        return (string) $assoc_args['model'];
+    }
+
+    /**
      * Builds the resume context used for persisted CLI batch state.
      *
      * @param string[]    $requested_languages Requested languages.
      * @param string      $overwrite_policy    missing|ai|all.
-     * @param bool        $brand_tonality      Whether brand tonality is enabled.
+     * @param string      $naming              Effective naming level for the run.
+     * @param string      $model               Effective model ID for the run.
      * @param string|null $active_plugin       Active multilingual plugin name.
      * @return array<string,mixed>
      */
-    private function build_resume_context($requested_languages, $overwrite_policy, $brand_tonality, $active_plugin) {
+    private function build_resume_context($requested_languages, $overwrite_policy, $naming, $model, $active_plugin) {
         $languages = $requested_languages;
         sort($languages);
 
         return [
             'active_plugin' => !empty($active_plugin) ? $active_plugin : 'none',
-            'brand_tonality' => (bool) $brand_tonality,
             'languages' => array_values($languages),
+            'model' => (string) $model,
+            'naming' => (string) $naming,
             'overwrite' => (string) $overwrite_policy,
         ];
     }

@@ -45,6 +45,14 @@ namespace {
 
         public function __construct() {}
 
+        /** @var array[] Every set_run_overrides() call, in order (the CLI resets to [] when a run ends). */
+        public $run_overrides_seen = [];
+
+        public function set_run_overrides(array $overrides) {
+            $this->run_overrides_seen[] = $overrides;
+            parent::set_run_overrides($overrides);
+        }
+
         public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false, $language_override = null) {
             if ($this->on_generate) {
                 call_user_func($this->on_generate, $attachment_id);
@@ -261,7 +269,7 @@ namespace {
                 $attachment_ids[0],
             ], array_column($this->openai->calls, 'attachment_id'));
 
-            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], 'missing', false, null]);
+            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], 'missing', 'visible', Auto_Alt_Text_Models::current_id(), null]);
             $resume_option_name = $this->invoke_private_method($cli, 'get_resume_state_option_name', [$resume_context]);
 
             Assert::assertFalse(get_option($resume_option_name, false));
@@ -450,6 +458,71 @@ namespace {
             }
         }
 
+        public function test_generate_passes_naming_and_model_as_run_overrides() {
+            $this->create_attachments(1);
+            $writes = 0;
+            add_filter('pre_update_option_auto_alt_text_naming', function ($value) use (&$writes) {
+                $writes++;
+                return $value;
+            });
+
+            $this->create_cli()->generate([], ['naming' => 'product', 'model' => 'gpt-6-luna']);
+
+            Assert::assertSame(['naming' => 'product', 'model' => 'gpt-6-luna'], $this->openai->run_overrides_seen[0]);
+            Assert::assertSame([], end($this->openai->run_overrides_seen), 'Overrides end with the run');
+            Assert::assertSame(0, $writes, 'A run never writes the naming setting');
+            Assert::assertFalse(get_option('wp_auto_alt_text_enable_brand_tonality'));
+            Assert::assertContains('Naming: product', WP_CLI::$logs);
+            Assert::assertContains('Model: gpt-6-luna', WP_CLI::$logs);
+        }
+
+        public function test_generate_without_flags_passes_no_overrides() {
+            $this->create_attachments(1);
+
+            $this->create_cli()->generate([], []);
+
+            Assert::assertSame([], $this->openai->run_overrides_seen[0]);
+        }
+
+        public function test_brand_tonality_is_an_alias_for_product_brand() {
+            $this->create_attachments(1);
+
+            $this->create_cli()->generate([], ['brand-tonality' => true]);
+
+            Assert::assertSame(['naming' => 'product_brand'], $this->openai->run_overrides_seen[0]);
+        }
+
+        public function test_generate_rejects_naming_together_with_brand_tonality() {
+            $this->assert_cli_error(['naming' => 'product', 'brand-tonality' => true], 'Use either --naming or --brand-tonality, not both.');
+        }
+
+        public function test_generate_rejects_naming_without_a_value() {
+            $this->assert_cli_error(['naming' => true], '--naming needs a value: visible, product or product_brand.');
+        }
+
+        public function test_generate_rejects_an_unknown_naming_level() {
+            $this->assert_cli_error(['naming' => 'seo'], 'Invalid --naming value "seo". Use visible, product or product_brand.');
+        }
+
+        public function test_generate_rejects_an_unknown_model() {
+            try {
+                $this->create_cli()->generate([], ['model' => 'gpt-retired']);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertStringStartsWith('Unknown --model "gpt-retired". Choose one of: ', $exception->getMessage());
+                Assert::assertStringContainsString('gpt-6-luna', $exception->getMessage());
+            }
+        }
+
+        private function assert_cli_error(array $assoc_args, $message) {
+            try {
+                $this->create_cli()->generate([], $assoc_args);
+                Assert::fail('Expected InvalidArgumentException was not thrown.');
+            } catch (InvalidArgumentException $exception) {
+                Assert::assertSame($message, $exception->getMessage());
+            }
+        }
+
         private function create_cli($language_manager = null) {
             return new Auto_Alt_Text_CLI(
                 $this->openai,
@@ -532,7 +605,7 @@ namespace {
                 sprintf('Skipped image %d: its alt text changed during the run and is kept by the overwrite policy.', $edited_later),
                 WP_CLI::$logs
             );
-            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], 'ai', false, null]);
+            $resume_context = $this->invoke_private_method($cli, 'build_resume_context', [[], 'ai', 'visible', Auto_Alt_Text_Models::current_id(), null]);
             $resume_option_name = $this->invoke_private_method($cli, 'get_resume_state_option_name', [$resume_context]);
             Assert::assertSame($edited_later, get_option($resume_option_name)['last_processed_id'], 'A skipped image still advances --resume');
         }
