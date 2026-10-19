@@ -36,7 +36,7 @@ class Auto_Alt_Text_OpenAI  {
      * @return string
      */
     public static function get_model_name() {
-        return self::MODEL;
+        return Auto_Alt_Text_Models::current_id();
     }
 
     /**
