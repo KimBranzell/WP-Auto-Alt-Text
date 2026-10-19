@@ -8,3 +8,5 @@ tests/wp-tests-config.php
 !README.md
 !CHANGELOG.md
 .*/
+eval/images/
+eval/results/
