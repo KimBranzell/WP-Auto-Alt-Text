@@ -233,12 +233,23 @@ class Auto_Alt_Text_Image_Source_Test extends WP_UnitTestCase {
         $this->assert_no_scoped_filters_left();
     }
 
-    public function test_avif_is_converted_to_jpeg() {
-        $source = Auto_Alt_Text_Image_Source::for_attachment($this->upload('avif-lossy.avif'), 'auto');
-        $parts = self::data_url_parts($source->input_image()['image_url']);
-        $source->cleanup();
+    public function test_avif_sources_are_sent_as_webp_never_jpeg() {
+        // AVIF can carry an alpha channel; JPEG would turn it black.
+        foreach (['avif-transparent.avif', 'avif-lossy.avif'] as $file) {
+            $id = $this->upload($file);
+            $editor = wp_get_image_editor(get_attached_file($id));
+            $this->assertNotWPError($editor, 'The local editor must read AVIF for this test');
+            $source = Auto_Alt_Text_Image_Source::for_attachment($id, 'auto');
+            $parts = self::data_url_parts($source->input_image()['image_url']);
+            $source->cleanup();
 
-        $this->assertSame('image/jpeg', $parts['mime']);
+            $this->assertNotSame('image/jpeg', $parts['mime'], $file);
+            $this->assertSame(
+                call_user_func([get_class($editor), 'supports_mime_type'], 'image/webp') ? 'image/webp' : 'image/png',
+                $parts['mime'],
+                $file
+            );
+        }
     }
 
     public function test_without_an_editor_a_supported_original_is_sent_as_is() {
@@ -264,16 +275,19 @@ class Auto_Alt_Text_Image_Source_Test extends WP_UnitTestCase {
     }
 
     public function test_output_format_mapping_filters_are_ignored() {
-        // A site mapping JPEG to AVIF must not make the plugin send AVIF.
+        // A site mapping JPEG to AVIF must not make the plugin send AVIF. Upload first: under the
+        // mapping WordPress itself would store the "-scaled" original as AVIF.
+        $id = $this->upload('test-image-large.jpg');
         add_filter('image_editor_output_format', function ($formats) {
             $formats['image/jpeg'] = 'image/avif';
             return $formats;
         });
-        $source = Auto_Alt_Text_Image_Source::for_attachment($this->upload('test-image-large.jpg'), 'auto');
+        $source = Auto_Alt_Text_Image_Source::for_attachment($id, 'auto');
         $parts = self::data_url_parts($source->input_image()['image_url']);
         $source->cleanup();
 
         $this->assertSame('image/jpeg', $parts['mime']);
+        $this->assertLessThanOrEqual(1048576, $parts['width'] * $parts['height'], 'The resized copy is sent, not the original');
     }
 
     private function offload($id, $url) {

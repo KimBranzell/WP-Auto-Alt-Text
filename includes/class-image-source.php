@@ -16,7 +16,7 @@ class Auto_Alt_Text_Image_Source {
     private const ORIGINAL_MAX_BYTES = 20971520;
     private const DOWNLOAD_TIMEOUT = 30;
     private const API_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    private const ALPHA_MIMES = ['image/png', 'image/gif', 'image/webp'];
+    private const ALPHA_MIMES = ['image/png', 'image/gif', 'image/webp', 'image/avif'];
     private const DETAILS = ['low', 'high', 'auto', 'original'];
     private const LOCAL_HOST_SUFFIXES = ['.test', '.local', '.localhost', '.internal', '.invalid'];
 
