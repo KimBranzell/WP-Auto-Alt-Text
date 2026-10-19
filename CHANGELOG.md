@@ -4,7 +4,7 @@ Här listas alla viktiga ändringar i WP Auto Alt Text. Senaste versionen står 
 
 ## [2.0.0] – Ej släppt
 
-Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och flerspråkspluginer. Alt-texterna genereras nu i bakgrunden.
+Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och flerspråkspluginer. Alt-texterna genereras nu i bakgrunden. De blir dessutom kortare och mer användbara för den som använder skärmläsare, produktens namn kommer med när du vill det, och stora bilder skalas ned innan de skickas, vilket sänker kostnaden per bild.
 
 ### Tillagt
 
