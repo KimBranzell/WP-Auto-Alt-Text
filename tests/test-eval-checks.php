@@ -101,4 +101,20 @@ class Auto_Alt_Text_Eval_Checks_Test extends WP_UnitTestCase {
         }
         $this->assertSame(0.0, aat_eval_checks(['expected_text' => ['TOMATKETCHUP']], 'Felix Original', 'Felix Original', self::config())['text_recall']);
     }
+
+    public function test_format_passes_when_length_or_language_is_not_applicable() {
+        $ok = ['length_ok' => true, 'opening_ok' => true, 'language_ok' => true];
+
+        $this->assertTrue(aat_eval_format_ok(array_merge($ok, ['language_ok' => null])), 'language null is not applicable');
+        $this->assertTrue(aat_eval_format_ok(array_merge($ok, ['length_ok' => null])), 'length null is not applicable');
+        $this->assertTrue(aat_eval_format_ok($ok));
+    }
+
+    public function test_format_fails_on_a_false_check() {
+        $ok = ['length_ok' => true, 'opening_ok' => true, 'language_ok' => true];
+
+        $this->assertFalse(aat_eval_format_ok(array_merge($ok, ['language_ok' => false])));
+        $this->assertFalse(aat_eval_format_ok(array_merge($ok, ['opening_ok' => false])));
+        $this->assertFalse(aat_eval_format_ok(array_merge($ok, ['length_ok' => false])));
+    }
 }

@@ -55,7 +55,7 @@ ksort($aat_by_config);
 $aat_summary = '';
 foreach ($aat_by_config as $aat_name => $aat_rows) {
     $aat_ok = array_values(array_filter($aat_rows, static fn($r) => 'ok' === $r['status']));
-    $aat_format = $aat_ok ? count(array_filter($aat_ok, static fn($r) => false !== ($r['checks']['length_ok'] ?? true) && $r['checks']['opening_ok'] && $r['checks']['language_ok'])) / count($aat_ok) : 0;
+    $aat_format = $aat_ok ? count(array_filter($aat_ok, static fn($r) => aat_eval_format_ok($r['checks']))) / count($aat_ok) : 0;
     $aat_fixes = array_count_values(array_map(static fn($r) => (string) $r['name_fix'], $aat_ok));
     $aat_latencies = array_map(static fn($r) => $r['latency_ms'], $aat_ok);
     sort($aat_latencies);

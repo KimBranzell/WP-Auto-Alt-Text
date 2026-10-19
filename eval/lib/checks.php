@@ -37,6 +37,13 @@ function aat_eval_checks(array $item, $text, $first_text, array $config) {
     ];
 }
 
+/** Format column: a null check (not applicable) never fails; any false does. */
+function aat_eval_format_ok(array $checks): bool {
+    return false !== ($checks['length_ok'] ?? null)
+        && true === ($checks['opening_ok'] ?? false)
+        && false !== ($checks['language_ok'] ?? null);
+}
+
 function aat_eval_starts_with_banned($text) {
     $start = mb_strtolower(ltrim((string) $text));
     foreach (AAT_EVAL_BANNED_OPENINGS as $phrase) {
