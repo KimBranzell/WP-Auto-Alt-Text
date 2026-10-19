@@ -18,6 +18,11 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
 - **Automatisk rensning av loggen.** Loggposter äldre än 30 dagar raderas en gång per dag.
 - **Skilj på AI-text och text skriven av en redaktör.** Pluginet märker de alt-texter det skriver. Ändrar en redaktör texten räknas den som redaktörens egen, var ändringen än görs. En ny inställning, "Skriv över befintliga alt-texter vid massgenerering", bestämmer vad massåtgärder, REST och WP-CLI får skriva över: bara saknade alt-texter (standard), även oredigerade AI-texter, eller allt. Befintliga AI-texter från tidigare versioner märks automatiskt i bakgrunden efter uppdateringen.
 - **Produkt- och sidnamn som sammanhang.** När en bild hör till en produkt (även en variant, till exempel "Nordic Mug – Blå"), en sida eller ett inlägg får AI:n veta det, även om filnamnet är obegripligt. Med varumärkestonalitet påslagen tas produktnamnet med i alt-texten. Används bilden på flera produkter skickas inget namn, eftersom ett felaktigt produktnamn är värre än inget.
+- **Namn i alt-texten.** En ny inställning ersätter brand-tonalitet: "Bara det som syns i bilden", "Produktnamn" eller "Produkt- och varumärkesnamn". Med de två senare finns produktens namn alltid med när bilden hör till en enda produkt: pluginet kontrollerar texten och lägger till namnet om AI:n har glömt det. Sidor och inlägg används bara som sammanhang.
+- **Extra instruktioner.** Ett fält för egna instruktioner, till exempel "Nämn alltid färgen". De läggs sist i pluginets instruktioner och kan inte ändra svarets format.
+- **Välj modell.** Inställningssidan visar de OpenAI-modeller pluginet stöder och ungefär vad 1 000 bilder kostar med varje. Standard är GPT-6.1 Sol, vald efter ett test på 31 bilder.
+- **Alt-textkontext.** I mediebiblioteket, på bildens redigeringssida och i förhandsgranskningen ser du vilken produkt, sida eller vilket inlägg alt-texten hör till, eller varför inget hittades. `wp auto-alt-text context <id>` visar samma sak i terminalen.
+- **Vattenmärkning av AI-text.** Under modellvalet förklarar inställningssidan hur du slår på OpenAI:s vattenmärkning av text i ditt OpenAI-konto (Data controls → Text provenance). Pluginet ändrar aldrig AI:ns text, förutom när det lägger till produktnamnet.
 
 ### Ändrat
 
@@ -30,6 +35,12 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
 - **Mindre databasarbete vid varje sidvisning.** Pluginet kontrollerar sina databastabeller bara efter en uppdatering, inte vid varje anrop.
 - **Loggning.** Felsökningsmeddelanden sparas bara när felsökningsläget är påslaget. Nätverksfel loggas nu med sin verkliga orsak.
 - **WP-CLI skriver inte längre över befintliga alt-texter som standard.** `wp auto-alt-text generate` fyller bara i saknade alt-texter, om du inte väljer något annat med `--overwrite=ai`, `--overwrite=all` eller inställningen. `--skip-existing` fungerar som förut.
+- **Kortare och mer användbara alt-texter.** AI:n får nya instruktioner: högst cirka 125 tecken, huvudmotivet först, inga gissningar och inget säljspråk. Text som syns i bilden skrivs av exakt.
+- **Billigare bildhantering.** Bilden skalas ned till den storlek modellen faktiskt använder (högst cirka 1 megapixel) innan den skickas. Originalfilen ändras aldrig.
+- **Brand-tonalitet har ersatts av "Namn i alt-texten".** Påslagen brand-tonalitet blir "Produkt- och varumärkesnamn" och avslagen blir "Bara det som syns i bilden".
+- **Ny standardmodell.** Webbplatser som inte har valt någon modell använder GPT-6.1 Sol i stället för GPT-5.2. Det kostar ungefär 3,40 USD per 1 000 bilder (GPT-5.2 med samma bildhantering: cirka 3,20 USD).
+- **OpenAI sparar inte anropen.** Pluginet ber OpenAI att inte lagra förfrågningarna.
+- **WP-CLI:** `--naming` och `--model` gäller en körning. `--brand-tonality` fungerar som förut. En körning ändrar aldrig pluginets inställningar.
 
 ### Åtgärdat
 
@@ -54,6 +65,10 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
 - Meddelandet om att översättningar laddades för tidigt ("translation loading was triggered too early") i WordPress 6.7 och senare är borta.
 - Inställningssidans stilmall laddas nu, och länken "Configure now" i mediefönstret leder till rätt sida.
 - Inställningen "Aktivera feedbacksystem" sparas nu.
+- Tomma, avbrutna eller nekade svar från OpenAI sparas aldrig som alt-text. De ger i stället ett tydligt felmeddelande.
+- Genomskinliga bilder skickas inte längre som JPEG med svart bakgrund.
+- Filnamn som är hashar eller kameranamn skickas inte längre till AI:n som ledtråd.
+- Rutan "Custom Template" på inställningssidan sparades aldrig och är borttagen.
 
 ### Säkerhet
 
@@ -86,3 +101,9 @@ Den här versionen gör att pluginet slutar störa WooCommerce, WordPress och fl
 - Ny inställning `auto_alt_text_overwrite_policy` (`missing` | `ai` | `all`) och dold metadata `_aat_alt_provenance` på bilder.
 - Kön har en ny kolumn, `context_post_id`, och processorer får produkten eller inlägget som tredje argument. `Auto_Alt_Text_Queue::enqueue()` och `promote_pending()` tar emot det som ett valfritt tredje argument.
 - Ny WP-Cron-händelse `aat_provenance_backfill`, som körs i omgångar efter uppdateringen och tas bort när pluginet inaktiveras.
+- Nya klasser: `Auto_Alt_Text_Models`, `Auto_Alt_Text_Prompt` och `Auto_Alt_Text_Image_Source`. `Auto_Alt_Text_OpenAI::run_generation()` genererar utan att spara något.
+- Nya filter: `auto_alt_text_models`, `auto_alt_text_model`, `auto_alt_text_max_length`, `auto_alt_text_image_detail` och `auto_alt_text_image_max_pixels`.
+- Nya inställningar: `auto_alt_text_naming`, `auto_alt_text_extra_instructions` och `auto_alt_text_model`. `wp_auto_alt_text_enable_brand_tonality` tas bort vid uppgraderingen.
+- Databasschema 1.3: statistiktabellen får kolumnerna `model`, `input_tokens` och `output_tokens`.
+- Ny AJAX-åtgärd: `aat_get_context`.
+- `eval/` innehåller utvärderingskittet. Det ingår inte i releasen.

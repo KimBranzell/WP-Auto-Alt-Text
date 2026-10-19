@@ -31,6 +31,7 @@ WP Auto Alt Text is a powerful WordPress plugin that leverages artificial intell
 - Visual diff view for edited alt text changes
 - Support for WooCommerce product images
 - Product and page context: the AI is told which product, variation or page an image belongs to, and no name is given when the image is shared by several
+- Accessibility-first alt text of about 125 characters, with the product name guaranteed when you want it
 - WPML-aware translation flow that translates one source alt text into translated media attachments
 - Automatic alt text generation on image upload (configurable)
 - Secure API key encryption
@@ -95,13 +96,23 @@ Alternatively, define the key in `wp-config.php`. It then takes precedence over 
 - Automatic generation toggle: controls only the automatic generation that runs when an image is uploaded or a WooCommerce product is saved. The Generate button in the media modal, bulk actions, WP-CLI and the REST API always work, whatever the toggle says.
 - Overwrite existing alt text: decides what bulk actions, REST `/batch` and WP-CLI may rewrite: only missing alt text (default), also AI-written alt text nobody has edited, or everything, including text written by a person. The single-image Generate button always overwrites.
 - Automatic throughput adaptation based on your OpenAI project limits
-- Default alt text prompt templates
+- Names in alt text: `visible` (only names readable in the image; the default), `product` (always the product or variant name when the image belongs to one product) or `product_brand` (also the brand name). At the product levels the plugin checks the result and adds the name if the model left it out. Page and post titles are only context.
+- Extra instructions: free text appended to the plugin's prompt (max 1,000 characters). It can adjust style and content, but not the reply format.
+- Model: the OpenAI model, with an estimated cost per 1,000 images. Watermarking of AI-written text is an OpenAI account setting (Organization/Project settings → Data controls → Text provenance), not a plugin setting.
 - Processing preferences
 
 ### Advanced Options
 
 - Error logging preferences
 - Backup settings
+
+### Filters
+
+- `auto_alt_text_models`: add or change entries in the model registry (ID, label, prices, reasoning effort, output token limit).
+- `auto_alt_text_model`: force the model ID.
+- `auto_alt_text_max_length`: target length in characters (default 125).
+- `auto_alt_text_image_detail`: the image detail level per attachment and generation type (`low`, `high`, `auto` or `original`).
+- `auto_alt_text_image_max_pixels`: the area cap for the resized image (default 1,048,576).
 
 ## Technical Requirements
 
@@ -147,6 +158,8 @@ For large libraries, use WP-CLI to generate alt text without browser timeouts:
 - `wp auto-alt-text generate --limit=500` — Process up to 500 newest matching images.
 - `wp auto-alt-text generate --limit=100` — Fill in missing alt text for the 100 newest images that lack it. Existing alt text is never overwritten unless you ask for it. Re-running continues with the next batch.
 - `wp auto-alt-text generate --overwrite=ai` — Also rewrite alt text the plugin generated earlier, as long as nobody has edited it. `--overwrite=all` rewrites everything, including text written by a person. Without `--overwrite`, the plugin's "overwrite" setting decides (default: only missing). `--skip-existing` still works as an alias for `--overwrite=missing`.
+- `wp auto-alt-text generate --naming=product --model=gpt-6-luna`: naming level and model for this run only. `--brand-tonality` is an alias for `--naming=product_brand`. A run never changes the plugin's settings.
+- `wp auto-alt-text context 123`: show which product, page or post image 123's alt text is tied to, or why none was found. Add `--format=json` for scripts.
 - `wp auto-alt-text generate --limit=100 --offset=100` — Skip the first 100 matching images and process the next 100.
 - `wp auto-alt-text generate --limit=100 --resume` — Continue from the previous batch position for the same CLI filters.
 - `wp auto-alt-text translate --all` — Translate existing source alt texts across WPML media translations.
