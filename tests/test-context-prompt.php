@@ -10,7 +10,7 @@ class Auto_Alt_Text_Context_Prompt_Test extends WP_UnitTestCase {
             if (strpos($url, 'openai.com') === false) {
                 return $pre;
             }
-            $this->bodies[] = (string) $args['body'];
+            $this->bodies[] = json_decode((string) $args['body'], true);
             return [
                 'headers'  => [],
                 'body'     => wp_json_encode(['output_text' => 'Generated alt text']),
@@ -20,53 +20,49 @@ class Auto_Alt_Text_Context_Prompt_Test extends WP_UnitTestCase {
         }, 10, 3);
     }
 
-    public function tearDown(): void {
-        delete_option('wp_auto_alt_text_enable_brand_tonality');
-        parent::tearDown();
+    private function openai() {
+        $openai = new Auto_Alt_Text_OpenAI();
+        $openai->save_api_key('sk-test-not-real');
+        return $openai;
     }
 
     private function generate_for_image_on_page() {
         $page = self::factory()->post->create(['post_type' => 'page', 'post_title' => 'Nordic Mug']);
         $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg', $page);
-        $openai = new Auto_Alt_Text_OpenAI();
-        $openai->save_api_key('sk-test-not-real');
-        $openai->generate_alt_text(wp_get_attachment_url($id), $id, 'manual', true);
+        $this->openai()->generate_alt_text(wp_get_attachment_url($id), $id, 'manual', true);
         return end($this->bodies);
     }
 
-    public function test_prompt_names_the_page_and_only_identifies_without_brand_tonality() {
-        update_option('wp_auto_alt_text_enable_brand_tonality', false);
+    public function test_prompt_names_the_page_as_context() {
+        update_option('auto_alt_text_naming', 'visible');
 
         $body = $this->generate_for_image_on_page();
 
-        $this->assertStringContainsString('This image belongs to the page \"Nordic Mug\"', $body);
-        $this->assertStringContainsString('describe what is visible', $body);
-        $this->assertStringNotContainsString('naturally in the alt text', $body);
+        $this->assertStringContainsString('This image belongs to the page "Nordic Mug".', $body['input'][0]['content'][0]['text']);
+        $this->assertStringNotContainsString('Include the product name', $body['instructions']);
     }
 
-    public function test_prompt_asks_to_include_the_name_with_brand_tonality() {
-        update_option('wp_auto_alt_text_enable_brand_tonality', true);
+    public function test_page_titles_are_never_forced_into_the_text() {
+        update_option('auto_alt_text_naming', 'product_brand');
 
         $body = $this->generate_for_image_on_page();
 
-        $this->assertStringContainsString('Include \"Nordic Mug\" naturally in the alt text', $body);
+        $this->assertStringNotContainsString('Include the product name', $body['instructions']);
     }
 
     public function test_prompt_without_context_has_no_context_line() {
         $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
-        $openai = new Auto_Alt_Text_OpenAI();
-        $openai->save_api_key('sk-test-not-real');
-        $openai->generate_alt_text(wp_get_attachment_url($id), $id, 'manual', true);
 
-        $this->assertStringNotContainsString('This image belongs to', end($this->bodies));
+        $this->openai()->generate_alt_text(wp_get_attachment_url($id), $id, 'manual', true);
+
+        $this->assertStringNotContainsString('This image belongs to', end($this->bodies)['input'][0]['content'][0]['text']);
     }
 
     public function test_cache_key_varies_by_context() {
         $a = self::factory()->post->create(['post_type' => 'page', 'post_title' => 'Page A']);
         $b = self::factory()->post->create(['post_type' => 'page', 'post_title' => 'Page B']);
         $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
-        $openai = new Auto_Alt_Text_OpenAI();
-        $openai->save_api_key('sk-test-not-real');
+        $openai = $this->openai();
 
         foreach ([$a, $b, $a] as $hint) {
             $openai->set_context_post_id($hint);
@@ -80,14 +76,13 @@ class Auto_Alt_Text_Context_Prompt_Test extends WP_UnitTestCase {
         $page = self::factory()->post->create(['post_type' => 'page', 'post_title' => 'Nordic Mug']);
         $first = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
         $second = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
-        $openai = new Auto_Alt_Text_OpenAI();
-        $openai->save_api_key('sk-test-not-real');
+        $openai = $this->openai();
 
         $openai->set_context_post_id($page);
         $openai->generate_alt_text(wp_get_attachment_url($first), $first, 'manual', true);
         $openai->generate_alt_text(wp_get_attachment_url($second), $second, 'manual', true);
 
-        $this->assertStringContainsString('Nordic Mug', $this->bodies[0]);
-        $this->assertStringNotContainsString('This image belongs to', $this->bodies[1]);
+        $this->assertStringContainsString('Nordic Mug', $this->bodies[0]['input'][0]['content'][0]['text']);
+        $this->assertStringNotContainsString('This image belongs to', $this->bodies[1]['input'][0]['content'][0]['text']);
     }
 }

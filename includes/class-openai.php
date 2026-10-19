@@ -19,6 +19,9 @@ class Auto_Alt_Text_OpenAI  {
     private $last_error_class = null;
     private $context_post_id = null;
 
+    /** Per-run overrides from WP-CLI and the eval: 'naming', 'model', 'detail'. */
+    private $run_overrides = [];
+
     public function __construct(?Auto_Alt_Text_Language_Manager $language_manager = null) {
         if (defined('AUTO_ALT_TEXT_OPENAI_API_KEY') && AUTO_ALT_TEXT_OPENAI_API_KEY) {
             $this->api_key = (string) AUTO_ALT_TEXT_OPENAI_API_KEY;
@@ -132,6 +135,14 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
+     * Overrides for every following generation of this instance (spec §3):
+     * WP-CLI passes --naming and --model here instead of writing options.
+     */
+    public function set_run_overrides(array $overrides) {
+        $this->run_overrides = array_intersect_key($overrides, array_flip(['naming', 'model', 'detail']));
+    }
+
+    /**
      * Error class of the last failed call:
      * 'quota' | 'auth' | 'rate_limit' | 'transient' | 'permanent' | null.
      */
@@ -180,43 +191,6 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Converts an AVIF image to a temporary JPEG file.
-     *
-     * This private function checks the MIME type of the provided image URL. If the MIME type is 'image/avif',
-     * it creates a unique temporary JPEG file, converts the AVIF image to the temporary JPEG, and returns
-     * an array with information about the conversion. If the MIME type is not 'image/avif', it returns an
-     * array indicating that no conversion was performed.
-     *
-     * @param string $image_url The URL of the image to be converted.
-     * @return array An array with information about the conversion, including whether the conversion was
-     *               performed, the path to the temporary JPEG file, and the original image URL.
-     */
-    private function convert_if_avif($image_path) {
-        $mime_type = wp_check_filetype($image_path)['type'];
-
-        if ($mime_type === 'image/avif') {
-            // Create unique temp file name
-            $upload_dir = wp_upload_dir();
-            $temp_jpg_path = $upload_dir['path'] . '/temp_' . uniqid() . '.jpg';
-
-            // Convert AVIF to temporary JPG
-            $image = imagecreatefromavif($image_path);
-            imagejpeg($image, $temp_jpg_path, 90);
-            imagedestroy($image);
-
-            return [
-                'path' => $temp_jpg_path,
-                'is_temp' => true
-            ];
-        }
-
-        return [
-            'path' => $image_path,
-            'is_temp' => false
-        ];
-    }
-
-    /**
      * Translates the given image description using the OpenAI API.
      *
      * This method sends a request to the OpenAI API to translate the provided image description prompt. It sets the
@@ -254,139 +228,264 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Generates alt text for an image using the OpenAI API.
+     * Generates alt text for an attachment and stores it (spec §4–§6).
+     * Builds the prompt and cache key first and serves a cached answer when
+     * the same image, model and prompt were seen before; otherwise calls the
+     * API through execute_generation(). Stores the alt text, provenance,
+     * statistics and cache only on success.
      *
-     * This method is responsible for generating alt text for an image by sending a request to the OpenAI API.
-     * It first checks if the alt text has been cached, and if not, it generates a new alt text description
-     * using the OpenAI API. The generated alt text is then saved to the post meta and cached for future use.
-     *
-     * @param string $image_source The source of the image, such as the image URL or file path.
-     * @param int $attachment_id The ID of the attachment for which the alt text is being generated.
-     * @param string      $generation_type The type of alt text generation, either 'manual' or 'auto'.
-     * @param bool        $preview_mode Whether the alt text is being generated in preview mode.
-     * @param string|null $language_override Optional language code override for this generation run.
-     * @return string|null The generated alt text, or null if an error occurred.
+     * @param string      $image_source      Kept for callers; the attachment's own file or URL is used.
+     * @param int         $attachment_id
+     * @param string      $generation_type   upload, woocommerce, batch, cli, api, manual, …
+     * @param bool        $preview_mode      Return the text without storing it.
+     * @param string|null $language_override Language code for this generation.
+     * @return string|null The alt text, or null on failure (see get_last_error()).
      */
     public function generate_alt_text($image_source, $attachment_id, $generation_type = 'manual', $preview_mode = false, $language_override = null) {
+        $attachment_id = (int) $attachment_id;
         Auto_Alt_Text_Logger::log("Starting alt text generation", "info", [
             'attachment_id' => $attachment_id,
             'type' => $generation_type,
             'preview' => $preview_mode
         ]);
 
-        // Get file path from attachment ID
-        $image_path = get_attached_file($attachment_id);
-        $target_language = $this->resolve_generation_language($attachment_id, $language_override);
-        $context = Auto_Alt_Text_Context::for_attachment($attachment_id, $this->context_post_id);
+        $overrides = $this->run_overrides;
+        $overrides['context_post_id'] = $this->context_post_id;
+        $overrides['preview'] = (bool) $preview_mode;
+        if (!empty($language_override)) {
+            $overrides['language'] = $language_override;
+        }
         // One hint per generation: a reused instance must not carry it to the next image.
         $this->context_post_id = null;
-        $instruction = $this->get_instruction($attachment_id, $target_language, $context);
-        $cache_context = [
-            'language' => $target_language,
-            'instruction' => $instruction,
-        ];
 
-        // Check cache first using our enhanced Cache Manager
+        $job = $this->prepare_generation($attachment_id, (string) $generation_type, $overrides);
+
         if (!$preview_mode) {
-            $cached_response = Auto_Alt_Text_Cache_Manager::get_cached_response($image_path, $cache_context);
-            if ($cached_response !== false) {
-                Auto_Alt_Text_Logger::log("Retrieved alt text from cache", "info", [
-                    'attachment_id' => $attachment_id
-                ]);
-
-                if (!$preview_mode && !empty($cached_response)) {
-                    update_post_meta($attachment_id, '_wp_attachment_image_alt', $cached_response);
-                    Auto_Alt_Text_Provenance::record($attachment_id, $generation_type, $cached_response);
-                }
-
-                return $cached_response;
+            $cached = Auto_Alt_Text_Cache_Manager::get_cached_response($job['cache_key']);
+            if (is_string($cached) && '' !== $cached) {
+                Auto_Alt_Text_Logger::log("Retrieved alt text from cache", "info", ['attachment_id' => $attachment_id]);
+                update_post_meta($attachment_id, '_wp_attachment_image_alt', $cached);
+                Auto_Alt_Text_Provenance::record($attachment_id, $generation_type, $cached, $job['model']['id']);
+                return $cached;
             }
         }
+
+        $result = $this->execute_generation($job);
+        if ('ok' !== $result['status']) {
+            Auto_Alt_Text_Logger::log("Alt text generation failed", "error", [
+                'attachment_id' => $attachment_id,
+                'error'         => $result['error'],
+                'error_class'   => $result['error_class'],
+            ]);
+            return null;
+        }
+
+        $text = $result['text'];
+        $this->statistics->track_generation(
+            $attachment_id,
+            $text,
+            $result['total_tokens'],
+            $generation_type,
+            !$preview_mode,
+            false,
+            null,
+            $result['model'],
+            $result['input_tokens'],
+            $result['output_tokens']
+        );
+
+        if (!$preview_mode) {
+            update_post_meta($attachment_id, '_wp_attachment_image_alt', $text);
+            Auto_Alt_Text_Provenance::record($attachment_id, $generation_type, $text, $result['model']);
+            Auto_Alt_Text_Cache_Manager::set_cached_response($job['cache_key'], $text);
+        }
+
+        Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
+            'attachment_id' => $attachment_id,
+            'model'         => $result['model'],
+            'tokens_used'   => $result['total_tokens'],
+            'name_fix'      => $result['name_fix'],
+        ]);
+        return $text;
+    }
+
+    /**
+     * The generation pipeline without side effects of its own: it stores no alt
+     * text, provenance, cache entry or statistics. The shared transport
+     * bookkeeping in callAPI() (rate limiter, quota monitor, auth pause,
+     * connector status) still applies. The evaluation harness calls this (spec §7.2).
+     *
+     * @param array $overrides model, naming, language, detail, context_post_id, preview, feedback.
+     * @return array status, text, first_text, name_fix, model, effort, detail, naming, context,
+     *               input_tokens, output_tokens, reasoning_tokens, total_tokens, latency_ms, error, error_class.
+     */
+    public function run_generation($attachment_id, $generation_type, array $overrides = []) {
+        return $this->execute_generation($this->prepare_generation((int) $attachment_id, (string) $generation_type, $overrides));
+    }
+
+    /**
+     * Everything a generation needs before the API call. Cheap: the image is
+     * read and resized only in execute_generation(), after the cache check.
+     */
+    private function prepare_generation($attachment_id, $generation_type, array $overrides) {
+        $model = Auto_Alt_Text_Models::get($overrides['model'] ?? null) ?? Auto_Alt_Text_Models::current();
+        $language = $this->resolve_generation_language($attachment_id, $overrides['language'] ?? null);
+        $explanation = Auto_Alt_Text_Context::explain($attachment_id, $overrides['context_post_id'] ?? null);
+        $context = $explanation['context'];
+        $naming = Auto_Alt_Text_Prompt::naming($overrides['naming'] ?? null);
+        $prompt = Auto_Alt_Text_Prompt::from_settings($attachment_id, $language, $context, [
+            'naming'   => $naming,
+            'feedback' => $overrides['feedback'] ?? null,
+        ]);
+        $detail = isset($overrides['detail'])
+            ? (string) $overrides['detail']
+            : Auto_Alt_Text_Image_Source::resolve_image_detail($attachment_id, $generation_type, !empty($overrides['preview']));
+        $requires_name = Auto_Alt_Text_Prompt::NAMING_VISIBLE !== $naming
+            && $context
+            && in_array($context['type'], Auto_Alt_Text_Prompt::PRODUCT_CONTEXT_TYPES, true);
+
+        return [
+            'attachment_id' => $attachment_id,
+            'model'         => $model,
+            'naming'        => $naming,
+            'context'       => $context,
+            'detail'        => $detail,
+            'prompt'        => $prompt,
+            'required_name' => $requires_name ? (string) ($context['product_name'] ?? $context['title']) : null,
+            'cache_key'     => Auto_Alt_Text_Cache_Manager::get_cache_key($attachment_id, [
+                'file'         => Auto_Alt_Text_Image_Source::fingerprint($attachment_id),
+                'model'        => $model['id'],
+                'effort'       => $model['effort'],
+                'detail'       => $detail,
+                'instructions' => $prompt['instructions'],
+                'input'        => $prompt['input'],
+            ]),
+        ];
+    }
+
+    /** Prepares the image, calls the API and applies the name guarantee. Writes nothing. */
+    private function execute_generation(array $job) {
+        $started = microtime(true);
+        $result = [
+            'status'           => 'error',
+            'text'             => '',
+            'first_text'       => '',
+            'name_fix'         => null,
+            'model'            => $job['model']['id'],
+            'effort'           => $job['model']['effort'],
+            'detail'           => $job['detail'],
+            'naming'           => $job['naming'],
+            'context'          => $job['context'],
+            'input_tokens'     => 0,
+            'output_tokens'    => 0,
+            'reasoning_tokens' => 0,
+            'total_tokens'     => 0,
+            'latency_ms'       => 0,
+            'error'            => null,
+            'error_class'      => null,
+        ];
+        $this->last_error = null;
+        $this->last_error_class = null;
 
         if (empty($this->api_key)) {
             $this->last_error = 'OpenAI API key is not configured';
             $this->last_error_class = 'permanent';
-            return null;
+            return $this->finish_result($result, $started);
         }
 
-        // Always get file path from attachment ID
-        $image_path = get_attached_file($attachment_id);
-
-        // Handle AVIF conversion if needed
-        $processed_image = $this->convert_if_avif($image_path);
-
-        // Convert file to base64
-        $image_data = base64_encode(file_get_contents($processed_image['path']));
-        $image_url = 'data:image/jpeg;base64,' . $image_data;
+        $image = Auto_Alt_Text_Image_Source::for_attachment($job['attachment_id'], $job['detail']);
+        if (is_wp_error($image)) {
+            $this->last_error = $image->get_error_message();
+            $this->last_error_class = 'image_download_failed' === $image->get_error_code() ? 'transient' : 'permanent';
+            return $this->finish_result($result, $started);
+        }
 
         try {
-            $response = $this->request_text($this->build_response_request([
-                [
-                    'role' => 'user',
+            $response = $this->request_text($this->build_response_request(
+                [[
+                    'role'    => 'user',
                     'content' => [
-                        ['type' => 'input_text', 'text' => $instruction],
-                        ['type' => 'input_image', 'image_url' => $image_url]
-                    ]
-                ]
-            ]));
+                        ['type' => 'input_text', 'text' => $job['prompt']['input']],
+                        $image->input_image(),
+                    ],
+                ]],
+                null,
+                $job['prompt']['instructions'],
+                $job['model']['id']
+            ));
+            $this->add_usage($result, $response);
 
-            $generated_text = 'ok' === $response['status'] ? $response['text'] : '';
-
-            if (!empty($generated_text)) {
-                $tokens_used = $response['total_tokens'];
-
-                // Track the generation
-                $this->statistics->track_generation(
-                    $attachment_id,
-                    $generated_text,
-                    $tokens_used,
-                    $generation_type,
-                    !$preview_mode
-                );
-
-                // Only save alt text if not in preview mode
-                if (!$preview_mode) {
-                    update_post_meta($attachment_id, '_wp_attachment_image_alt', $generated_text);
-                    Auto_Alt_Text_Provenance::record($attachment_id, $generation_type, $generated_text);
-                }
-
-                if (!$preview_mode && $generated_text) {
-                    Auto_Alt_Text_Cache_Manager::set_cached_response($image_path, $generated_text, $cache_context);
-                    Auto_Alt_Text_Logger::log("Cached generated alt text", "info", [
-                        'attachment_id' => $attachment_id,
-                        'generated_text' => $generated_text
-                    ]);
-                }
-
-                Auto_Alt_Text_Logger::log("Alt text generated successfully", "info", [
-                    'attachment_id' => $attachment_id,
-                    'tokens_used' => $tokens_used
-                ]);
-
-                // Clean up temporary file if one was created
-                if ($processed_image['is_temp'] && file_exists($processed_image['path'])) {
-                    wp_delete_file($processed_image['path']);
-                }
-
-                return $generated_text;
+            $text = 'ok' === $response['status'] ? Auto_Alt_Text_Prompt::clean_output($response['text']) : '';
+            if ('' !== $text) {
+                $result['first_text'] = $text;
+                [$result['text'], $result['name_fix']] = $this->ensure_name($text, $job, $result);
+                $result['status'] = 'ok';
+            } elseif ('ok' === $response['status']) {
+                $this->last_error = __('OpenAI returned an empty response. Please try again.', 'WP-Auto-Alt-Text');
+                $this->last_error_class = 'transient';
             }
-
-            return null;
-
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
-            Auto_Alt_Text_Logger::log("API call failed", "error", [
-                'error' => $e->getMessage(),
-                'attachment_id' => $attachment_id
-            ]);
-
-            // Clean up temporary file if one was created
-            if ($processed_image['is_temp'] && file_exists($processed_image['path'])) {
-                wp_delete_file($processed_image['path']);
-            }
-
-            return null;
+        } finally {
+            $image->cleanup();
         }
+
+        return $this->finish_result($result, $started);
+    }
+
+    /**
+     * G9: at the product levels a product image's alt text always names the
+     * product: one text-only rewrite, then a prefix. Returns [text, name_fix].
+     */
+    private function ensure_name($text, array $job, array &$result) {
+        $name = $job['required_name'];
+        if (null === $name || '' === $name) {
+            return [$text, null];
+        }
+        if (Auto_Alt_Text_Prompt::contains_name($text, $name)) {
+            return [$text, 'model'];
+        }
+
+        try {
+            $rewrite = $this->request_text($this->build_response_request(
+                [[
+                    'role'    => 'user',
+                    'content' => [['type' => 'input_text', 'text' => Auto_Alt_Text_Prompt::name_rewrite_input($text, $name)]],
+                ]],
+                null,
+                $job['prompt']['instructions'],
+                $job['model']['id']
+            ));
+            $this->add_usage($result, $rewrite);
+            $rewritten = 'ok' === $rewrite['status'] ? Auto_Alt_Text_Prompt::clean_output($rewrite['text']) : '';
+            if ('' !== $rewritten && Auto_Alt_Text_Prompt::contains_name($rewritten, $name)) {
+                return [$rewritten, 'rewrite'];
+            }
+        } catch (Exception $e) {
+            // The first answer stands; the prefix below adds the name.
+        }
+
+        return [Auto_Alt_Text_Prompt::prefix_name($name, $text), 'prefix'];
+    }
+
+    private function add_usage(array &$result, array $response) {
+        foreach (['input_tokens', 'output_tokens', 'reasoning_tokens', 'total_tokens'] as $key) {
+            $result[$key] += (int) ($response[$key] ?? 0);
+        }
+    }
+
+    private function finish_result(array $result, $started) {
+        $result['latency_ms'] = (int) round((microtime(true) - $started) * 1000);
+        if ('ok' === $result['status']) {
+            $this->last_error = null;
+            $this->last_error_class = null;
+            return $result;
+        }
+        $this->last_error = $this->last_error ?: __('Unable to generate alt text right now. Please try again.', 'WP-Auto-Alt-Text');
+        $this->last_error_class = $this->last_error_class ?: 'transient';
+        $result['error'] = $this->last_error;
+        $result['error_class'] = $this->last_error_class;
+        return $result;
     }
 
     /**
@@ -417,18 +516,7 @@ class Auto_Alt_Text_OpenAI  {
      * @return string The human-readable language name.
      */
     private function get_language_name($language_code) {
-        $language_code = $this->normalize_language_code($language_code);
-
-        if (defined('AUTO_ALT_TEXT_LANGUAGES') && isset(AUTO_ALT_TEXT_LANGUAGES[$language_code])) {
-            return AUTO_ALT_TEXT_LANGUAGES[$language_code];
-        }
-
-        if ('da' === $language_code) {
-            return 'Danska';
-        }
-
-        // Default to English if the language code is not found
-        return 'English';
+        return Auto_Alt_Text_Prompt::language_name($this->normalize_language_code($language_code));
     }
 
     /**
@@ -452,65 +540,23 @@ class Auto_Alt_Text_OpenAI  {
             return null;
         }
 
-        try {
-            $language = $this->language_manager->get_post_language($attachment_id);
-            if (empty($language)) {
-                $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
-            }
+        $request = trim($this->get_improvement_instructions($improvement_type) . ($custom_feedback ? ' Additional feedback: ' . $custom_feedback : ''));
+        $result = $this->run_generation((int) $attachment_id, 'manual', [
+            'preview'  => true,
+            'feedback' => ['type' => (string) $improvement_type, 'text' => $request, 'previous' => (string) $original_alt_text],
+        ]);
 
-            $lang_name = $this->get_language_name($language);
-
-            // Get the filename for SEO optimization
-            $filename = basename(get_attached_file($attachment_id));
-
-            // Clean up the filename for better readability
-            $clean_filename = pathinfo($filename, PATHINFO_FILENAME);
-            $clean_filename = str_replace(['-', '_'], ' ', $clean_filename);
-
-            // Map improvement types to specific instructions
-            $improvement_instructions = $this->get_improvement_instructions($improvement_type);
-
-            // Build a custom prompt that includes the original alt text and feedback
-            $feedback_prompt = "You are an expert in creating image descriptions for accessibility. " .
-                "I need you to improve the following alt text for an image: \"{$original_alt_text}\". " .
-                "{$improvement_instructions} " .
-                ($custom_feedback ? "Additional feedback: {$custom_feedback}. " : "") .
-                "The description should be in {$lang_name}. " .
-                "The image filename is \"{$clean_filename}\". Try to naturally incorporate relevant terms from the filename for SEO purposes. " .
-                "Provide only the improved alt text without any additional explanations or quotes.";
-
-            $response = $this->request_text($this->build_response_request(
-                [[
-                    'role'    => 'user',
-                    'content' => [['type' => 'input_text', 'text' => $feedback_prompt]],
-                ]],
-                null,
-                'You are an expert in creating accessible and SEO-friendly image descriptions.'
-            ));
-
-            $regenerated_text = 'ok' === $response['status'] ? $response['text'] : '';
-
-            if (!empty($regenerated_text)) {
-
-                // Track statistics for the regenerated alt text
-                if (!empty($regenerated_text)) {
-                    $statistics = new Auto_Alt_Text_Statistics();
-                    $statistics->update_feedback_regeneration_count();
-                }
-
-                return $regenerated_text;
-            }
-
-            $this->last_error = __('OpenAI returned no improved alt text. Please try again.', 'WP-Auto-Alt-Text');
-            return null;
-        } catch (Exception $e) {
-            $this->last_error = $e->getMessage();
-            Auto_Alt_Text_Logger::log("Alt text regeneration failed", "error", [
-                'attachment_id' => $attachment_id,
-                'error' => $e->getMessage()
-            ]);
-            return null;
+        if ('ok' === $result['status']) {
+            (new Auto_Alt_Text_Statistics())->update_feedback_regeneration_count();
+            return $result['text'];
         }
+
+        // request_text() and the pipeline already set a specific last_error; keep it.
+        Auto_Alt_Text_Logger::log("Alt text regeneration failed", "error", [
+            'attachment_id' => $attachment_id,
+            'error' => $result['error']
+        ]);
+        return null;
     }
 
     /**
@@ -536,122 +582,6 @@ class Auto_Alt_Text_OpenAI  {
             default:
                 return "Please improve this alt text to be more effective and descriptive.";
         }
-    }
-
-    /**
-     * Generates the instruction for the OpenAI API call to generate alt text for an image.
-     *
-     * The instruction is based on the user's language preference and a customizable template.
-     * It provides detailed requirements for the generated alt text, such as keeping it concise,
-     * avoiding phrases like "image of", using the user's language, and maintaining proper
-     * grammar and syntax.
-     *
-     * @param int         $attachment_id The attachment the alt text is for, or 0.
-     * @param string|null $language      Language code; defaults to the attachment's language.
-     * @param array|null  $context       Owning product or page from Auto_Alt_Text_Context::for_attachment(),
-     *                                   or null when the image has no single owner.
-     * @return string The generated instruction for the OpenAI API call.
-     */
-    private function get_instruction($attachment_id = 0, $language = null, $context = null) {
-        if (empty($language)) {
-            $language = $this->language_manager->get_post_language($attachment_id);
-        }
-
-        if (empty($language)) {
-            $language = get_option(AUTO_ALT_TEXT_LANGUAGE_OPTION, 'en');
-        }
-
-        $language_name = $this->get_language_name($language);
-
-        // Check if brand tonality is enabled
-        $enable_brand_tonality = get_option('wp_auto_alt_text_enable_brand_tonality', false);
-
-        // Get brand info only if brand tonality is enabled
-        $brand_name = $enable_brand_tonality ? get_option('aat_brand_name') : '';
-        $brand_description = $enable_brand_tonality ? get_option('aat_brand_description') : '';
-
-        $prompt = "You are an expert in accessibility";
-
-        // Only add SEO and marketing expertise if brand tonality is enabled
-        if ($enable_brand_tonality) {
-            $prompt .= ", SEO optimization, and product marketing";
-        }
-
-        $prompt .= ", tasked with generating alt text for images";
-
-        // Only include brand details if brand tonality is enabled and they exist
-        if ($enable_brand_tonality && !empty($brand_name)) {
-            $prompt .= "from '{$brand_name}'";
-        }
-
-        if ($enable_brand_tonality && !empty($brand_description)) {
-            $prompt .= ", '{$brand_description}.'";
-        }
-
-        if ($enable_brand_tonality) {
-            $prompt .= "Your job is to analyze the provided image and generate a concise, SEO-friendly, and accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
-        } else {
-            $prompt .= "Your job is to analyze the provided image and generate a concise, accessibility-optimized alt text in {$language_name}, following these guidelines:\n";
-        }
-
-        $prompt .= "<h1>Key Requirements</h1>\n";
-        $prompt .= "- Keep it between 25-40 words to balance clarity and detail.\n";
-        $prompt .= "- Use object-action-context structure, where:\n";
-        $prompt .= "-- Object: Identify the main subject or focus of the image.\n";
-        $prompt .= "-- Action: Describe the action or interaction depicted in the image.\n";
-        $prompt .= "-- Context: Provide additional context or details about the image.\n";
-
-        if ($attachment_id > 0) {
-            $filename = basename(get_attached_file($attachment_id));
-            $clean_filename = pathinfo($filename, PATHINFO_FILENAME);
-            $clean_filename = str_replace(['-', '_'], ' ', $clean_filename);
-
-            if (!empty($clean_filename)) {
-                $prompt .= "- Image filename: \"{$clean_filename}\". ";
-                if ($enable_brand_tonality) {
-                    $prompt .= "Use this filename only as inspiration for keywords and themes, don't explicitly include the filename in the alt text unless it's genuinely descriptive of the image content.\n";
-                } else {
-                    $prompt .= "Consider any relevant contextual information this might suggest, but prioritize describing what's actually visible in the image.\n";
-                }
-            }
-        }
-
-        // Product or page the image belongs to (design D2): always given as
-        // context; brand tonality additionally asks for the name in the text.
-        if (!empty($context['title'])) {
-            $labels = ['product' => 'product', 'variation' => 'product variant', 'page' => 'page', 'post' => 'post'];
-            $label = $labels[$context['type']] ?? 'page';
-            $prompt .= sprintf("- This image belongs to the %s \"%s\". ", $label, $context['title']);
-            if ($enable_brand_tonality) {
-                $prompt .= sprintf("Include \"%s\" naturally in the alt text.\n", $context['title']);
-            } else {
-                $prompt .= "Use this name only to identify what is shown; describe what is visible.\n";
-            }
-        }
-
-        // Only include brand-specific and SEO instructions if brand tonality is enabled
-        if ($enable_brand_tonality) {
-            if (!empty($brand_name)) {
-                $prompt .= "- Include \"{$brand_name}\" naturally at varying positions (beginning, middle or end).\n";
-            }
-            $prompt .= "- Mention product-specific details, such as material, function, or unique features.\n";
-            $prompt .= "- Incorporate relevant keywords from the context while maintaining natural-sounding text.\n";
-        }
-
-        // Base accessibility-focused instructions for all cases
-        $prompt .= "- If the image contains text, transcribe it accurately, even if it exceeds the word limit.\n";
-        $prompt .= "- Avoid generic descriptions – make the text informative and engaging.\n";
-        $prompt .= "- Do NOT include phrases like 'image of' or 'picture of'.\n";
-        $prompt .= "- For ambiguous images, describe them neutrally.\n";
-        $prompt .= "- Write in {$language_name}, defaulting to English if {$language_name} is unsupported.\n";
-        $prompt .= "- Ensure proper grammar and readability.\n";
-
-        if (!$enable_brand_tonality) {
-            $prompt .= "- Focus on making the alt text accessible and descriptive rather than SEO-optimized.\n";
-            $prompt .= "- Prioritize information that would be helpful for someone using a screen reader.\n";
-        }
-
-        return $prompt;
     }
 
     /**

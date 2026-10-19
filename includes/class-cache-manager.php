@@ -1,49 +1,27 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+/**
+ * Caches generated alt text in transients. Keys are built from the attachment
+ * ID and everything that shaped the answer (file size and mtime, model,
+ * detail, prompt), so the image file is never read just to make a key.
+ */
 class Auto_Alt_Text_Cache_Manager {
     private const CACHE_PREFIX = 'aat_img_';
-    private const DEFAULT_EXPIRATION = DAY_IN_SECONDS * 30; // 30 days default
 
-    public static function get_cache_key($image_path, $context = []) {
-        $cache_prefix = self::get_image_cache_prefix($image_path);
-
-        if ($cache_prefix === '') {
-            return '';
-        }
-
-        return $cache_prefix . '_' . md5(wp_json_encode(self::normalize_cache_context($context)));
+    /** @param array $parts file fingerprint, model, effort, detail, instructions, input. */
+    public static function get_cache_key($attachment_id, array $parts) {
+        return self::CACHE_PREFIX . (int) $attachment_id . '_' . md5(wp_json_encode(self::normalize($parts)));
     }
 
-    public static function get_cached_response($image_path, $context = []) {
-        $cache_key = self::get_cache_key($image_path, $context);
-
-        if ($cache_key === '') {
-            return false;
-        }
-
+    /** @return string|false */
+    public static function get_cached_response($cache_key) {
         return get_transient($cache_key);
     }
 
-    public static function set_cached_response($image_path, $api_response, $context = []) {
-        $cache_key = self::get_cache_key($image_path, $context);
-
-        if ($cache_key === '') {
-            return;
-        }
-
-        $days = get_option('aat_cache_expiration', 30);
-        $expiration = DAY_IN_SECONDS * $days;
-        set_transient($cache_key, $api_response, $expiration);
-    }
-
-    public static function is_cached($image_path, $context = []) {
-        $cache_key = self::get_cache_key($image_path, $context);
-
-        if ($cache_key === '') {
-            return false;
-        }
-
-        return get_transient($cache_key) !== false;
+    public static function set_cached_response($cache_key, $alt_text) {
+        $days = max(1, (int) get_option('aat_cache_expiration', 30));
+        set_transient($cache_key, $alt_text, DAY_IN_SECONDS * $days);
     }
 
     public static function clear_all_caches() {
@@ -66,82 +44,27 @@ class Auto_Alt_Text_Cache_Manager {
         );
     }
 
-    public static function invalidate_cache($image_reference) {
-        $image_path = self::resolve_image_path($image_reference);
-        $cache_prefix = self::get_image_cache_prefix($image_path);
-
-        if ($cache_prefix === '') {
-            return;
-        }
-
+    /** Drops every cached variant for one attachment. */
+    public static function invalidate_cache($attachment_id) {
         global $wpdb;
-
-        $transient_pattern = $wpdb->esc_like('_transient_' . $cache_prefix) . '%';
-        $timeout_pattern = $wpdb->esc_like('_transient_timeout_' . $cache_prefix) . '%';
-
+        $prefix = self::CACHE_PREFIX . (int) $attachment_id . '_';
         $wpdb->query(
             $wpdb->prepare(
                 "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-                $transient_pattern,
-                $timeout_pattern
+                $wpdb->esc_like('_transient_' . $prefix) . '%',
+                $wpdb->esc_like('_transient_timeout_' . $prefix) . '%'
             )
         );
     }
 
-    /**
-     * Builds the image-specific prefix used by all cache variants.
-     *
-     * @param string $image_path The attachment file path.
-     * @return string
-     */
-    private static function get_image_cache_prefix($image_path) {
-        $image_path = self::resolve_image_path($image_path);
-
-        if (!is_string($image_path) || $image_path === '' || !file_exists($image_path)) {
-            return '';
+    /** Sorts associative arrays recursively so key order never changes the hash. */
+    private static function normalize($value) {
+        if (!is_array($value)) {
+            return $value;
         }
-
-        $content = file_get_contents($image_path);
-        $mtime = filemtime($image_path);
-
-        if ($content === false || $mtime === false) {
-            return '';
+        if (array_keys($value) !== range(0, count($value) - 1)) {
+            ksort($value);
         }
-
-        return self::CACHE_PREFIX . md5($content . $mtime);
-    }
-
-    /**
-     * Resolves an attachment ID or file path to a valid image path.
-     *
-     * @param int|string $image_reference Attachment ID or file path.
-     * @return string
-     */
-    private static function resolve_image_path($image_reference) {
-        if (is_numeric($image_reference)) {
-            return (string) get_attached_file((int) $image_reference);
-        }
-
-        if (is_string($image_reference)) {
-            return $image_reference;
-        }
-
-        return '';
-    }
-
-    /**
-     * Normalizes cache context before hashing it into the transient key.
-     *
-     * @param array $context Cache context values.
-     * @return array
-     */
-    private static function normalize_cache_context($context) {
-        if (!is_array($context)) {
-            return [];
-        }
-
-        ksort($context);
-
-        return $context;
+        return array_map([__CLASS__, 'normalize'], $value);
     }
 }

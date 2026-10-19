@@ -344,29 +344,13 @@ namespace {
             }
         }
 
-        public function test_cache_key_varies_by_language_context() {
-            $image_path = tempnam(sys_get_temp_dir(), 'aat-cache-');
-            file_put_contents($image_path, 'cache-test-image');
+        public function test_cache_key_varies_by_what_shaped_the_answer() {
+            $swedish = Auto_Alt_Text_Cache_Manager::get_cache_key(7, ['instructions' => 'Write in Svenska', 'model' => 'gpt-6-luna']);
+            $english = Auto_Alt_Text_Cache_Manager::get_cache_key(7, ['instructions' => 'Write in Engelska', 'model' => 'gpt-6-luna']);
 
-            $swedish_key = Auto_Alt_Text_Cache_Manager::get_cache_key($image_path, [
-                'language' => 'sv',
-                'instruction' => 'Generate alt text in Svenska',
-            ]);
-            $english_key = Auto_Alt_Text_Cache_Manager::get_cache_key($image_path, [
-                'language' => 'en',
-                'instruction' => 'Generate alt text in Engelska',
-            ]);
-
-            Assert::assertNotSame($swedish_key, $english_key);
-            Assert::assertSame(
-                $swedish_key,
-                Auto_Alt_Text_Cache_Manager::get_cache_key($image_path, [
-                    'instruction' => 'Generate alt text in Svenska',
-                    'language' => 'sv',
-                ])
-            );
-
-            unlink($image_path);
+            Assert::assertNotSame($swedish, $english);
+            Assert::assertSame($swedish, Auto_Alt_Text_Cache_Manager::get_cache_key(7, ['model' => 'gpt-6-luna', 'instructions' => 'Write in Svenska']));
+            Assert::assertStringStartsWith('aat_img_7_', $swedish);
         }
 
         public function test_queue_command_outputs_counts() {

@@ -36,8 +36,9 @@ class Auto_Alt_Text_Provenance {
      * @param int         $attachment_id
      * @param string      $source  Generation type of the write, e.g. 'upload', 'cli', 'manual'.
      * @param string|null $written The value the plugin passed to update_post_meta().
+     * @param string|null $model   Model that wrote the text; null uses the configured model.
      */
-    public static function record($attachment_id, $source, $written = null) {
+    public static function record($attachment_id, $source, $written = null, $model = null) {
         $alt = self::current_alt($attachment_id);
         if (null !== $written && trim(wp_unslash((string) $written)) !== $alt) {
             self::forget($attachment_id);
@@ -49,7 +50,7 @@ class Auto_Alt_Text_Provenance {
         update_post_meta((int) $attachment_id, self::META_KEY, [
             'hash'   => sha1($alt),
             // Pre-2.0 text came from whatever model was configured back then.
-            'model'  => 'backfill' === $source ? '' : Auto_Alt_Text_OpenAI::get_model_name(),
+            'model'  => 'backfill' === $source ? '' : (null !== $model ? (string) $model : Auto_Alt_Text_OpenAI::get_model_name()),
             'at'     => time(),
             'source' => sanitize_key($source),
         ]);
