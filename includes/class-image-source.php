@@ -24,7 +24,14 @@ class Auto_Alt_Text_Image_Source {
     private $detail = 'auto';
     private $temp_files = [];
 
-    /** `auto` for every generation type: `low` cut packaging text recall by 8-24 % in the evaluation (spec §5, §7.4). */
+    /**
+     * `auto` for every generation type: `low` cut packaging text recall by 8-24 % in the evaluation (spec §5, §7.4).
+     *
+     * @param int    $attachment_id
+     * @param string $generation_type
+     * @param bool   $preview_mode    Kept for compatibility; it no longer changes the result.
+     * @return string low, high, auto or original (via the `auto_alt_text_image_detail` filter).
+     */
     public static function resolve_image_detail($attachment_id, $generation_type, $preview_mode = false) {
         $detail = 'auto';
         $detail = apply_filters('auto_alt_text_image_detail', $detail, (int) $attachment_id, (string) $generation_type);

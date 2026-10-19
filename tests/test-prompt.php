@@ -125,6 +125,7 @@ class Auto_Alt_Text_Prompt_Test extends WP_UnitTestCase {
             'product with size'     => ['/u/Sandlåda-Robust-350L-1024x768.jpg', 'Sandlåda Robust 350L'],
             'duplicate suffix'      => ['/u/blue-ceramic-mug-2.jpg', 'blue ceramic mug'],
             'edited image suffix'   => ['/u/blue-ceramic-mug-e1700000000123.jpg', 'blue ceramic mug'],
+            'invalid utf-8'         => ["/u/caf\xE9-au-lait-cr\xE8me.jpg", null],
         ];
     }
 
@@ -147,12 +148,25 @@ class Auto_Alt_Text_Prompt_Test extends WP_UnitTestCase {
         ];
     }
 
-    public function test_contains_name_tolerates_case_accents_dashes_and_quotes() {
-        $this->assertTrue(Auto_Alt_Text_Prompt::contains_name('En grön sandlåda robust 350 l med lock.', 'Sandlåda Robust 350 L'));
-        $this->assertTrue(Auto_Alt_Text_Prompt::contains_name('Grön Sandlada Robust 350 L.', 'Sandlåda Robust 350 L'));
-        $this->assertTrue(Auto_Alt_Text_Prompt::contains_name('Mugg Nordic Mug - Blå på ett bord.', 'Nordic Mug – Blå'));
-        $this->assertTrue(Auto_Alt_Text_Prompt::contains_name('Den ”Nordic Mug” står på bordet.', 'Nordic Mug'));
-        $this->assertFalse(Auto_Alt_Text_Prompt::contains_name('En grön sandlåda med lock.', 'Sandlåda Robust 350 L'));
+    /** @dataProvider name_cases */
+    public function test_contains_name_tolerates_case_accents_dashes_and_quotes($text, $name, $expected) {
+        $this->assertSame($expected, Auto_Alt_Text_Prompt::contains_name($text, $name));
+    }
+
+    public function name_cases() {
+        return [
+            'other case'          => ['En grön sandlåda robust 350 l med lock.', 'Sandlåda Robust 350 L', true],
+            'no accents'          => ['Grön Sandlada Robust 350 L.', 'Sandlåda Robust 350 L', true],
+            'other dash'          => ['Mugg Nordic Mug - Blå på ett bord.', 'Nordic Mug – Blå', true],
+            'quoted'              => ['Den ”Nordic Mug” står på bordet.', 'Nordic Mug', true],
+            'registered sign'     => ['Nike Air sneakers i vitt', 'Nike Air®', true],
+            'comma in the name'   => ['Mugg blå med handtag', 'Mugg, blå', true],
+            'multiplication sign' => ['Bord 120x80 i ek', 'Bord 120×80', true],
+            'trademark in text'   => ['Nike Air™ sneakers i vitt', 'Nike Air', true],
+            'name missing'        => ['En grön sandlåda med lock.', 'Sandlåda Robust 350 L', false],
+            'other model'         => ['Nike Air sneakers i vitt', 'Nike Air Max®', false],
+            'other size'          => ['Bord 120x80 i ek', 'Bord 160×80', false],
+        ];
     }
 
     public function test_prefix_and_rewrite_texts() {

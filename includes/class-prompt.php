@@ -139,7 +139,8 @@ class Auto_Alt_Text_Prompt {
         $name = preg_replace('/-\d{1,2}$/', '', $name);
 
         $kept = [];
-        foreach (preg_split('/[\s._-]+/u', (string) $name, -1, PREG_SPLIT_NO_EMPTY) as $token) {
+        // preg_split() returns false on invalid UTF-8: such a name gives no hint.
+        foreach (preg_split('/[\s._-]+/u', (string) $name, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
             $length = mb_strlen($token);
             if (ctype_digit($token)
                 || ($length >= 8 && preg_match('/^[0-9a-f]+$/i', $token))
@@ -172,7 +173,7 @@ class Auto_Alt_Text_Prompt {
         return trim(preg_replace('/[ \t\r\n]+/', ' ', $text));
     }
 
-    /** Whether the text names the product, ignoring case, accents, dashes and quotes. */
+    /** Whether the text names the product, ignoring case, accents, dashes, quotes, other punctuation and symbols. */
     public static function contains_name($text, $name) {
         $needle = self::normalize_for_match($name);
         return '' === $needle || false !== mb_strpos(self::normalize_for_match($text), $needle);
@@ -228,6 +229,9 @@ class Auto_Alt_Text_Prompt {
         $value = mb_strtolower($value, 'UTF-8');
         $value = str_replace(['-', '–', '—', '‐', '‑', '‒', '−'], ' ', $value);
         $value = str_replace(['"', "'", '“', '”', '„', '«', '»', '‘', '’'], '', $value);
+        // Sizes are written "120×80" or "120x80"; other punctuation and symbols (®, ™, commas) never decide a match.
+        $value = str_replace('×', 'x', $value);
+        $value = preg_replace('/[\p{P}\p{S}]+/u', ' ', $value);
         return trim(preg_replace('/\s+/u', ' ', $value));
     }
 }
