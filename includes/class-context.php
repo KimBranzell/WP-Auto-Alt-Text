@@ -13,6 +13,9 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *    its variations is kept, as is a single variation matching on its own.
  * 2. Without product usage, a published post featuring the image is weighed
  *    against the hint or parent: any disagreement gives no context.
+ *
+ * explain() also reports how the answer was reached (generation-quality spec
+ * §4a), so editors can see why a name is or is not used.
  */
 class Auto_Alt_Text_Context {
     private const EXCLUDED_STATUSES = ['trash', 'auto-draft'];
@@ -21,31 +24,80 @@ class Auto_Alt_Text_Context {
     /**
      * @param int      $attachment_id
      * @param int|null $hint_post_id Post that queued the job (e.g. the saved product).
-     * @return array{title:string,type:string,post_id:int}|null
+     * @return array{title:string,type:string,post_id:int,product_name:?string}|null
      */
     public static function for_attachment($attachment_id, $hint_post_id = null) {
+        return self::explain($attachment_id, $hint_post_id)['context'];
+    }
+
+    /**
+     * @return array{context:?array,source:?string,reason:string,count:int}
+     *         source: hint|product_usage|parent|featured; reason: found|ambiguous_products|ambiguous_posts|none.
+     */
+    public static function explain($attachment_id, $hint_post_id = null) {
         $attachment_id = (int) $attachment_id;
         $hint = self::usable((int) $hint_post_id);
+        $none = ['context' => null, 'source' => null, 'reason' => 'none', 'count' => 0];
 
         $rows = self::product_usage($attachment_id);
-        $post_id = $rows
-            ? self::product_owner($rows, $hint)
-            : self::post_owner($attachment_id, $hint);
-        if (!$post_id) {
-            return null;
+        if ($rows) {
+            $products = self::products_in($rows);
+            if (count($products) > 1) {
+                return ['context' => null, 'source' => null, 'reason' => 'ambiguous_products', 'count' => count($products)];
+            }
+            $post_id = self::product_owner($rows, $hint, $products[0]);
+            $source = ($hint && $post_id === $hint) ? 'hint' : 'product_usage';
+        } else {
+            $owner = self::post_owner($attachment_id, $hint);
+            if (!$owner['post_id']) {
+                return array_merge($none, ['reason' => $owner['reason'], 'count' => $owner['count']]);
+            }
+            $post_id = $owner['post_id'];
+            $source = $owner['source'];
         }
 
-        $post = get_post(self::translated($post_id, $attachment_id));
-        $title = $post ? self::title_for($post) : '';
-        if ('' === $title) {
-            return null;
+        $context = self::context_for($post_id, $attachment_id);
+        if (null === $context) {
+            return $none;
         }
+        return ['context' => $context, 'source' => $source, 'reason' => 'found', 'count' => 1];
+    }
 
-        return [
-            'title'   => $title,
-            'type'    => 'product_variation' === $post->post_type ? 'variation' : $post->post_type,
-            'post_id' => (int) $post->ID,
-        ];
+    /** One line for editors, in Swedish like the settings page. */
+    public static function describe(array $explanation) {
+        $reason = $explanation['reason'] ?? 'none';
+
+        if ('found' === $reason && !empty($explanation['context'])) {
+            $context = $explanation['context'];
+            $is_product = in_array($context['type'], ['product', 'variation'], true);
+            $labels = [
+                'product'   => __('Produkt', 'WP-Auto-Alt-Text'),
+                'variation' => __('Produktvariant', 'WP-Auto-Alt-Text'),
+                'page'      => __('Sida', 'WP-Auto-Alt-Text'),
+                'post'      => __('Inlägg', 'WP-Auto-Alt-Text'),
+            ];
+            $sources = [
+                'hint'          => $is_product ? __('sparad produkt', 'WP-Auto-Alt-Text') : __('angiven sida', 'WP-Auto-Alt-Text'),
+                'product_usage' => __('produktbild/galleri', 'WP-Auto-Alt-Text'),
+                'parent'        => __('uppladdad till', 'WP-Auto-Alt-Text'),
+                'featured'      => __('utvald bild', 'WP-Auto-Alt-Text'),
+            ];
+            return sprintf(
+                /* translators: 1: content type, 2: title, 3: how it was found */
+                __('%1$s: %2$s (%3$s)', 'WP-Auto-Alt-Text'),
+                $labels[$context['type']] ?? __('Innehåll', 'WP-Auto-Alt-Text'),
+                $context['title'],
+                $sources[$explanation['source']] ?? ''
+            );
+        }
+        if ('ambiguous_products' === $reason) {
+            /* translators: %d: number of products using the image */
+            return sprintf(__('Ingen produkt: bilden används av %d produkter', 'WP-Auto-Alt-Text'), (int) $explanation['count']);
+        }
+        if ('ambiguous_posts' === $reason) {
+            return __('Inget namn: bilden används på flera sidor eller inlägg', 'WP-Auto-Alt-Text');
+        }
+        return __('Ingen produkt eller sida hittades', 'WP-Auto-Alt-Text');
     }
 
     /**
@@ -81,31 +133,32 @@ class Auto_Alt_Text_Context {
         ));
     }
 
-    /**
-     * The single product the usage rows belong to (a variation counts as its
-     * parent), or 0 when they span several products. Resolves to the hint
-     * when it is that product or one of its variations, to the only matching
-     * row when there is just one, and otherwise to the product.
-     */
-    private static function product_owner(array $rows, $hint) {
+    /** @return int[] The distinct products the usage rows belong to (a variation counts as its parent). */
+    private static function products_in(array $rows) {
         $products = [];
         foreach ($rows as $row) {
             $products[ 'product_variation' === $row->post_type ? (int) $row->post_parent : (int) $row->ID ] = true;
         }
-        if (1 !== count($products)) {
-            return 0;
-        }
-        $product_id = (int) array_key_first($products);
+        return array_keys($products);
+    }
 
+    /**
+     * Within the single product the rows belong to: the hint when it is that
+     * product or one of its variations, the only matching row when there is
+     * just one, and otherwise the product.
+     */
+    private static function product_owner(array $rows, $hint, $product_id) {
         if ($hint && ($hint === $product_id || ('product_variation' === get_post_type($hint) && $product_id === wp_get_post_parent_id($hint)))) {
             return $hint;
         }
-        return (1 === count($rows)) ? (int) $rows[0]->ID : $product_id;
+        return (1 === count($rows)) ? (int) $rows[0]->ID : (int) $product_id;
     }
 
     /**
      * Without product usage: the single published post featuring the image,
-     * or else the hint or parent, and 0 when they disagree.
+     * or else the hint or parent; nothing when they disagree.
+     *
+     * @return array{post_id:int,source:?string,reason:string,count:int}
      */
     private static function post_owner($attachment_id, $hint) {
         global $wpdb;
@@ -118,16 +171,52 @@ class Auto_Alt_Text_Context {
              LIMIT 2",
             (string) $attachment_id
         ));
-        $owner = $hint ?: self::usable((int) wp_get_post_parent_id($attachment_id));
+        $parent = $hint ? 0 : self::usable((int) wp_get_post_parent_id($attachment_id));
+        $owner = $hint ?: $parent;
+        $owner_source = $hint ? 'hint' : ($parent ? 'parent' : null);
+        $ambiguous = ['post_id' => 0, 'source' => null, 'reason' => 'ambiguous_posts', 'count' => 2];
 
         if (count($featured) >= 2) {
-            return 0;
+            return $ambiguous;
         }
         if (1 === count($featured)) {
             $featured_id = (int) $featured[0];
-            return ($owner && $owner !== $featured_id) ? 0 : self::usable($featured_id);
+            if ($owner && $owner !== $featured_id) {
+                return $ambiguous;
+            }
+            $usable = self::usable($featured_id);
+            return $usable
+                ? ['post_id' => $usable, 'source' => $owner ? $owner_source : 'featured', 'reason' => 'found', 'count' => 1]
+                : ['post_id' => 0, 'source' => null, 'reason' => 'none', 'count' => 0];
         }
-        return $owner;
+        return $owner
+            ? ['post_id' => $owner, 'source' => $owner_source, 'reason' => 'found', 'count' => 1]
+            : ['post_id' => 0, 'source' => null, 'reason' => 'none', 'count' => 0];
+    }
+
+    /** @return array{title:string,type:string,post_id:int,product_name:?string}|null */
+    private static function context_for($post_id, $attachment_id) {
+        $post = get_post(self::translated($post_id, $attachment_id));
+        $title = $post ? self::title_for($post) : '';
+        if ('' === $title) {
+            return null;
+        }
+
+        $product_name = null;
+        if ('product' === $post->post_type) {
+            $product_name = $title;
+        } elseif ('product_variation' === $post->post_type) {
+            $parent = get_post((int) $post->post_parent);
+            $product_name = $parent ? self::prompt_safe($parent->post_title) : '';
+            $product_name = '' !== $product_name ? $product_name : $title;
+        }
+
+        return [
+            'title'        => $title,
+            'type'         => 'product_variation' === $post->post_type ? 'variation' : $post->post_type,
+            'post_id'      => (int) $post->ID,
+            'product_name' => $product_name,
+        ];
     }
 
     /** The context post's translation in the attachment's language, when one exists. */

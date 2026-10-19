@@ -15,7 +15,7 @@ class Auto_Alt_Text_Context_Test extends WP_UnitTestCase {
 
         $context = Auto_Alt_Text_Context::for_attachment($image, $hinted);
 
-        $this->assertSame(['title' => 'Hinted page', 'type' => 'page', 'post_id' => $hinted], $context);
+        $this->assertSame(['title' => 'Hinted page', 'type' => 'page', 'post_id' => $hinted, 'product_name' => null], $context);
     }
 
     public function test_parent_is_used_without_hint() {
@@ -253,7 +253,7 @@ class Auto_Alt_Text_Context_Test extends WP_UnitTestCase {
 
         $context = Auto_Alt_Text_Context::for_attachment($image);
 
-        $this->assertSame(['title' => 'Nordic Mug', 'type' => 'product', 'post_id' => $parent], $context);
+        $this->assertSame(['title' => 'Nordic Mug', 'type' => 'product', 'post_id' => $parent, 'product_name' => 'Nordic Mug'], $context);
     }
 
     public function test_trashed_hint_is_ignored() {
