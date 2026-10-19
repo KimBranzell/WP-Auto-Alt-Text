@@ -998,7 +998,9 @@ class Auto_Alt_Text_OpenAI  {
     /**
      * Reads a Responses API payload (spec §6). Text comes only from
      * `output_text` content items (or the top-level `output_text` convenience
-     * field); reasoning summaries and other items are ignored.
+     * field); reasoning summaries and other items are ignored. Status is
+     * 'ok', 'incomplete' (token limit), 'stopped' (incomplete for any other
+     * reason), 'refused' or 'empty'; only 'ok' carries usable text.
      *
      * @return array{status:string,text:string,input_tokens:int,output_tokens:int,reasoning_tokens:int,total_tokens:int}
      */
@@ -1030,8 +1032,12 @@ class Auto_Alt_Text_OpenAI  {
         }
         $result['text'] = trim(implode("\n", $parts));
 
-        if ('incomplete' === ($response_data['status'] ?? '') && 'max_output_tokens' === ($response_data['incomplete_details']['reason'] ?? '')) {
+        $incomplete = 'incomplete' === ($response_data['status'] ?? '');
+        if ($incomplete && 'max_output_tokens' === ($response_data['incomplete_details']['reason'] ?? '')) {
             $result['status'] = 'incomplete';
+        } elseif ($incomplete) {
+            // Any other reason (e.g. content_filter): partial text is never an answer.
+            $result['status'] = 'stopped';
         } elseif ('' !== $result['text']) {
             $result['status'] = 'ok';
         } elseif ($refused) {
@@ -1058,6 +1064,9 @@ class Auto_Alt_Text_OpenAI  {
 
         if ('incomplete' === $result['status']) {
             $this->last_error = __('The model ran out of output tokens.', 'WP-Auto-Alt-Text');
+            $this->last_error_class = 'permanent';
+        } elseif ('stopped' === $result['status']) {
+            $this->last_error = __('The model stopped before finishing the alt text.', 'WP-Auto-Alt-Text');
             $this->last_error_class = 'permanent';
         } elseif ('refused' === $result['status']) {
             $this->last_error = __('The model declined to describe this image.', 'WP-Auto-Alt-Text');

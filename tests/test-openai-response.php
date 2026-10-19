@@ -116,6 +116,34 @@ class Auto_Alt_Text_OpenAI_Response_Test extends WP_UnitTestCase {
         $this->assertSame('', get_post_meta($id, '_wp_attachment_image_alt', true));
     }
 
+    private function cache_entries($attachment_id) {
+        global $wpdb;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like('_transient_aat_img_' . (int) $attachment_id . '_') . '%'
+        ));
+    }
+
+    public function test_incomplete_for_another_reason_is_never_saved() {
+        $partial = 'A canola field under a';
+        $this->queue_response(200, [
+            'status'             => 'incomplete',
+            'incomplete_details' => ['reason' => 'content_filter'],
+            'output'             => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => $partial]]]],
+            'output_text'        => $partial,
+        ]);
+        $openai = $this->openai();
+        $id = $this->image();
+
+        $this->assertNull($openai->generate_alt_text(wp_get_attachment_url($id), $id, 'manual'));
+        $this->assertSame('permanent', $openai->get_last_error_class());
+        $this->assertStringContainsString('stopped before finishing', $openai->get_last_error());
+        $this->assertCount(1, $this->requests, 'Only a token-limit stop is retried');
+        $this->assertSame('', get_post_meta($id, '_wp_attachment_image_alt', true));
+        $this->assertSame('', get_post_meta($id, Auto_Alt_Text_Provenance::META_KEY, true));
+        $this->assertSame(0, $this->cache_entries($id));
+    }
+
     public function test_refusal_fails_permanently_without_retry() {
         $this->queue_response(200, [
             'status' => 'completed',
