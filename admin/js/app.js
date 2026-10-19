@@ -454,8 +454,8 @@ function showPreviewDialog(altText, attachmentId, isCached, contextText = '') {
 
     dialog.innerHTML = `
         <div class="alt-text-preview-content">
-            <h3>Förhandsgranska alternativ text ${isCached ? '<span class="cached-badge">Cachead</span>' : ''}</h3>
-            <p class="aat-preview-context"></p>
+            <h3 id="preview-title">Förhandsgranska alternativ text ${isCached ? '<span class="cached-badge">Cachead</span>' : ''}</h3>
+            <p class="aat-preview-context" id="aat-preview-context"></p>
             <textarea class="preview-text" aria-label="Alt text"></textarea>
 
             <div class="feedback-section">
@@ -487,15 +487,17 @@ function showPreviewDialog(altText, attachmentId, isCached, contextText = '') {
 
     document.body.appendChild(dialog);
 
+    const textarea = dialog.querySelector('.preview-text');
     const contextLine = dialog.querySelector('.aat-preview-context');
     if (contextText) {
         // Server text: assign it, never interpolate it into HTML.
         contextLine.textContent = `Alt-textkontext: ${contextText}`;
+        // Screen readers hear the context together with the text it applies to.
+        textarea.setAttribute('aria-describedby', contextLine.id);
     } else {
         contextLine.remove();
     }
 
-    const textarea = dialog.querySelector('.preview-text');
     // AI output is untrusted text: assign it, never interpolate it into HTML.
     textarea.value = altText;
     textarea.focus();

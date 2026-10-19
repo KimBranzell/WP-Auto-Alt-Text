@@ -54,6 +54,11 @@ class Auto_Alt_Text_Context_Field_Test extends WP_UnitTestCase {
         $this->assertSame($before, $after);
         $this->assertStringContainsString('data-attachment-id="' . $id . '"', $html);
         $this->assertStringContainsString('data-nonce="', $html);
+        $this->assertStringContainsString('class="aat-alt-context"', $html);
+        // The lazily filled line is a named status region, tied to its "Alt-textkontext" label.
+        $this->assertStringContainsString('role="status"', $html);
+        $this->assertStringContainsString('aria-live="polite"', $html);
+        $this->assertStringContainsString('aria-label="Alt-textkontext"', $html);
         $this->assertStringNotContainsString('Om oss', $html, 'The context is fetched lazily, never in grid responses');
         $this->assertStringNotContainsString('data-loaded', $html);
     }

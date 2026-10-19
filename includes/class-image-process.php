@@ -107,7 +107,9 @@ class Auto_Alt_Text_Image_Process {
         $text = Auto_Alt_Text_Context::describe(Auto_Alt_Text_Context::explain($post->ID));
         $html = '<span class="aat-alt-context" data-loaded="1">' . esc_html($text) . '</span>';
     } else {
-        $html = '<span class="aat-alt-context" aria-live="polite" data-attachment-id="' . esc_attr($post->ID)
+        // Filled later by app.js: a status region named after the field's label.
+        $html = '<span class="aat-alt-context" role="status" aria-live="polite" aria-label="' . esc_attr__('Alt-textkontext', 'WP-Auto-Alt-Text')
+            . '" data-attachment-id="' . esc_attr($post->ID)
             . '" data-nonce="' . esc_attr(wp_create_nonce('auto_alt_text_nonce')) . '"></span>';
     }
 
