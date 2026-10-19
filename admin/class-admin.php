@@ -134,7 +134,7 @@ class Auto_Alt_Text_Admin {
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('auto_alt_text_batch_nonce'),
 			'actionNonce' => wp_create_nonce('auto_alt_text_nonce'),
-			'brandTonalityEnabled' => (bool) get_option('wp_auto_alt_text_enable_brand_tonality', false),
+			'brandTonalityEnabled' => Auto_Alt_Text_Prompt::NAMING_VISIBLE !== Auto_Alt_Text_Prompt::naming(),
         ]);
     }
 

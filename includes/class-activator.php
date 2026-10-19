@@ -10,7 +10,7 @@ class Auto_Alt_Text_Activator {
     private const CURRENT_DB_VERSION = '1.0';
     private const COLUMN_VERSION = 'db_version';
     /** Bump whenever a CREATE TABLE statement below changes. */
-    private const SCHEMA_VERSION = '1.2';
+    private const SCHEMA_VERSION = '1.3';
     public const DB_VERSION_OPTION = 'auto_alt_text_db_version';
 
     private const COLUMN_GENERATION_TYPE = 'generation_type';
@@ -122,6 +122,9 @@ class Auto_Alt_Text_Activator {
                 " . self::COLUMN_IS_APPLIED . " tinyint(1) DEFAULT 0,
                 " . self::COLUMN_IS_EDITED . " tinyint(1) DEFAULT 0,
                 " . self::COLUMN_EDITED_TEXT . " text DEFAULT NULL,
+                model varchar(64) DEFAULT NULL,
+                input_tokens int(10) unsigned DEFAULT NULL,
+                output_tokens int(10) unsigned DEFAULT NULL,
                 " . self::COLUMN_VERSION . " varchar(10) NOT NULL DEFAULT '" . self::CURRENT_DB_VERSION . "',
                 PRIMARY KEY  (id),
                 KEY idx_image (image_id,generation_time)
@@ -158,6 +161,8 @@ class Auto_Alt_Text_Activator {
             dbDelta($create_logs_sql);
             dbDelta($create_queue_sql);
 
+            self::migrate_settings();
+
             // Record the version only once the queue table really exists, so a
             // failed CREATE is retried by maybe_upgrade() on the next request.
             if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($queue_table)))) {
@@ -177,5 +182,20 @@ class Auto_Alt_Text_Activator {
                 echo '<div class="error"><p>Auto Alt Text activation error: ' . esc_html($e->getMessage()) . '</p></div>';
             });
         }
+    }
+
+    /**
+     * Schema 1.3 (generation-quality spec §3): the brand tonality switch
+     * becomes a naming level, and the never-used prompt template option goes.
+     * Idempotent. Option names are literals because this can run before the
+     * other classes load.
+     */
+    private static function migrate_settings() {
+        if (false === get_option('auto_alt_text_naming', false)) {
+            $brand_tonality = get_option('wp_auto_alt_text_enable_brand_tonality', false);
+            update_option('auto_alt_text_naming', $brand_tonality ? 'product_brand' : 'visible');
+        }
+        delete_option('wp_auto_alt_text_enable_brand_tonality');
+        delete_option('alt_text_prompt_template');
     }
 }

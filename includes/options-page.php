@@ -137,31 +137,45 @@ function auto_alt_text_options() {
 
             <div class="card">
                 <div class="brand-settings-section">
-                    <h2>Brand Settings</h2>
+                    <h2><?php esc_html_e('Namn och varumärke', 'WP-Auto-Alt-Text'); ?></h2>
                     <table class="form-table">
                         <tr>
-                            <th scope="row"><?php esc_html_e('Aktivera brand-tonalitet', 'WP-Auto-Alt-Text'); ?></th>
+                            <th scope="row">
+                                <label for="naming"><?php esc_html_e('Namn i alt-texten', 'WP-Auto-Alt-Text'); ?></label>
+                            </th>
                             <td>
-                                <label class="switch">
-                                    <input type="checkbox"
-                                        name="wp_auto_alt_text_enable_brand_tonality"
-                                        id="enable_brand_tonality"
-                                        value="1"
-                                        <?php checked(get_option('wp_auto_alt_text_enable_brand_tonality', false)); ?>>
-                                    <span class="slider round"></span>
-                                </label>
-                                    <p class="description">
-                                    <?php esc_html_e('När detta alternativ är aktiverat kommer den alternativa texten att optimeras för sökmotorer med inspiration från varumärkesbeskrivningarna i fälten nedan.', 'WP-Auto-Alt-Text'); ?>
+                                <?php $naming = Auto_Alt_Text_Prompt::naming(); ?>
+                                <select id="naming" name="<?php echo esc_attr(Auto_Alt_Text_Prompt::NAMING_OPTION); ?>">
+                                    <option value="visible" <?php selected($naming, 'visible'); ?>><?php esc_html_e('Bara det som syns i bilden', 'WP-Auto-Alt-Text'); ?></option>
+                                    <option value="product" <?php selected($naming, 'product'); ?>><?php esc_html_e('Produktnamn', 'WP-Auto-Alt-Text'); ?></option>
+                                    <option value="product_brand" <?php selected($naming, 'product_brand'); ?>><?php esc_html_e('Produkt- och varumärkesnamn', 'WP-Auto-Alt-Text'); ?></option>
+                                </select>
+                                <p class="description">
+                                    <?php esc_html_e('Med Produktnamn finns produktens namn alltid med i alt-texten när bilden hör till en enda produkt. Sidor och inlägg används bara som sammanhang.', 'WP-Auto-Alt-Text'); ?>
                                 </p>
                             </td>
                         </tr>
-                        <tr>
-                            <th>Varumärkets namn</th>
-                            <td><input type="text" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
+                        <tr class="aat-brand-name-row">
+                            <th scope="row"><label for="aat_brand_name"><?php esc_html_e('Varumärkets namn', 'WP-Auto-Alt-Text'); ?></label></th>
+                            <td><input type="text" id="aat_brand_name" name="aat_brand_name" value="<?php echo esc_attr(get_option('aat_brand_name')); ?>" /></td>
+                        </tr>
+                        <tr class="aat-brand-description-row">
+                            <th scope="row"><label for="aat_brand_description"><?php esc_html_e('Varumärkesbeskrivning', 'WP-Auto-Alt-Text'); ?></label></th>
+                            <td>
+                                <textarea id="aat_brand_description" name="aat_brand_description" rows="3" placeholder="<?php echo esc_attr__( 'Ange en beskrivning av ditt varumärke', 'WP-Auto-Alt-Text' ); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea>
+                                <p class="description"><?php esc_html_e('Används som bakgrund för ordval, aldrig ordagrant.', 'WP-Auto-Alt-Text'); ?></p>
+                            </td>
                         </tr>
                         <tr>
-                            <th><?php esc_html_e('Varumärkesbeskrivning', 'WP-Auto-Alt-Text'); ?></th>
-                            <td><textarea name="aat_brand_description" rows="3" placeholder="<?php echo esc_attr__( 'Ange en beskrivning av ditt varumärke', 'WP-Auto-Alt-Text' ); ?>"><?php echo esc_textarea(get_option('aat_brand_description')); ?></textarea></td>
+                            <th scope="row">
+                                <label for="extra_instructions"><?php esc_html_e('Extra instruktioner', 'WP-Auto-Alt-Text'); ?></label>
+                            </th>
+                            <td>
+                                <textarea id="extra_instructions" name="<?php echo esc_attr(Auto_Alt_Text_Prompt::EXTRA_OPTION); ?>" rows="3" class="large-text" maxlength="<?php echo esc_attr(Auto_Alt_Text_Prompt::EXTRA_MAX_LENGTH); ?>"><?php echo esc_textarea(get_option(Auto_Alt_Text_Prompt::EXTRA_OPTION, '')); ?></textarea>
+                                <p class="description">
+                                    <?php esc_html_e('Läggs till sist i pluginets instruktioner, till exempel "Nämn alltid färgen". De kan inte ändra svarets format.', 'WP-Auto-Alt-Text'); ?>
+                                </p>
+                            </td>
                         </tr>
                     </table>
                 </div>
@@ -196,12 +210,34 @@ function auto_alt_text_options() {
                                 <p class="description"><?php esc_html_e('Nyckeln är definierad i wp-config.php (AUTO_ALT_TEXT_OPENAI_API_KEY).', 'WP-Auto-Alt-Text'); ?></p>
                             <?php endif; ?>
                             <p class="description">
-                                <?php
-                                printf(
-                                    esc_html__('Pluginen använder OpenAI Responses API med modellen %s för textgenerering och anpassar automatiskt takten efter OpenAI:s aktuella rate limit-headers.', 'WP-Auto-Alt-Text'),
-                                    esc_html(Auto_Alt_Text_OpenAI::get_model_name())
-                                );
-                                ?>
+                                <?php esc_html_e('Pluginen använder OpenAI Responses API och anpassar automatiskt takten efter OpenAI:s aktuella rate limit-headers.', 'WP-Auto-Alt-Text'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="model"><?php esc_html_e('Modell', 'WP-Auto-Alt-Text'); ?></label>
+                        </th>
+                        <td>
+                            <?php $current_model = Auto_Alt_Text_Models::current_id(); ?>
+                            <select id="model" name="<?php echo esc_attr(Auto_Alt_Text_Models::OPTION); ?>">
+                                <?php foreach (Auto_Alt_Text_Models::all() as $model_id => $model) : ?>
+                                    <option value="<?php echo esc_attr($model_id); ?>" <?php selected($current_model, $model_id); ?>>
+                                        <?php
+                                        echo esc_html(sprintf(
+                                            /* translators: 1: model name, 2: estimated USD per 1,000 images, 3: " (rekommenderad)" or empty */
+                                            __('%1$s – ca %2$s USD per 1 000 bilder%3$s', 'WP-Auto-Alt-Text'),
+                                            $model['label'],
+                                            number_format_i18n(Auto_Alt_Text_Models::cost_per_1000($model_id), 2),
+                                            $model['recommended'] ? __(' (rekommenderad)', 'WP-Auto-Alt-Text') : ''
+                                        ));
+                                        ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">
+                                <?php esc_html_e('Vattenmärkning: OpenAI kan märka AI-genererad text med en osynlig vattenstämpel. Den slås på i ditt OpenAI-konto under Organization/Project settings → Data controls → Text provenance, inte här.', 'WP-Auto-Alt-Text'); ?>
+                                <a href="https://help.openai.com/en/articles/8912793-provenance-signals-in-openai-generated-content" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Läs mer', 'WP-Auto-Alt-Text'); ?></a>
                             </p>
                         </td>
                     </tr>
@@ -280,64 +316,19 @@ function auto_alt_text_options() {
                 </table>
             </div>
 
-            <!-- <div class="card">
-                <h2><?php esc_html_e('AI Prompt Template', 'WP-Auto-Alt-Text'); ?></h2>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><?php esc_html_e('Custom Template', 'WP-Auto-Alt-Text'); ?></th>
-                        <td>
-                            <textarea name="alt_text_prompt_template" id="alt-text-prompt-template" class="large-text code" rows="4">
-                                <?php echo esc_textarea(get_option('alt_text_prompt_template',
-                                'You are an expert in accessibility and SEO optimization, tasked with generating alt text for images. Analyze the image provided and generate a concise, descriptive alt text in {LANGUAGE} tailored to the following requirements:
-
-                                1. First detect if there is any text in the image
-                                2. If text is present, identify its language and include it in your response
-                                3. Generate a concise alt text in {LANGUAGE} that:
-                                    - Describes the image content
-                                    - Includes any detected text (maintaining original language)
-                                    - Maintains cultural context
-                                4. Keep it under 2 sentences
-                                5. Don\'t include phrases like "image of" or "picture of".
-                                6. Write the text in {LANGUAGE} language.
-                                7. For ambiguous images, describe them neutrally.
-                                8. Use plain and easy-to-understand language.
-                                9. If {LANGUAGE} is unsupported, default to English.
-                                10. Maintain proper grammar and syntax in {LANGUAGE}
-
-                                Output:
-                                A single, SEO-friendly alt text description')); ?>
-                            </textarea>
-                            <div id="template-counter" class="description">
-                                <div>Characters: <span id="char-count">0</span>/10000</div>
-                            </div>
-                            <p class="description">
-                                <?php esc_html_e('Use {LANGUAGE} in your template to automatically insert the selected language.', 'WP-Auto-Alt-Text'); ?>
-                                <br>
-                                <strong><?php esc_html_e('Example:', 'WP-Auto-Alt-Text'); ?></strong>
-                                <?php esc_html_e('Generate a descriptive alt text in {LANGUAGE} that captures the main elements of the image.', 'WP-Auto-Alt-Text'); ?>
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-            </div> -->
-
             <?php submit_button(); ?>
         </form>
         <script>
             jQuery(document).ready(function($) {
+                // The brand name is used at "Produkt- och varumärkesnamn"; the description at both product levels.
                 function toggleBrandFields() {
-                    var enabled = $('#enable_brand_tonality').is(':checked');
-                    var brandFields = $('.brand-settings-section tr:not(:first-child)');
-
-                    if (enabled) {
-                        brandFields.removeClass('disabled-field');
-                    } else {
-                        brandFields.addClass('disabled-field');
-                    }
+                    var naming = $('#naming').val();
+                    $('.aat-brand-name-row').toggleClass('disabled-field', naming !== 'product_brand');
+                    $('.aat-brand-description-row').toggleClass('disabled-field', naming === 'visible');
                 }
 
-                $('#enable_brand_tonality').on('change', toggleBrandFields);
-                toggleBrandFields(); // Run on page load
+                $('#naming').on('change', toggleBrandFields);
+                toggleBrandFields();
             });
         </script>
     </div>
@@ -432,19 +423,9 @@ function auto_alt_text_register_settings() {
         'language',
         'auto_alt_text_sanitize'
     );
-    // register_setting(
-    //     AUTO_ALT_TEXT_SETTINGS_GROUP,
-    //     'alt_text_prompt_template',     // New setting for prompt template
-    //     'auto_alt_text_sanitize'
-    // );
     register_setting(
         AUTO_ALT_TEXT_SETTINGS_GROUP,
         'aat_brand_name',
-        'auto_alt_text_sanitize'
-    );
-    register_setting(
-        AUTO_ALT_TEXT_SETTINGS_GROUP,
-        'wp_auto_alt_text_enable_brand_tonality',
         'auto_alt_text_sanitize'
     );
     register_setting(
@@ -501,6 +482,33 @@ function auto_alt_text_register_settings() {
             'sanitize_callback' => ['Auto_Alt_Text_Provenance', 'sanitize_policy'],
         ]
     );
+    register_setting(
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
+        Auto_Alt_Text_Prompt::NAMING_OPTION,
+        [
+            'type' => 'string',
+            'default' => Auto_Alt_Text_Prompt::NAMING_VISIBLE,
+            'sanitize_callback' => ['Auto_Alt_Text_Prompt', 'sanitize_naming'],
+        ]
+    );
+    register_setting(
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
+        Auto_Alt_Text_Prompt::EXTRA_OPTION,
+        [
+            'type' => 'string',
+            'default' => '',
+            'sanitize_callback' => ['Auto_Alt_Text_Prompt', 'sanitize_extra'],
+        ]
+    );
+    register_setting(
+        AUTO_ALT_TEXT_SETTINGS_GROUP,
+        Auto_Alt_Text_Models::OPTION,
+        [
+            'type' => 'string',
+            'default' => '',
+            'sanitize_callback' => 'auto_alt_text_sanitize_model',
+        ]
+    );
 }
 
 /**
@@ -508,6 +516,32 @@ function auto_alt_text_register_settings() {
  */
 function auto_alt_text_is_valid_api_key_format($key) {
     return (bool) preg_match('/^sk-(proj-)?[A-Za-z0-9_-]{80,}$/', (string) $key);
+}
+
+/**
+ * Model setting: registry IDs only. Warns, but still saves, when the key
+ * cannot use the effective model (the chosen one, or the registry default
+ * when no explicit choice is saved; spec §6).
+ */
+function auto_alt_text_sanitize_model($value) {
+    $value = Auto_Alt_Text_Models::sanitize($value);
+    if (in_array('model_unavailable', wp_list_pluck(get_settings_errors(Auto_Alt_Text_Models::OPTION), 'code'), true)) {
+        return $value;
+    }
+    $effective = '' === $value ? Auto_Alt_Text_Models::default_id() : $value;
+    if (false === (new Auto_Alt_Text_OpenAI())->is_model_available($effective)) {
+        add_settings_error(
+            Auto_Alt_Text_Models::OPTION,
+            'model_unavailable',
+            sprintf(
+                /* translators: %s: model ID */
+                esc_html__('Modellen %s är inte tillgänglig för den här API-nyckeln. Välj en annan modell eller byt nyckel, annars misslyckas genereringen.', 'WP-Auto-Alt-Text'),
+                esc_html($effective)
+            ),
+            'warning'
+        );
+    }
+    return $value;
 }
 
 /**
@@ -560,32 +594,6 @@ function auto_alt_text_sanitize($input) {
             }
 
             return $openai->encrypt_api_key($trimmed_input);
-
-        // case 'sanitize_option_alt_text_prompt_template':
-        //     $min_length = 50;
-        //     $max_length = 10000;
-        //     $required_keywords = ['alt text', 'descriptive', 'concise'];
-
-        //     if (strlen($input) < $min_length || strlen($input) > $max_length) {
-        //         add_settings_error(
-        //             'alt_text_prompt_template',
-        //             'invalid_prompt_length',
-        //             sprintf(__('Prompt template must be between %d and %d characters.', 'WP-Auto-Alt-Text'), $min_length, $max_length)
-        //         );
-        //         return get_option('alt_text_prompt_template');
-        //     }
-
-        //     foreach ($required_keywords as $keyword) {
-        //         if (stripos($input, $keyword) === false) {
-        //             add_settings_error(
-        //                 'alt_text_prompt_template',
-        //                 'missing_keyword',
-        //                 sprintf(__('Prompt template must include the keyword "%s".', 'WP-Auto-Alt-Text'), $keyword)
-        //             );
-        //             return get_option('alt_text_prompt_template');
-        //         }
-        //     }
-        //     return sanitize_textarea_field($input);
 
         case 'sanitize_option_' . AUTO_ALT_TEXT_LANGUAGE_OPTION:
             // 'language' is a generic option name: only validate values coming

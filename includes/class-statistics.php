@@ -89,10 +89,13 @@ class Auto_Alt_Text_Statistics {
      * @param bool   $is_applied     Whether the generated text was applied to the image.
      * @param bool   $is_edited      Whether the generated text was edited.
      * @param string $edited_text    The edited text, if any.
+     * @param string|null $model         Model ID used for the generation.
+     * @param int|null    $input_tokens  Input tokens, including any name rewrite.
+     * @param int|null    $output_tokens Output tokens, including any name rewrite.
      *
      * @return bool|int The result of the database insert operation.
      */
-    public function track_generation($image_id, $generated_text, $tokens_used, $generation_type, $is_applied = false, $is_edited = false, $edited_text = null) {
+    public function track_generation($image_id, $generated_text, $tokens_used, $generation_type, $is_applied = false, $is_edited = false, $edited_text = null, $model = null, $input_tokens = null, $output_tokens = null) {
         global $wpdb;
 
         Auto_Alt_Text_Logger::log("Tracking generation stats", "debug", [
@@ -112,9 +115,12 @@ class Auto_Alt_Text_Statistics {
                 'generation_time' => current_time('mysql'),
                 'is_applied' => $is_applied,
                 'is_edited' => $is_edited,
-                'edited_text' => $edited_text
+                'edited_text' => $edited_text,
+                'model' => null === $model ? null : (string) $model,
+                'input_tokens' => null === $input_tokens ? null : (int) $input_tokens,
+                'output_tokens' => null === $output_tokens ? null : (int) $output_tokens,
             ],
-            ['%d', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s']
+            ['%d', '%d', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s', '%d', '%d']
         );
     }
 
