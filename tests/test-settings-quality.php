@@ -148,16 +148,98 @@ class Auto_Alt_Text_Settings_Quality_Test extends WP_UnitTestCase {
         $this->assertNotContains('model_unavailable', wp_list_pluck(get_settings_errors('auto_alt_text_model'), 'code'));
     }
 
-    public function test_settings_page_shows_the_new_fields() {
+    private function render_settings_page(): string {
         require_once ABSPATH . 'wp-admin/includes/template.php';
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
         wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
         $GLOBALS['title'] = 'Auto Alt Text';
-        update_option('auto_alt_text_naming', 'product');
 
         ob_start();
         auto_alt_text_options();
-        $html = ob_get_clean();
+        return ob_get_clean();
+    }
+
+    /** @return array<string,array{selected:bool,label:string}> The model select's options, in order. */
+    private function model_options(string $html): array {
+        $this->assertSame(1, preg_match('#<select id="model"[^>]*>(.*?)</select>#s', $html, $select));
+        preg_match_all('#<option value="([^"]*)"([^>]*)>(.*?)</option>#s', $select[1], $matches, PREG_SET_ORDER);
+        $options = [];
+        foreach ($matches as $match) {
+            $options[$match[1]] = [
+                'selected' => false !== strpos($match[2], 'selected'),
+                'label'    => trim(html_entity_decode($match[3], ENT_QUOTES, 'UTF-8')),
+            ];
+        }
+        return $options;
+    }
+
+    private static function selected_values(array $options): array {
+        return array_keys(array_filter($options, function ($option) {
+            return $option['selected'];
+        }));
+    }
+
+    public function test_model_select_follows_the_default_when_nothing_is_saved() {
+        delete_option('auto_alt_text_model');
+
+        $options = $this->model_options($this->render_settings_page());
+
+        $this->assertSame('', array_key_first($options), 'The default choice comes first');
+        $this->assertSame([''], self::selected_values($options), 'No explicit model is pinned');
+        $default = Auto_Alt_Text_Models::get(Auto_Alt_Text_Models::default_id());
+        $this->assertStringStartsWith('Standard: ' . $default['label'] . ' – ca ', $options['']['label']);
+        $this->assertStringContainsString('USD per 1 000 bilder', $options['']['label']);
+        $this->assertStringContainsString('(rekommenderad)', $options[$default['id']]['label']);
+        $this->assertStringContainsString('USD per 1 000 bilder', $options['gpt-6-luna']['label']);
+    }
+
+    public function test_default_choice_label_is_built_from_the_registry() {
+        delete_option('auto_alt_text_model');
+        add_filter('auto_alt_text_models', function ($models) {
+            foreach ($models as $id => $model) {
+                $models[$id]['recommended'] = 'gpt-6-luna' === $id;
+            }
+            return $models;
+        });
+
+        $options = $this->model_options($this->render_settings_page());
+
+        $this->assertStringStartsWith('Standard: GPT-6 Luna – ca ', $options['']['label']);
+    }
+
+    public function test_model_select_shows_a_saved_choice() {
+        update_option('auto_alt_text_model', 'gpt-6-luna');
+
+        $options = $this->model_options($this->render_settings_page());
+
+        $this->assertSame(['gpt-6-luna'], self::selected_values($options));
+    }
+
+    public function test_model_select_falls_back_to_the_default_choice_for_a_removed_model() {
+        update_option('auto_alt_text_model', 'gpt-6-luna');
+        add_filter('auto_alt_text_models', function ($models) {
+            unset($models['gpt-6-luna']);
+            return $models;
+        });
+
+        $options = $this->model_options($this->render_settings_page());
+
+        $this->assertSame([''], self::selected_values($options));
+    }
+
+    public function test_saving_the_default_choice_keeps_it_empty() {
+        $this->mock_model_status(200);
+        update_option('auto_alt_text_model', 'gpt-6-luna');
+
+        update_option('auto_alt_text_model', '');
+
+        $this->assertSame('', get_option('auto_alt_text_model'));
+    }
+
+    public function test_settings_page_shows_the_new_fields() {
+        update_option('auto_alt_text_naming', 'product');
+
+        $html = $this->render_settings_page();
 
         $this->assertStringContainsString('name="auto_alt_text_naming"', $html);
         $this->assertMatchesRegularExpression('/value="product"\s+selected=/', $html);

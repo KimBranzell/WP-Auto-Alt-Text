@@ -68,6 +68,26 @@ function auto_alt_text_get_supported_languages() {
 }
 
 /**
+ * A model's label in the model select: name, estimated cost and the recommended marker.
+ *
+ * @param string $model_id Registry ID.
+ * @return string Unescaped label, or '' for an unknown ID.
+ */
+function auto_alt_text_model_option_label($model_id) {
+    $model = Auto_Alt_Text_Models::get($model_id);
+    if (null === $model) {
+        return '';
+    }
+    return sprintf(
+        /* translators: 1: model name, 2: estimated USD per 1,000 images, 3: " (rekommenderad)" or empty */
+        __('%1$s – ca %2$s USD per 1 000 bilder%3$s', 'WP-Auto-Alt-Text'),
+        $model['label'],
+        number_format_i18n(Auto_Alt_Text_Models::cost_per_1000($model_id), 2),
+        $model['recommended'] ? __(' (rekommenderad)', 'WP-Auto-Alt-Text') : ''
+    );
+}
+
+/**
  * Renders the options page for the Auto Alt Text plugin.
  *
  * This function checks if the current user has the necessary permissions to access the options page.
@@ -219,19 +239,24 @@ function auto_alt_text_options() {
                             <label for="model"><?php esc_html_e('Modell', 'WP-Auto-Alt-Text'); ?></label>
                         </th>
                         <td>
-                            <?php $current_model = Auto_Alt_Text_Models::current_id(); ?>
+                            <?php
+                            // The raw setting, not current_id(): with no saved choice the site follows the default (spec §6),
+                            // and saving the page must not pin today's default.
+                            $selected_model = Auto_Alt_Text_Models::sanitize(get_option(Auto_Alt_Text_Models::OPTION, ''));
+                            ?>
                             <select id="model" name="<?php echo esc_attr(Auto_Alt_Text_Models::OPTION); ?>">
-                                <?php foreach (Auto_Alt_Text_Models::all() as $model_id => $model) : ?>
-                                    <option value="<?php echo esc_attr($model_id); ?>" <?php selected($current_model, $model_id); ?>>
-                                        <?php
-                                        echo esc_html(sprintf(
-                                            /* translators: 1: model name, 2: estimated USD per 1,000 images, 3: " (rekommenderad)" or empty */
-                                            __('%1$s – ca %2$s USD per 1 000 bilder%3$s', 'WP-Auto-Alt-Text'),
-                                            $model['label'],
-                                            number_format_i18n(Auto_Alt_Text_Models::cost_per_1000($model_id), 2),
-                                            $model['recommended'] ? __(' (rekommenderad)', 'WP-Auto-Alt-Text') : ''
-                                        ));
-                                        ?>
+                                <option value="" <?php selected($selected_model, ''); ?>>
+                                    <?php
+                                    echo esc_html(sprintf(
+                                        /* translators: %s: the default model's name and cost hint */
+                                        __('Standard: %s', 'WP-Auto-Alt-Text'),
+                                        auto_alt_text_model_option_label(Auto_Alt_Text_Models::default_id())
+                                    ));
+                                    ?>
+                                </option>
+                                <?php foreach (array_keys(Auto_Alt_Text_Models::all()) as $model_id) : ?>
+                                    <option value="<?php echo esc_attr($model_id); ?>" <?php selected($selected_model, $model_id); ?>>
+                                        <?php echo esc_html(auto_alt_text_model_option_label($model_id)); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
