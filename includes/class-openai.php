@@ -1,12 +1,14 @@
 <?php
 class Auto_Alt_Text_OpenAI  {
     private const API_URL = 'https://api.openai.com/v1/responses';
-    private const MODEL = 'gpt-5.2';
-    private const MAX_TOKENS = 120;
+    private const MODELS_URL = 'https://api.openai.com/v1/models';
     private const MAX_API_RETRIES = 1;          // sync default: 2 attempts total (was 3 → 4 attempts)
     private const MAX_RETRY_DELAY_SECONDS = 5.0; // was hardcoded 15.0
-    private const ESTIMATED_IMAGE_INPUT_TOKENS = 1200;
+    /** Pacing estimates: a ~1 MP image at detail auto, and a 512 px image at detail low. */
+    private const ESTIMATED_IMAGE_INPUT_TOKENS = 1300;
+    private const ESTIMATED_LOW_DETAIL_IMAGE_TOKENS = 320;
     private const ESTIMATED_CHARS_PER_TOKEN = 4;
+    private const DEFAULT_MAX_OUTPUT_TOKENS = 300;
 
     private $api_key;
     private $last_error;
@@ -45,7 +47,7 @@ class Auto_Alt_Text_OpenAI  {
      * @return int
      */
     public static function get_default_max_output_tokens() {
-        return self::MAX_TOKENS;
+        return Auto_Alt_Text_Models::current()['max_output_tokens'];
     }
 
     /**
@@ -138,30 +140,43 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Tests the connection to the OpenAI API by sending a simple test message.
+     * Checks the key by listing models: free, and no tokens are spent.
      *
-     * This method is used to verify that the OpenAI API key is configured correctly and that the
-     * connection to the API is working as expected. It sends a simple 'Test connection' message
-     * to the API and returns `true` if the connection is successful, or `false` if an exception
-     * is thrown.
-     *
-     * @return bool True if the connection to the OpenAI API is successful, false otherwise.
+     * @return bool True when OpenAI accepts the key.
      */
     public function test_api_key() {
-        try {
-            $response = $this->callAPI($this->build_response_request([
-                [
-                    'role' => 'user',
-                    'content' => [
-                        ['type' => 'input_text', 'text' => 'Test connection']
-                    ]
-                ]
-            ], 5));
-
-            return !empty($this->extract_response_text($response));
-        } catch (Exception $e) {
+        if (empty($this->api_key)) {
             return false;
         }
+        $response = wp_remote_get(self::MODELS_URL, $this->auth_request_args());
+        return !is_wp_error($response) && 200 === wp_remote_retrieve_response_code($response);
+    }
+
+    /**
+     * Whether the key can use a model (spec §6).
+     *
+     * @return bool|null True or false, or null when there is no key or OpenAI did not answer clearly.
+     */
+    public function is_model_available($model_id) {
+        if (empty($this->api_key) || !is_string($model_id) || '' === $model_id) {
+            return null;
+        }
+        $response = wp_remote_get(self::MODELS_URL . '/' . rawurlencode($model_id), $this->auth_request_args());
+        if (is_wp_error($response)) {
+            return null;
+        }
+        $code = wp_remote_retrieve_response_code($response);
+        if (200 === $code) {
+            return true;
+        }
+        return 404 === $code ? false : null;
+    }
+
+    private function auth_request_args() {
+        return [
+            'headers' => ['Authorization' => 'Bearer ' . $this->api_key],
+            'timeout' => 15,
+        ];
     }
 
     /**
@@ -222,28 +237,16 @@ class Auto_Alt_Text_OpenAI  {
                 );
             }
 
-            $response_data = $this->callAPI($this->build_response_request([
-                [
-                    'role' => 'system',
-                    'content' => [
-                        ['type' => 'input_text', 'text' => 'You are a professional translator. Translate the given image description accurately while maintaining its descriptive quality.']
-                    ]
-                ],
-                [
-                    'role' => 'user',
-                    'content' => [
-                        ['type' => 'input_text', 'text' => $prompt]
-                    ]
-                ]
-            ], 150));
+            $response = $this->request_text($this->build_response_request(
+                [[
+                    'role'    => 'user',
+                    'content' => [['type' => 'input_text', 'text' => $prompt]],
+                ]],
+                null,
+                'You are a professional translator. Translate the given image description accurately while maintaining its descriptive quality.'
+            ));
 
-            $translated_text = $this->extract_response_text($response_data);
-            if (!empty($translated_text)) {
-                return trim($translated_text);
-            }
-
-            $this->last_error = __('OpenAI returned no translatable content. Please try again.', 'WP-Auto-Alt-Text');
-            return null;
+            return 'ok' === $response['status'] ? $response['text'] : null;
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
             return null;
@@ -317,7 +320,7 @@ class Auto_Alt_Text_OpenAI  {
         $image_url = 'data:image/jpeg;base64,' . $image_data;
 
         try {
-            $response_data = $this->callAPI($this->build_response_request([
+            $response = $this->request_text($this->build_response_request([
                 [
                     'role' => 'user',
                     'content' => [
@@ -325,12 +328,12 @@ class Auto_Alt_Text_OpenAI  {
                         ['type' => 'input_image', 'image_url' => $image_url]
                     ]
                 ]
-            ], self::MAX_TOKENS));
+            ]));
 
-            $generated_text = $this->extract_response_text($response_data);
+            $generated_text = 'ok' === $response['status'] ? $response['text'] : '';
 
             if (!empty($generated_text)) {
-                $tokens_used = $this->extract_total_tokens($response_data);
+                $tokens_used = $response['total_tokens'];
 
                 // Track the generation
                 $this->statistics->track_generation(
@@ -429,24 +432,6 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Sends a Responses API request to OpenAI.
-     *
-     * @param array $input The request input blocks.
-     * @param int $max_output_tokens The maximum number of output tokens.
-     * @return array|null The response data from the API, or null if an error occurred.
-     * @throws Exception If the API request fails or the rate limit is exceeded.
-     */
-    private function send_response_request($input, $max_output_tokens = self::MAX_TOKENS) {
-        try {
-            $result = $this->callAPI($this->build_response_request($input, $max_output_tokens));
-            return $result;
-        } catch (Exception $e) {
-            $this->last_error = $e->getMessage();
-            throw $e;
-        }
-    }
-
-    /**
      * Regenerates alt text based on specific feedback.
      *
      * @param string $image_source The source of the image, such as the image URL or file path.
@@ -494,22 +479,16 @@ class Auto_Alt_Text_OpenAI  {
                 "The image filename is \"{$clean_filename}\". Try to naturally incorporate relevant terms from the filename for SEO purposes. " .
                 "Provide only the improved alt text without any additional explanations or quotes.";
 
-            $response_data = $this->send_response_request([
-                [
-                    'role' => 'system',
-                    'content' => [
-                        ['type' => 'input_text', 'text' => 'You are an expert in creating accessible and SEO-friendly image descriptions.']
-                    ]
-                ],
-                [
-                    'role' => 'user',
-                    'content' => [
-                        ['type' => 'input_text', 'text' => $feedback_prompt]
-                    ]
-                ]
-            ], 150);
+            $response = $this->request_text($this->build_response_request(
+                [[
+                    'role'    => 'user',
+                    'content' => [['type' => 'input_text', 'text' => $feedback_prompt]],
+                ]],
+                null,
+                'You are an expert in creating accessible and SEO-friendly image descriptions.'
+            ));
 
-            $regenerated_text = trim($this->extract_response_text($response_data));
+            $regenerated_text = 'ok' === $response['status'] ? $response['text'] : '';
 
             if (!empty($regenerated_text)) {
 
@@ -881,18 +860,24 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Builds a normalized request payload for the OpenAI Responses API.
-     *
-     * @param array $input The input blocks to send to the API.
-     * @param int $max_output_tokens The maximum output tokens.
-     * @return array The request payload.
+     * Builds a Responses API request (spec §6): registry model, `store: false`,
+     * and a reasoning effort only for models that take one.
      */
-    private function build_response_request($input, $max_output_tokens = self::MAX_TOKENS) {
-        return [
-            'model' => self::MODEL,
-            'input' => $input,
-            'max_output_tokens' => max(1, (int) $max_output_tokens)
+    private function build_response_request($input, $max_output_tokens = null, $instructions = null, $model_id = null) {
+        $model = (null !== $model_id ? Auto_Alt_Text_Models::get($model_id) : null) ?? Auto_Alt_Text_Models::current();
+        $request = [
+            'model'             => $model['id'],
+            'input'             => $input,
+            'max_output_tokens' => max(1, (int) ($max_output_tokens ?: $model['max_output_tokens'])),
+            'store'             => false,
         ];
+        if (is_string($instructions) && '' !== $instructions) {
+            $request['instructions'] = $instructions;
+        }
+        if (null !== $model['effort']) {
+            $request['reasoning'] = ['effort' => $model['effort']];
+        }
+        return $request;
     }
 
     /**
@@ -902,48 +887,38 @@ class Auto_Alt_Text_OpenAI  {
      * @return int
      */
     private function estimate_request_tokens($data) {
-        $max_output_tokens = isset($data['max_output_tokens']) ? (int) $data['max_output_tokens'] : self::MAX_TOKENS;
-        $text_characters = 0;
-        $image_count = 0;
+        $max_output_tokens = isset($data['max_output_tokens']) ? (int) $data['max_output_tokens'] : self::DEFAULT_MAX_OUTPUT_TOKENS;
+        $text_characters = is_string($data['instructions'] ?? null) ? strlen($data['instructions']) : 0;
+        $image_tokens = 0;
 
-        $this->collect_request_metrics($data['input'] ?? [], $text_characters, $image_count);
+        $this->collect_request_metrics($data['input'] ?? [], $text_characters, $image_tokens);
 
-        $estimated_input_tokens = (int) ceil($text_characters / self::ESTIMATED_CHARS_PER_TOKEN);
-        $estimated_input_tokens += $image_count * self::ESTIMATED_IMAGE_INPUT_TOKENS;
+        $estimated_input_tokens = (int) ceil($text_characters / self::ESTIMATED_CHARS_PER_TOKEN) + $image_tokens;
 
         return max(1, $estimated_input_tokens + max(1, $max_output_tokens));
     }
 
     /**
-     * Collects text and image counts from a request payload.
-     *
-     * @param mixed $node Current request node.
-     * @param int   $text_characters Total text characters.
-     * @param int   $image_count Total images.
-     * @return void
+     * Sums text characters and estimated image tokens in a request's input.
      */
-    private function collect_request_metrics($node, &$text_characters, &$image_count) {
-        if (is_string($node)) {
-            $text_characters += strlen($node);
-            return;
-        }
-
+    private function collect_request_metrics($node, &$text_characters, &$image_tokens) {
         if (!is_array($node)) {
             return;
         }
 
-        foreach ($node as $key => $value) {
-            if ('image_url' === $key && is_string($value)) {
-                $image_count++;
-                continue;
-            }
+        if ('input_image' === ($node['type'] ?? null)) {
+            $image_tokens += 'low' === ($node['detail'] ?? 'auto')
+                ? self::ESTIMATED_LOW_DETAIL_IMAGE_TOKENS
+                : self::ESTIMATED_IMAGE_INPUT_TOKENS;
+            return;
+        }
 
+        foreach ($node as $key => $value) {
             if ('text' === $key && is_string($value)) {
                 $text_characters += strlen($value);
                 continue;
             }
-
-            $this->collect_request_metrics($value, $text_characters, $image_count);
+            $this->collect_request_metrics($value, $text_characters, $image_tokens);
         }
     }
 
@@ -1091,108 +1066,76 @@ class Auto_Alt_Text_OpenAI  {
     }
 
     /**
-     * Extracts plain text output from Responses API payloads.
+     * Reads a Responses API payload (spec §6). Text comes only from
+     * `output_text` content items (or the top-level `output_text` convenience
+     * field); reasoning summaries and other items are ignored.
      *
-     * @param array $response_data The decoded API response.
-     * @return string The extracted text output.
+     * @return array{status:string,text:string,input_tokens:int,output_tokens:int,reasoning_tokens:int,total_tokens:int}
      */
-    private function extract_response_text($response_data) {
-        if (isset($response_data['output_text'])) {
-            if (is_string($response_data['output_text'])) {
-                return trim($response_data['output_text']);
-            }
+    private function parse_response($response_data) {
+        $usage = is_array($response_data['usage'] ?? null) ? $response_data['usage'] : [];
+        $result = [
+            'status'           => 'empty',
+            'text'             => '',
+            'input_tokens'     => (int) ($usage['input_tokens'] ?? 0),
+            'output_tokens'    => (int) ($usage['output_tokens'] ?? 0),
+            'reasoning_tokens' => (int) ($usage['output_tokens_details']['reasoning_tokens'] ?? 0),
+        ];
+        $result['total_tokens'] = (int) ($usage['total_tokens'] ?? ($result['input_tokens'] + $result['output_tokens']));
 
-            if (is_array($response_data['output_text'])) {
-                return trim(implode("\n", array_filter($response_data['output_text'], 'is_string')));
-            }
-        }
-
-        if (isset($response_data['output']) && is_array($response_data['output'])) {
-            $parts = [];
-            foreach ($response_data['output'] as $item) {
-                if (!isset($item['content']) || !is_array($item['content'])) {
-                    continue;
-                }
-
-                foreach ($item['content'] as $content_item) {
-                    if (isset($content_item['text']) && is_string($content_item['text'])) {
-                        $parts[] = $content_item['text'];
-                    }
+        $parts = [];
+        $refused = false;
+        foreach ((array) ($response_data['output'] ?? []) as $item) {
+            foreach ((array) ($item['content'] ?? []) as $content) {
+                $type = is_array($content) ? ($content['type'] ?? '') : '';
+                if ('refusal' === $type) {
+                    $refused = true;
+                } elseif ('output_text' === $type && is_string($content['text'] ?? null)) {
+                    $parts[] = $content['text'];
                 }
             }
-
-            if (!empty($parts)) {
-                return trim(implode("\n", $parts));
-            }
         }
-
-        // Backward compatibility with previous chat-completions shaped responses.
-        if (isset($response_data['choices'][0]['message']['content'])) {
-            return trim($response_data['choices'][0]['message']['content']);
+        if (empty($parts) && is_string($response_data['output_text'] ?? null)) {
+            $parts[] = $response_data['output_text'];
         }
+        $result['text'] = trim(implode("\n", $parts));
 
-        $fallback_parts = [];
-        $this->collect_text_fragments($response_data, $fallback_parts);
-        if (!empty($fallback_parts)) {
-            return trim(implode("\n", $fallback_parts));
+        if ('incomplete' === ($response_data['status'] ?? '') && 'max_output_tokens' === ($response_data['incomplete_details']['reason'] ?? '')) {
+            $result['status'] = 'incomplete';
+        } elseif ('' !== $result['text']) {
+            $result['status'] = 'ok';
+        } elseif ($refused) {
+            $result['status'] = 'refused';
         }
-
-        return '';
+        return $result;
     }
 
     /**
-     * Recursively collects text fragments from mixed response shapes.
-     *
-     * @param mixed $node Current response node.
-     * @param array $parts Collected text parts.
-     * @return void
+     * Sends a request and parses it. An answer cut off by the token limit is
+     * retried once with twice the limit; a final non-ok status sets the error.
      */
-    private function collect_text_fragments($node, &$parts) {
-        if (is_string($node)) {
-            $trimmed = trim($node);
-            if ($trimmed !== '') {
-                $parts[] = $trimmed;
+    private function request_text(array $request) {
+        $result = $this->parse_response($this->callAPI($request));
+
+        if ('incomplete' === $result['status']) {
+            $request['max_output_tokens'] = 2 * (int) $request['max_output_tokens'];
+            $retry = $this->parse_response($this->callAPI($request));
+            foreach (['input_tokens', 'output_tokens', 'reasoning_tokens', 'total_tokens'] as $key) {
+                $retry[$key] += $result[$key];
             }
-            return;
+            $result = $retry;
         }
 
-        if (!is_array($node)) {
-            return;
+        if ('incomplete' === $result['status']) {
+            $this->last_error = __('The model ran out of output tokens.', 'WP-Auto-Alt-Text');
+            $this->last_error_class = 'permanent';
+        } elseif ('refused' === $result['status']) {
+            $this->last_error = __('The model declined to describe this image.', 'WP-Auto-Alt-Text');
+            $this->last_error_class = 'permanent';
+        } elseif ('empty' === $result['status']) {
+            $this->last_error = __('OpenAI returned an empty response. Please try again.', 'WP-Auto-Alt-Text');
+            $this->last_error_class = 'transient';
         }
-
-        foreach ($node as $key => $value) {
-            if (in_array($key, ['text', 'value', 'output_text'], true)) {
-                if (is_string($value)) {
-                    $trimmed = trim($value);
-                    if ($trimmed !== '') {
-                        $parts[] = $trimmed;
-                    }
-                } elseif (is_array($value)) {
-                    $this->collect_text_fragments($value, $parts);
-                }
-                continue;
-            }
-
-            if (is_array($value)) {
-                $this->collect_text_fragments($value, $parts);
-            }
-        }
-    }
-
-    /**
-     * Extracts total token usage from OpenAI response payloads.
-     *
-     * @param array $response_data The decoded API response.
-     * @return int Total tokens used.
-     */
-    private function extract_total_tokens($response_data) {
-        if (isset($response_data['usage']['total_tokens'])) {
-            return (int) $response_data['usage']['total_tokens'];
-        }
-
-        $input_tokens = isset($response_data['usage']['input_tokens']) ? (int) $response_data['usage']['input_tokens'] : 0;
-        $output_tokens = isset($response_data['usage']['output_tokens']) ? (int) $response_data['usage']['output_tokens'] : 0;
-
-        return $input_tokens + $output_tokens;
+        return $result;
     }
 }
