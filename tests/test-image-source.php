@@ -154,6 +154,78 @@ class Auto_Alt_Text_Image_Source_Test extends WP_UnitTestCase {
         $this->assertSame('image/png', $parts['mime']);
     }
 
+    public function test_transparent_source_is_png_when_the_loaded_editor_cannot_write_webp_but_another_can() {
+        // The loaded editor (first, supports PNG) cannot write WebP while the global check still says yes (GD is second).
+        add_filter('wp_image_editors', function () {
+            return ['Auto_Alt_Text_Test_No_Webp_Editor', 'WP_Image_Editor_GD'];
+        });
+        $this->assertTrue(wp_image_editor_supports(['mime_type' => 'image/webp']));
+
+        $source = Auto_Alt_Text_Image_Source::for_attachment($this->upload('transparent.png'), 'auto');
+        $parts = self::data_url_parts($source->input_image()['image_url']);
+        $source->cleanup();
+
+        $this->assertSame('image/png', $parts['mime']);
+    }
+
+    public function test_png_to_webp_conversion_is_saved_at_quality_82() {
+        Auto_Alt_Text_Test_Quality_Spy_Editor::$saves = [];
+        add_filter('wp_image_editors', function () {
+            return ['Auto_Alt_Text_Test_Quality_Spy_Editor'];
+        });
+        $source = Auto_Alt_Text_Image_Source::for_attachment($this->upload('transparent.png'), 'auto');
+        $source->cleanup();
+
+        $this->assertSame([['image/webp', 82]], Auto_Alt_Text_Test_Quality_Spy_Editor::$saves);
+    }
+
+    private function assert_no_scoped_filters_left() {
+        global $wp_filter;
+        foreach (['image_resize_dimensions', 'image_editor_output_format', 'wp_editor_set_quality', 'jpeg_quality'] as $tag) {
+            $this->assertFalse(isset($wp_filter[$tag]->callbacks[PHP_INT_MAX]), $tag);
+        }
+    }
+
+    public function test_exception_during_resize_cleans_up_temp_files_and_scoped_filters() {
+        $thrower = function ($null) {
+            throw new RuntimeException('boom');
+        };
+        $id = $this->upload('test-image-large.jpg');
+        add_filter('image_resize_dimensions', $thrower, 1);
+        try {
+            Auto_Alt_Text_Image_Source::for_attachment($id, 'auto');
+            $this->fail('Expected exception');
+        } catch (RuntimeException $e) {
+            $this->assertSame('boom', $e->getMessage());
+        }
+        remove_filter('image_resize_dimensions', $thrower, 1);
+
+        $this->assertSame($this->temp_baseline, $this->temp_count());
+        $this->assert_no_scoped_filters_left();
+    }
+
+    public function test_exception_during_save_cleans_up_temp_files_and_scoped_filters() {
+        // Only the save into the plugin's temp file throws, not the earlier loads.
+        $thrower = function ($formats, $filename) {
+            if (is_string($filename) && false !== strpos(basename($filename), 'aat-image')) {
+                throw new RuntimeException('boom');
+            }
+            return $formats;
+        };
+        $id = $this->upload('transparent.png');
+        add_filter('image_editor_output_format', $thrower, 1, 3);
+        try {
+            Auto_Alt_Text_Image_Source::for_attachment($id, 'auto');
+            $this->fail('Expected exception');
+        } catch (RuntimeException $e) {
+            $this->assertSame('boom', $e->getMessage());
+        }
+        remove_filter('image_editor_output_format', $thrower, 1);
+
+        $this->assertSame($this->temp_baseline, $this->temp_count());
+        $this->assert_no_scoped_filters_left();
+    }
+
     public function test_avif_is_converted_to_jpeg() {
         $source = Auto_Alt_Text_Image_Source::for_attachment($this->upload('avif-lossy.avif'), 'auto');
         $parts = self::data_url_parts($source->input_image()['image_url']);
@@ -262,5 +334,15 @@ class Auto_Alt_Text_Image_Source_Test extends WP_UnitTestCase {
 class Auto_Alt_Text_Test_No_Webp_Editor extends WP_Image_Editor_GD {
     public static function supports_mime_type($mime_type) {
         return 'image/webp' !== $mime_type && parent::supports_mime_type($mime_type);
+    }
+}
+
+/** Records the mime type and quality each save is made with. */
+class Auto_Alt_Text_Test_Quality_Spy_Editor extends WP_Image_Editor_GD {
+    public static $saves = [];
+
+    protected function _save($image, $filename = null, $mime_type = null) {
+        self::$saves[] = [$mime_type, $this->get_quality()];
+        return parent::_save($image, $filename, $mime_type);
     }
 }
