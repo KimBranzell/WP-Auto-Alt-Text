@@ -461,16 +461,18 @@ namespace {
         public function test_generate_passes_naming_and_model_as_run_overrides() {
             $this->create_attachments(1);
             $writes = 0;
-            add_filter('pre_update_option_auto_alt_text_naming', function ($value) use (&$writes) {
+            $count_write = function ($value) use (&$writes) {
                 $writes++;
                 return $value;
-            });
+            };
+            add_filter('pre_update_option_auto_alt_text_naming', $count_write);
+            add_filter('pre_update_option_auto_alt_text_model', $count_write);
 
             $this->create_cli()->generate([], ['naming' => 'product', 'model' => 'gpt-6-luna']);
 
             Assert::assertSame(['naming' => 'product', 'model' => 'gpt-6-luna'], $this->openai->run_overrides_seen[0]);
             Assert::assertSame([], end($this->openai->run_overrides_seen), 'Overrides end with the run');
-            Assert::assertSame(0, $writes, 'A run never writes the naming setting');
+            Assert::assertSame(0, $writes, 'A run never writes the naming or model setting');
             Assert::assertFalse(get_option('wp_auto_alt_text_enable_brand_tonality'));
             Assert::assertContains('Naming: product', WP_CLI::$logs);
             Assert::assertContains('Model: gpt-6-luna', WP_CLI::$logs);

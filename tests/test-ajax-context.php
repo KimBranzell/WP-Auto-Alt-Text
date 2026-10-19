@@ -54,6 +54,27 @@ class Auto_Alt_Text_Ajax_Context_Test extends WP_Ajax_UnitTestCase {
         $this->assertFalse($response['success']);
     }
 
+    public function test_context_is_refused_with_a_bad_nonce() {
+        $page = self::factory()->post->create(['post_type' => 'page', 'post_title' => 'Om oss']);
+        $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg', $page);
+        $_POST = ['nonce' => 'not-a-valid-nonce', 'attachment_id' => $id];
+        global $wpdb;
+        $suppress = $wpdb->suppress_errors(true);
+        $stopped = null;
+        try {
+            $this->_handleAjax('aat_get_context');
+        } catch (WPAjaxDieStopException $e) {
+            $stopped = $e->getMessage();
+        } catch (WPAjaxDieContinueException $e) {
+            // A JSON reply was sent: the assertions below fail.
+        } finally {
+            $wpdb->suppress_errors($suppress);
+        }
+
+        $this->assertSame('-1', $stopped, 'check_ajax_referer() ends the request');
+        $this->assertStringNotContainsString('Om oss', (string) $this->_last_response);
+    }
+
     public function test_generate_response_includes_the_context_line() {
         $response = $this->ajax('generate_alt_text_for_attachment', [
             'nonce'         => wp_create_nonce('auto_alt_text_nonce'),

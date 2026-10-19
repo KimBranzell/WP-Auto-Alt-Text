@@ -59,6 +59,14 @@ class Auto_Alt_Text_Generation_Pipeline_Test extends WP_UnitTestCase {
         return count(glob(get_temp_dir() . 'aat-image*') ?: []);
     }
 
+    private function cache_entries($attachment_id) {
+        global $wpdb;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like('_transient_aat_img_' . (int) $attachment_id . '_') . '%'
+        ));
+    }
+
     public function test_request_carries_rules_facts_and_a_base64_image() {
         $id = $this->image();
 
@@ -203,6 +211,8 @@ class Auto_Alt_Text_Generation_Pipeline_Test extends WP_UnitTestCase {
         $this->assertNull($openai->generate_alt_text(wp_get_attachment_url($id), $id, 'manual'));
         $this->assertSame('permanent', $openai->get_last_error_class());
         $this->assertSame('', get_post_meta($id, '_wp_attachment_image_alt', true));
+        $this->assertSame('', get_post_meta($id, Auto_Alt_Text_Provenance::META_KEY, true));
+        $this->assertSame(0, $this->cache_entries($id));
         $this->assertSame($before, $this->temp_count());
     }
 
