@@ -13,6 +13,8 @@
  * this process only (the watermark comparison uses a second OpenAI project).
  */
 
+if (PHP_SAPI !== 'cli') { exit; }
+
 if (!defined('ABSPATH') || !class_exists('Auto_Alt_Text_OpenAI')) {
     fwrite(STDERR, "Run this with: wp eval-file <plugin>/eval/run.php\n");
     return;

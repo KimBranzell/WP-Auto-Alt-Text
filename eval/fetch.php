@@ -8,6 +8,8 @@
  * Plain PHP (no WordPress). Dev tooling, never shipped.
  */
 
+if (PHP_SAPI !== 'cli') { exit; }
+
 $aat_dir = __DIR__;
 $aat_manifest = json_decode((string) file_get_contents($aat_dir . '/manifest.json'), true);
 if (!is_array($aat_manifest) || empty($aat_manifest['items'])) {

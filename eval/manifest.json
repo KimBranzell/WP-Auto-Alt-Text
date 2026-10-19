@@ -749,7 +749,7 @@
       "mime": null,
       "bytes": null,
       "sha256": null,
-      "notes": "Reference (person): Family group of five posing in a vegetable garden. Site path: wp-content/uploads/2026/04/land-o-lakes-inc-p6wuN_3Wwqs-unsplash-scaled.jpg (VVV: /Users/kimbranzell/vvv-local/www/wordpress-test/content/uploads/2026/04/land-o-lakes-inc-p6wuN_3Wwqs-unsplash-scaled.jpg). Existing site attachment, not downloaded.",
+      "notes": "Reference (person): Family group of five posing in a vegetable garden. Site path: wp-content/uploads/2026/04/land-o-lakes-inc-p6wuN_3Wwqs-unsplash-scaled.jpg. Existing site attachment, not downloaded.",
       "shop_name": null,
       "shop_colour": null
     },
@@ -775,7 +775,7 @@
       "mime": null,
       "bytes": null,
       "sha256": null,
-      "notes": "Reference (landscape): Lone white cottage in a coastal landscape. Site path: wp-content/uploads/2026/04/paulina-herpel-X78uqmf8Iwg-unsplash-scaled.jpg (VVV: /Users/kimbranzell/vvv-local/www/wordpress-test/content/uploads/2026/04/paulina-herpel-X78uqmf8Iwg-unsplash-scaled.jpg). Existing site attachment, not downloaded.",
+      "notes": "Reference (landscape): Lone white cottage in a coastal landscape. Site path: wp-content/uploads/2026/04/paulina-herpel-X78uqmf8Iwg-unsplash-scaled.jpg. Existing site attachment, not downloaded.",
       "shop_name": null,
       "shop_colour": null
     },
@@ -801,7 +801,7 @@
       "mime": null,
       "bytes": null,
       "sha256": null,
-      "notes": "Reference (food/drink (also WebP)): Roasting coffee beans in a drum. Site path: wp-content/uploads/2024/01/coffee-8406187_1280.webp (VVV: /Users/kimbranzell/vvv-local/www/wordpress-test/content/uploads/2024/01/coffee-8406187_1280.webp). Existing site attachment, not downloaded.",
+      "notes": "Reference (food/drink (also WebP)): Roasting coffee beans in a drum. Site path: wp-content/uploads/2024/01/coffee-8406187_1280.webp. Existing site attachment, not downloaded.",
       "shop_name": null,
       "shop_colour": null
     },
@@ -827,7 +827,7 @@
       "mime": null,
       "bytes": null,
       "sha256": null,
-      "notes": "Reference (animal): Yellow mongoose standing upright. Site path: wp-content/uploads/2024/01/yellow-mongoose-8445457_1280.jpg (VVV: /Users/kimbranzell/vvv-local/www/wordpress-test/content/uploads/2024/01/yellow-mongoose-8445457_1280.jpg). Existing site attachment, not downloaded.",
+      "notes": "Reference (animal): Yellow mongoose standing upright. Site path: wp-content/uploads/2024/01/yellow-mongoose-8445457_1280.jpg. Existing site attachment, not downloaded.",
       "shop_name": null,
       "shop_colour": null
     },
@@ -853,7 +853,7 @@
       "mime": null,
       "bytes": null,
       "sha256": null,
-      "notes": "Reference (WooCommerce placeholder): WooCommerce placeholder image (WebP, 1200x1200). Site path: wp-content/uploads/woocommerce-placeholder.webp (VVV: /Users/kimbranzell/vvv-local/www/wordpress-test/content/uploads/woocommerce-placeholder.webp). Existing site attachment, not downloaded.",
+      "notes": "Reference (WooCommerce placeholder): WooCommerce placeholder image (WebP, 1200x1200). Site path: wp-content/uploads/woocommerce-placeholder.webp. Existing site attachment, not downloaded.",
       "shop_name": null,
       "shop_colour": null
     }

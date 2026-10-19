@@ -9,6 +9,8 @@
  * <first run>-judge-key.json). Dev tooling, never shipped.
  */
 
+if (PHP_SAPI !== 'cli') { exit; }
+
 if (!defined('ABSPATH')) {
     fwrite(STDERR, "Run this with: wp eval-file <plugin>/eval/report.php runs=<run>\n");
     return;
