@@ -14,6 +14,8 @@ if (!defined('ABSPATH')) {
     return;
 }
 
+require_once __DIR__ . '/lib/checks.php';
+
 $aat_args = [];
 foreach (isset($args) ? (array) $args : [] as $aat_arg) {
     [$aat_key, $aat_value] = array_pad(explode('=', (string) $aat_arg, 2), 2, '1');
