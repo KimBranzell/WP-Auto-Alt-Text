@@ -102,6 +102,37 @@ class Auto_Alt_Text_OpenAI_Errors_Test extends WP_UnitTestCase {
         $this->assertFalse(Auto_Alt_Text_Quota_Monitor::is_active());
     }
 
+    public function test_model_the_key_cannot_use_is_named_in_a_permanent_error() {
+        $this->mock_api_response(404, ['error' => [
+            'message' => 'The model `gpt-6-luna` does not exist or you do not have access to it.',
+            'type'    => 'invalid_request_error',
+            'code'    => 'model_not_found',
+        ]]);
+        $this->openai->set_run_overrides(['model' => 'gpt-6-luna']);
+
+        [$result, $id] = $this->generate();
+
+        $this->assertNull($result);
+        $this->assertSame('permanent', $this->openai->get_last_error_class());
+        $this->assertSame(
+            'The model gpt-6-luna is not available to this OpenAI API key. Choose another model under Auto Alt Text → Settings.',
+            $this->openai->get_last_error()
+        );
+        $this->assertSame(1, $this->request_count);
+        $this->assertSame('', get_post_meta($id, '_wp_attachment_image_alt', true));
+        $this->assertSame('', get_post_meta($id, Auto_Alt_Text_Provenance::META_KEY, true));
+        $this->assertFalse(get_transient(Auto_Alt_Text_Queue::AUTH_PAUSE_TRANSIENT));
+    }
+
+    public function test_any_404_from_the_responses_endpoint_names_the_requested_model() {
+        $this->mock_api_response(404, ['error' => ['message' => 'Not found']]);
+
+        $this->generate();
+
+        $this->assertSame('permanent', $this->openai->get_last_error_class());
+        $this->assertStringContainsString('The model ' . Auto_Alt_Text_Models::current_id() . ' is not available', $this->openai->get_last_error());
+    }
+
     public function test_success_lifts_the_queue_auth_pause() {
         set_transient('aat_queue_auth_pause', 1, 15 * MINUTE_IN_SECONDS);
         $this->mock_api_response(200, [

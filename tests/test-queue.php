@@ -401,6 +401,34 @@ class Auto_Alt_Text_Queue_Test extends WP_UnitTestCase {
         $this->assertSame(0, $mails, 'Auth errors must not send the quota email');
     }
 
+    public function test_model_the_key_cannot_use_fails_the_job_with_the_message() {
+        add_filter('pre_http_request', function ($pre, $args, $url) {
+            if (strpos($url, 'openai.com') === false) {
+                return $pre;
+            }
+            return [
+                'headers'  => [],
+                'body'     => wp_json_encode(['error' => [
+                    'message' => 'The model `gpt-6.1-sol` does not exist or you do not have access to it.',
+                    'type'    => 'invalid_request_error',
+                    'code'    => 'model_not_found',
+                ]]),
+                'response' => ['code' => 404, 'message' => 'Not Found'],
+                'cookies'  => [],
+            ];
+        }, 10, 3);
+        $id = self::factory()->attachment->create_upload_object(DIR_TESTDATA . '/images/canola.jpg');
+        $this->queue->enqueue($id, 'upload');
+
+        $this->queue->run();
+
+        $job = $this->get_job($id);
+        $this->assertSame(Auto_Alt_Text_Queue::STATUS_FAILED, $job->status);
+        $this->assertStringContainsString('The model ' . Auto_Alt_Text_Models::current_id() . ' is not available to this OpenAI API key', $job->last_error);
+        $this->assertFalse(get_transient('aat_queue_auth_pause'), 'Only a rejected key pauses the queue');
+        $this->assertSame('', get_post_meta($id, '_wp_attachment_image_alt', true));
+    }
+
     public function test_explicit_job_keeps_human_alt_text_under_default_policy() {
         delete_option(Auto_Alt_Text_Provenance::POLICY_OPTION);
         $id = self::factory()->attachment->create();

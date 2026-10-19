@@ -681,7 +681,8 @@ class Auto_Alt_Text_OpenAI  {
             $raw_error = is_array($response_data)
                 ? ($response_data['error']['message'] ?? __('Unknown API error', 'WP-Auto-Alt-Text'))
                 : __('Unknown API error', 'WP-Auto-Alt-Text');
-            $friendly_error = $this->map_api_error_message($raw_error, $http_code);
+            $friendly_error = $this->model_unavailable_message(is_array($response_data) ? $response_data : [], $http_code, $data['model'] ?? '')
+                ?? $this->map_api_error_message($raw_error, $http_code);
             $error_class = $this->classify_api_error(is_array($response_data) ? $response_data : [], $http_code);
             $this->last_error_class = $error_class;
 
@@ -750,6 +751,27 @@ class Auto_Alt_Text_OpenAI  {
         }
 
         return 'permanent';
+    }
+
+    /**
+     * OpenAI answers 404 (code `model_not_found`) when the key cannot use the
+     * requested model. Installs that never saved a model switch to a new
+     * default on upgrade, so the save-time availability check never ran for
+     * them. The error stays `permanent`: the queue's auth pause would hide the
+     * message and would not lift when the model setting changes.
+     *
+     * @return string|null A message naming the model, or null for other errors.
+     */
+    private function model_unavailable_message(array $response_data, $http_code, $model_id) {
+        $code = strtolower((string) ($response_data['error']['code'] ?? ''));
+        if (404 !== $http_code && 'model_not_found' !== $code) {
+            return null;
+        }
+        return sprintf(
+            /* translators: %s: model ID */
+            __('The model %s is not available to this OpenAI API key. Choose another model under Auto Alt Text → Settings.', 'WP-Auto-Alt-Text'),
+            (string) $model_id
+        );
     }
 
     /**
