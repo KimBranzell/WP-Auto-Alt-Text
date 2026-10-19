@@ -63,6 +63,7 @@ class Auto_Alt_Text_Models {
                 'efforts'           => ['low', 'medium', 'high', 'xhigh', 'max'],
                 'effort'            => 'low',
                 'max_output_tokens' => 1500,
+                'recommended'       => true,
             ],
             'gpt-5.2' => [
                 'label'             => 'GPT-5.2',
@@ -71,7 +72,6 @@ class Auto_Alt_Text_Models {
                 'efforts'           => [],
                 'effort'            => null,
                 'max_output_tokens' => 300,
-                'recommended'       => true,
             ],
         ]);
 

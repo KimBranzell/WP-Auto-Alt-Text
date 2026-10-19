@@ -18,16 +18,15 @@ class Auto_Alt_Text_Image_Source {
     private const API_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     private const ALPHA_MIMES = ['image/png', 'image/gif', 'image/webp'];
     private const DETAILS = ['low', 'high', 'auto', 'original'];
-    private const BACKGROUND_TYPES = ['upload', 'woocommerce', 'woocommerce_variation', 'woocommerce_bulk', 'batch', 'cli', 'api_batch', 'wpmf_folder'];
     private const LOCAL_HOST_SUFFIXES = ['.test', '.local', '.localhost', '.internal', '.invalid'];
 
     private $image_url = '';
     private $detail = 'auto';
     private $temp_files = [];
 
-    /** `low` for background runs, `auto` for interactive ones (spec §5). */
+    /** `auto` for every generation type: `low` cut packaging text recall by 8-24 % in the evaluation (spec §5, §7.4). */
     public static function resolve_image_detail($attachment_id, $generation_type, $preview_mode = false) {
-        $detail = (!$preview_mode && in_array($generation_type, self::BACKGROUND_TYPES, true)) ? 'low' : 'auto';
+        $detail = 'auto';
         $detail = apply_filters('auto_alt_text_image_detail', $detail, (int) $attachment_id, (string) $generation_type);
         return in_array($detail, self::DETAILS, true) ? $detail : 'auto';
     }

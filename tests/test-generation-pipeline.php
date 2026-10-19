@@ -71,12 +71,12 @@ class Auto_Alt_Text_Generation_Pipeline_Test extends WP_UnitTestCase {
         $this->assertStringStartsWith('data:image/jpeg;base64,', $this->content()[1]['image_url']);
     }
 
-    public function test_background_runs_send_low_detail() {
+    public function test_background_runs_send_auto_detail() {
         $id = $this->image();
 
         $this->openai()->generate_alt_text(wp_get_attachment_url($id), $id, 'upload');
 
-        $this->assertSame('low', $this->content()[1]['detail']);
+        $this->assertSame('auto', $this->content()[1]['detail']);
     }
 
     public function test_output_is_cleaned_before_saving() {

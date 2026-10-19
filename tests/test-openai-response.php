@@ -60,10 +60,10 @@ class Auto_Alt_Text_OpenAI_Response_Test extends WP_UnitTestCase {
         $this->openai()->generate_alt_text(wp_get_attachment_url($id), $id, 'manual', true);
 
         $body = $this->requests[0]['body'];
-        $this->assertSame('gpt-5.2', $body['model']);
+        $this->assertSame('gpt-6.1-sol', $body['model']);
         $this->assertFalse($body['store']);
-        $this->assertSame(300, $body['max_output_tokens']);
-        $this->assertArrayNotHasKey('reasoning', $body, 'gpt-5.2 has no effort in the registry');
+        $this->assertSame(1500, $body['max_output_tokens']);
+        $this->assertSame(['effort' => 'low'], $body['reasoning']);
     }
 
     public function test_reasoning_effort_is_sent_when_the_model_has_one() {
@@ -100,7 +100,8 @@ class Auto_Alt_Text_OpenAI_Response_Test extends WP_UnitTestCase {
 
         $this->assertSame('A canola field.', $text);
         $this->assertCount(2, $this->requests);
-        $this->assertSame(600, $this->requests[1]['body']['max_output_tokens']);
+        $this->assertSame(1500, $this->requests[0]['body']['max_output_tokens']);
+        $this->assertSame(3000, $this->requests[1]['body']['max_output_tokens']);
     }
 
     public function test_incomplete_twice_fails_permanently_without_writing() {

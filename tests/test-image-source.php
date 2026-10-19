@@ -27,8 +27,8 @@ class Auto_Alt_Text_Image_Source_Test extends WP_UnitTestCase {
     }
 
     // Adopted from the WIP tests/test-openai.php.
-    public function test_resolve_image_detail_defaults_to_low_for_batch_runs() {
-        $this->assertSame('low', Auto_Alt_Text_Image_Source::resolve_image_detail(123, 'batch', false));
+    public function test_resolve_image_detail_is_auto_for_batch_runs() {
+        $this->assertSame('auto', Auto_Alt_Text_Image_Source::resolve_image_detail(123, 'batch', false));
     }
 
     // Adopted from the WIP tests/test-openai.php.
@@ -36,12 +36,19 @@ class Auto_Alt_Text_Image_Source_Test extends WP_UnitTestCase {
         $this->assertSame('auto', Auto_Alt_Text_Image_Source::resolve_image_detail(123, 'manual', false));
     }
 
-    public function test_every_background_type_is_low_and_previews_are_auto() {
+    public function test_every_generation_type_is_auto() {
         foreach (['upload', 'woocommerce', 'woocommerce_variation', 'woocommerce_bulk', 'batch', 'cli', 'api_batch', 'wpmf_folder'] as $type) {
-            $this->assertSame('low', Auto_Alt_Text_Image_Source::resolve_image_detail(1, $type), $type);
+            $this->assertSame('auto', Auto_Alt_Text_Image_Source::resolve_image_detail(1, $type), $type);
         }
         $this->assertSame('auto', Auto_Alt_Text_Image_Source::resolve_image_detail(1, 'api'));
         $this->assertSame('auto', Auto_Alt_Text_Image_Source::resolve_image_detail(1, 'batch', true));
+    }
+
+    public function test_detail_filter_can_still_return_low_for_a_background_type() {
+        add_filter('auto_alt_text_image_detail', function () {
+            return 'low';
+        });
+        $this->assertSame('low', Auto_Alt_Text_Image_Source::resolve_image_detail(1, 'batch'));
     }
 
     public function test_detail_filter_is_validated() {

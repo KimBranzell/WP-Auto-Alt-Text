@@ -1,8 +1,8 @@
 <?php
 class Auto_Alt_Text_Models_Test extends WP_UnitTestCase {
     public function test_default_is_the_recommended_model() {
-        $this->assertSame('gpt-5.2', Auto_Alt_Text_Models::default_id());
-        $this->assertSame('gpt-5.2', Auto_Alt_Text_Models::current_id());
+        $this->assertSame('gpt-6.1-sol', Auto_Alt_Text_Models::default_id());
+        $this->assertSame('gpt-6.1-sol', Auto_Alt_Text_Models::current_id());
     }
 
     public function test_every_entry_is_normalized() {
@@ -25,8 +25,8 @@ class Auto_Alt_Text_Models_Test extends WP_UnitTestCase {
 
     public function test_unknown_saved_model_falls_back_to_the_default() {
         update_option(Auto_Alt_Text_Models::OPTION, 'gpt-retired');
-        $this->assertSame('gpt-5.2', Auto_Alt_Text_Models::current_id());
-        $this->assertSame('gpt-5.2', Auto_Alt_Text_Models::current()['id']);
+        $this->assertSame('gpt-6.1-sol', Auto_Alt_Text_Models::current_id());
+        $this->assertSame('gpt-6.1-sol', Auto_Alt_Text_Models::current()['id']);
     }
 
     public function test_filter_can_add_a_model_with_defaults() {
