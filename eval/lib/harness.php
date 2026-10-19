@@ -58,6 +58,30 @@ function aat_eval_select_items(array $items, $selector) {
     return array_values(array_filter($items, static fn($item) => in_array($item['id'], $ids, true)));
 }
 
+/** The selected items plus the other members of their colour-pair groups (a variable product needs all its variations). */
+function aat_eval_with_siblings(array $selected, array $all) {
+    $groups = array_filter(array_unique(array_column($selected, 'variant_group')));
+    $ids = array_column($selected, 'id');
+    $result = $selected;
+    foreach ($all as $item) {
+        if (!empty($item['variant_group']) && in_array($item['variant_group'], $groups, true) && !in_array($item['id'], $ids, true)) {
+            $result[] = $item;
+        }
+    }
+    return $result;
+}
+
+/** Items whose image file is not in eval/images (devsite items use existing attachments and are skipped). */
+function aat_eval_missing_files(array $items) {
+    $missing = [];
+    foreach ($items as $item) {
+        if ('devsite' !== $item['source'] && !empty($item['file']) && !is_file(dirname(__DIR__) . '/' . $item['file'])) {
+            $missing[] = $item['id'];
+        }
+    }
+    return $missing;
+}
+
 /**
  * Makes sure every item exists on the site: an attachment, and a WooCommerce
  * product (or variation) for items with a shop name. Idempotent through the
@@ -68,6 +92,8 @@ function aat_eval_select_items(array $items, $selector) {
 function aat_eval_import(array $items) {
     $prepared = [];
     $groups = [];
+    $attachments = [];
+    $all = aat_eval_manifest();
     $woocommerce = class_exists('WC_Product_Simple');
     if (!$woocommerce) {
         WP_CLI::warning('WooCommerce is not active: product items run without product context.');
@@ -83,17 +109,25 @@ function aat_eval_import(array $items) {
             continue;
         }
         if (!empty($item['variant_group'])) {
-            $groups[$item['variant_group']][] = $item;
+            $groups[$item['variant_group']] = true;
             continue;
         }
         aat_eval_simple_product($item, $attachment_id);
         $prepared[$item['id']]['product_name'] = $item['shop_name'];
     }
 
-    foreach ($groups as $group => $members) {
-        aat_eval_variable_product($group, $members, $prepared);
+    // Groups are built from the full manifest, so a subset run never rewrites the attribute options or drops a sibling variation.
+    foreach (array_keys($groups) as $group) {
+        $members = array_values(array_filter($all, static fn($member) => ($member['variant_group'] ?? null) === $group && !empty($member['shop_name'])));
         foreach ($members as $member) {
-            $prepared[$member['id']]['product_name'] = $member['shop_name'];
+            $attachments[$member['id']] = $prepared[$member['id']]['attachment_id'] ?? aat_eval_attachment($member);
+        }
+        $members = array_values(array_filter($members, static fn($member) => !empty($attachments[$member['id']])));
+        aat_eval_variable_product($group, $members, $attachments);
+        foreach ($members as $member) {
+            if (isset($prepared[$member['id']])) {
+                $prepared[$member['id']]['product_name'] = $member['shop_name'];
+            }
         }
     }
     return $prepared;
@@ -139,7 +173,7 @@ function aat_eval_simple_product(array $item, $attachment_id) {
 }
 
 /** One variable product per variant group; each member is a variation with its own image. */
-function aat_eval_variable_product($group, array $members, array $prepared) {
+function aat_eval_variable_product($group, array $members, array $attachments) {
     $attribute = new WC_Product_Attribute();
     $attribute->set_name('Färg');
     $attribute->set_options(array_map(static fn($member) => $member['shop_colour'], $members));
@@ -159,7 +193,7 @@ function aat_eval_variable_product($group, array $members, array $prepared) {
         $variation = $existing_variation ? wc_get_product($existing_variation) : new WC_Product_Variation();
         $variation->set_parent_id($parent->get_id());
         $variation->set_attributes([sanitize_title('Färg') => $member['shop_colour']]);
-        $variation->set_image_id($prepared[$member['id']]['attachment_id']);
+        $variation->set_image_id($attachments[$member['id']]);
         $variation->set_status('publish');
         $variation->save();
         update_post_meta($variation->get_id(), '_aat_eval_id', $member['id']);

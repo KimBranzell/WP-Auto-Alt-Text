@@ -28,7 +28,7 @@ function aat_eval_checks(array $item, $text, $first_text, array $config) {
     return [
         'length_ok'       => empty($expected) ? mb_strlen($text) <= (int) ($config['max_length'] ?? 125) : null,
         'opening_ok'      => !aat_eval_starts_with_banned($text),
-        'language_ok'     => aat_eval_language($text) === ($config['language'] ?? 'sv'),
+        'language_ok'     => aat_eval_language_ok($text, $config['language'] ?? 'sv', array_merge([$product, $brand], $expected)),
         'name_first_ok'   => $names_required ? Auto_Alt_Text_Prompt::contains_name($first_text, $product) : null,
         'name_final_ok'   => $names_required ? Auto_Alt_Text_Prompt::contains_name($text, $product) : null,
         'brand_ok'        => ('product_brand' === $naming && '' !== $product && '' !== $brand) ? Auto_Alt_Text_Prompt::contains_name($text, $brand) : null,
@@ -47,9 +47,44 @@ function aat_eval_starts_with_banned($text) {
     return false;
 }
 
-/** 'sv', 'en' or 'unknown', by stop words (and å/ä/ö for Swedish). */
-function aat_eval_language($text) {
-    $lower = mb_strtolower((string) $text);
+/**
+ * One character in, one character out, so positions line up with the original.
+ * Lowercase, accents folded.
+ */
+function aat_eval_fold_chars($text) {
+    $out = [];
+    foreach (mb_str_split((string) $text) as $char) {
+        $folded = mb_strtolower(remove_accents($char));
+        $out[] = '' === $folded ? $char : mb_substr($folded, 0, 1);
+    }
+    return $out;
+}
+
+/** Replaces every case/accent-insensitive occurrence of each string in $strip with a space. */
+function aat_eval_strip_strings($text, array $strip) {
+    $chars = mb_str_split((string) $text);
+    $folded = implode('', aat_eval_fold_chars($text));
+    foreach ($strip as $string) {
+        $needle = implode('', aat_eval_fold_chars(trim((string) $string)));
+        $length = mb_strlen($needle);
+        if (0 === $length) {
+            continue;
+        }
+        $offset = 0;
+        while (false !== ($position = mb_strpos($folded, $needle, $offset))) {
+            for ($i = $position; $i < $position + $length; $i++) {
+                $chars[$i] = ' ';
+            }
+            $folded = mb_substr($folded, 0, $position) . str_repeat(' ', $length) . mb_substr($folded, $position + $length);
+            $offset = $position + $length;
+        }
+    }
+    return implode('', $chars);
+}
+
+/** 'sv', 'en' or 'unknown', by stop words (and å/ä/ö for Swedish). Strings in $strip (names, printed text) are ignored. */
+function aat_eval_language($text, array $strip = []) {
+    $lower = mb_strtolower(aat_eval_strip_strings($text, $strip));
     $words = preg_split('/[^\p{L}]+/u', $lower, -1, PREG_SPLIT_NO_EMPTY);
     $scores = [];
     foreach (AAT_EVAL_STOPWORDS as $language => $stopwords) {
@@ -63,6 +98,12 @@ function aat_eval_language($text) {
     return $scores[$top] > 0 ? $top : 'unknown';
 }
 
+/** true/false, or null when nothing language-bearing is left after stripping the names. */
+function aat_eval_language_ok($text, $expected_language, array $strip = []) {
+    $language = aat_eval_language($text, $strip);
+    return 'unknown' === $language ? null : $language === $expected_language;
+}
+
 function aat_eval_listed($needle, array $expected) {
     foreach ($expected as $text) {
         if (Auto_Alt_Text_Prompt::contains_name($text, $needle)) {
@@ -72,14 +113,21 @@ function aat_eval_listed($needle, array $expected) {
     return false;
 }
 
+/** Lowercase, accents folded, everything but letters and digits removed: "OAT-LY!" and "Oatly" match. */
+function aat_eval_squash($text) {
+    return preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower(remove_accents((string) $text)));
+}
+
 function aat_eval_recall($text, array $expected) {
+    $haystack = aat_eval_squash($text);
     $found = 0;
     foreach ($expected as $needle) {
-        if (Auto_Alt_Text_Prompt::contains_name($text, $needle)) {
+        $squashed = aat_eval_squash($needle);
+        if ('' === $squashed || false !== mb_strpos($haystack, $squashed)) {
             $found++;
         }
     }
-    return $found / count($expected);
+    return (float) ($found / count($expected));
 }
 
 /** USD for one call; reasoning tokens are billed as output tokens. */

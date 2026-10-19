@@ -36,7 +36,8 @@ foreach (json_decode((string) file_get_contents(__DIR__ . '/manifest.json'), tru
     $aat_manifest[$aat_item['id']] = $aat_item;
 }
 
-$aat_config = static fn($r) => sprintf('%s · %s · %s · %s', $r['model'], $r['naming'], $r['detail'], $r['language']);
+// With several runs the run name is part of the key, so e.g. watermark on/off rows are never merged. Only the key file and report carry it; the judge file stays blind.
+$aat_config = static fn($r) => sprintf('%s%s · %s · %s · %s', count($aat_runs) > 1 ? $r['run'] . ' · ' : '', $r['model'], $r['naming'], $r['detail'], $r['language']);
 $aat_rate = static function (array $rows, $check) {
     $values = array_filter(array_map(static fn($r) => $r['checks'][$check] ?? null, $rows), static fn($v) => null !== $v);
     return $values ? array_sum(array_map('floatval', $values)) / count($values) : null;

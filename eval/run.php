@@ -49,6 +49,19 @@ foreach ($aat_options['detail'] as $aat_detail) {
     }
 }
 
+foreach ($aat_options['lang'] as $aat_lang) {
+    if (!in_array($aat_lang, ['sv', 'en'], true)) {
+        WP_CLI::error(sprintf('Unknown language "%s". Use: sv, en.', $aat_lang));
+    }
+}
+
+// Readiness, checked before any spend: product items need WooCommerce, every image must be on disk.
+$aat_has_products = (bool) array_filter($aat_items, static fn($item) => !empty($item['shop_name']));
+if ($aat_has_products && !class_exists('WC_Product_Simple')) {
+    WP_CLI::error('WooCommerce is not active, but product items are selected. Activate it or select items without a shop name.');
+}
+$aat_missing = aat_eval_missing_files(aat_eval_with_siblings($aat_items, aat_eval_manifest()));
+
 $aat_per_combo = count($aat_options['naming']) * count($aat_options['lang']) * $aat_options['repeat'];
 $aat_calls = 0;
 $aat_estimate = 0.0;
@@ -59,8 +72,23 @@ foreach ($aat_models as $aat_model) {
     }
 }
 WP_CLI::log(sprintf('%d items, %d calls. Estimated cost: $%.2f (up to $%.2f if many answers need a name rewrite).', count($aat_items), $aat_calls, $aat_estimate, $aat_estimate * 1.5));
+if ($aat_missing) {
+    $aat_message = sprintf('Missing images for %s. Run php eval/fetch.php first.', implode(', ', $aat_missing));
+    if (!$aat_options['dry_run']) {
+        WP_CLI::error($aat_message);
+    }
+    WP_CLI::warning($aat_message);
+}
 if ($aat_options['dry_run']) {
     return;
+}
+
+// Open the output before the import and before any paid call, so a failure here costs nothing.
+$aat_out = dirname(__FILE__) . '/results/' . $aat_options['run'] . '.jsonl';
+wp_mkdir_p(dirname($aat_out));
+$aat_handle = @fopen($aat_out, 'a');
+if (false === $aat_handle) {
+    WP_CLI::error(sprintf('Cannot open %s for writing.', $aat_out));
 }
 
 // The eval measures the plugin's own prompt for a fictional shop; its uploads must not queue real generations.
@@ -77,9 +105,6 @@ if ($aat_key && !defined('AUTO_ALT_TEXT_OPENAI_API_KEY')) {
 }
 $aat_openai = new Auto_Alt_Text_OpenAI();
 
-$aat_out = dirname(__FILE__) . '/results/' . $aat_options['run'] . '.jsonl';
-wp_mkdir_p(dirname($aat_out));
-$aat_handle = fopen($aat_out, 'a');
 $aat_progress = \WP_CLI\Utils\make_progress_bar('Evaluating', $aat_calls);
 
 foreach ($aat_items as $aat_item) {
@@ -111,6 +136,7 @@ foreach ($aat_items as $aat_item) {
                             'repeat'           => $aat_repeat,
                             'status'           => $aat_result['status'],
                             'error'            => $aat_result['error'],
+                            'error_class'      => $aat_result['error_class'] ?? null,
                             'text'             => $aat_result['text'],
                             'first_text'       => $aat_result['first_text'],
                             'name_fix'         => $aat_result['name_fix'],

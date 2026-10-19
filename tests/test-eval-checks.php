@@ -79,4 +79,26 @@ class Auto_Alt_Text_Eval_Checks_Test extends WP_UnitTestCase {
         $this->assertEqualsWithDelta(0.000115, aat_eval_cost($luna, 1000, 30), 0.0000001);
         $this->assertGreaterThan(aat_eval_estimate($luna, 'low'), aat_eval_estimate($luna, 'auto'));
     }
+
+    public function test_a_swedish_shop_name_does_not_make_an_english_answer_swedish() {
+        $text = 'Barnfåtölj LeatherSoft in light blue faux leather.';
+        $config = ['product_name' => 'Barnfåtölj LeatherSoft'];
+
+        $this->assertTrue(aat_eval_checks([], $text, $text, self::config($config + ['language' => 'en']))['language_ok']);
+        $this->assertFalse(aat_eval_checks([], $text, $text, self::config($config + ['language' => 'sv']))['language_ok']);
+    }
+
+    public function test_language_is_not_applicable_without_stop_words() {
+        $text = 'Black suede Chelsea boots Albert, side view.';
+
+        $this->assertNull(aat_eval_checks([], $text, $text, self::config(['product_name' => 'Chelsea boots Albert']))['language_ok']);
+    }
+
+    public function test_recall_ignores_spaces_punctuation_case_and_accents() {
+        $pairs = [['APELSIN JUICE', 'Apelsinjuice'], ['OAT-LY!', 'Oatly'], ['1KG', '1 kg'], ['100% frukt', '100 % frukt'], ['PAULÚNS', 'Pauluns']];
+        foreach ($pairs as [$expected, $text]) {
+            $this->assertSame(1.0, aat_eval_checks(['expected_text' => [$expected]], $text, $text, self::config())['text_recall'], $expected);
+        }
+        $this->assertSame(0.0, aat_eval_checks(['expected_text' => ['TOMATKETCHUP']], 'Felix Original', 'Felix Original', self::config())['text_recall']);
+    }
 }
