@@ -108,6 +108,7 @@ class WP_Auto_Alt_Text_Plugin {
 		require_once __DIR__ . '/includes/interfaces/interface-cli-command.php';
 		require_once __DIR__ . '/includes/class-language-manager.php';
 		require_once __DIR__ . '/includes/class-models.php';
+		require_once __DIR__ . '/includes/class-prompt.php';
 		require_once __DIR__ . '/includes/class-openai.php';
 		require_once __DIR__ . '/includes/class-rate-limiter.php';
 		require_once __DIR__ . '/includes/options-page.php';
